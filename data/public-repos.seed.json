@@ -1,0 +1,440 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "manual-top10-2026-08-31T201428Z",
+  "fetched_at": "2026-08-31T20:14:28Z",
+  "completed_at": "2026-08-31T20:15:24+00:00",
+  "upstream": "deepseek-ai/deepseek-harness",
+  "source_url": "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1",
+  "selection": {
+    "method": "github_forks_endpoint",
+    "sort": "stargazers",
+    "limit": 10,
+    "ties": "GitHub response order",
+    "archived_included": true
+  },
+  "provenance": {
+    "method": "one_shot_github_rest",
+    "response_headers": {
+      "ETag": "W/\"0235732631804188bd89dd385796240575b6177edbb9160880030f427e9116db\"",
+      "Date": "Mon, 31 Aug 2026 20:14:40 GMT",
+      "Link": "<https://api.github.com/repositories/1333065091/forks?sort=stargazers&per_page=10&page=2>; rel=\"next\", <https://api.github.com/repositories/1333065091/forks?sort=stargazers&per_page=10&page=2389>; rel=\"last\""
+    },
+    "signature_status": "unsigned_development_seed",
+    "note": "Metadata calls are sequential snapshots, not one atomic view of GitHub."
+  },
+  "entries": [
+    {
+      "artifact_id": "github:1333146268",
+      "github_id": 1333146268,
+      "node_id": "R_kgDOT3YynA",
+      "full_name": "salathleizhang/deepseek-harness-desktop",
+      "owner": "salathleizhang",
+      "name": "deepseek-harness-desktop",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/salathleizhang/deepseek-harness-desktop",
+      "description": "Native desktop app for DeepSeek Harness — an Electron shell that runs the harness locally and hosts the official Web GUI unchanged.",
+      "description_origin": "author_declared",
+      "topics": [
+        "deepseek",
+        "deepseek-harness",
+        "dsh-plugin"
+      ],
+      "language": "TypeScript",
+      "github_stars": 142,
+      "seed_rank": 1,
+      "forks_count": 7,
+      "pushed_at": "2026-08-29T13:06:16Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "fe8e3f8d5e190e756c29c46036b4d879cf7bc754",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333812618",
+      "github_id": 1333812618,
+      "node_id": "R_kgDOT4Bdig",
+      "full_name": "flaqai/open-deepseek-harness-desktop",
+      "owner": "flaqai",
+      "name": "open-deepseek-harness-desktop",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/flaqai/open-deepseek-harness-desktop",
+      "description": "An easy-to-use, reliable DeepSeek Harness desktop app with robust plugin management, process orchestration, dynamic tool discovery, and a selection of useful pre-installed plugins that can be removed at any time.",
+      "description_origin": "author_declared",
+      "topics": [
+        "cordis",
+        "cordis-plugin",
+        "deepseek",
+        "deepseek-harness",
+        "deepseek-harness-desktop",
+        "deepseek-harness-guide",
+        "deepseek-harness-plugin",
+        "desktop-app",
+        "dsh",
+        "dsh-plugin",
+        "dsh-plugin-desktop",
+        "electron",
+        "flaq-skills",
+        "flaqai"
+      ],
+      "language": "TypeScript",
+      "github_stars": 106,
+      "seed_rank": 2,
+      "forks_count": 4,
+      "pushed_at": "2026-08-31T11:22:17Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "75d44a09b7d2db3161f11352225d5443e2d841e1",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1338052790",
+      "github_id": 1338052790,
+      "node_id": "R_kgDOT8EQtg",
+      "full_name": "Foreverlearners-cpu/deepseek-harness-multi-user",
+      "owner": "Foreverlearners-cpu",
+      "name": "deepseek-harness-multi-user",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/Foreverlearners-cpu/deepseek-harness-multi-user",
+      "description": "Building a multi-user DeepSeek Harness with Kafka, MySQL, Redis, Elasticsearch and CDC infrastructure, authentication, authorization, and a web management UI.",
+      "description_origin": "author_declared",
+      "topics": [
+        "deepseek-harness",
+        "dsh",
+        "dsh-plugin"
+      ],
+      "language": "TypeScript",
+      "github_stars": 65,
+      "seed_rank": 3,
+      "forks_count": 9,
+      "pushed_at": "2026-08-27T06:45:49Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "dd44278a10c80aed3003aa0b3e087da48e90c1b1",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333142942",
+      "github_id": 1333142942,
+      "node_id": "R_kgDOT3Ylng",
+      "full_name": "Sakana-yuyu/deepseek-harness-desktop",
+      "owner": "Sakana-yuyu",
+      "name": "deepseek-harness-desktop",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/Sakana-yuyu/deepseek-harness-desktop",
+      "description": "Rust构建的客户端，体积更小，更方便，Mac，win，linux已完成。",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 45,
+      "seed_rank": 4,
+      "forks_count": 3,
+      "pushed_at": "2026-08-30T05:25:18Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "ceab3e266a92588c4430eedcfd45d93de03021a3",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1334769528",
+      "github_id": 1334769528,
+      "node_id": "R_kgDOT473eA",
+      "full_name": "Ajwyunsx/deepseek-harness-mobile",
+      "owner": "Ajwyunsx",
+      "name": "deepseek-harness-mobile",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/Ajwyunsx/deepseek-harness-mobile",
+      "description": "DeepSeek Harness 的 Android 手机版：proot 容器 + WebView 移动适配 | Android port of DeepSeek Harness — proot Ubuntu container running dsh web with a mobile-optimized WebView UI",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 44,
+      "seed_rank": 5,
+      "forks_count": 3,
+      "pushed_at": "2026-08-21T18:17:37Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "ba10e4f97647af3b3b539bae9d0ac286c8df7787",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333692732",
+      "github_id": 1333692732,
+      "node_id": "R_kgDOT36JPA",
+      "full_name": "sdkwork-ai/deepseek-harness-desktop",
+      "owner": "sdkwork-ai",
+      "name": "deepseek-harness-desktop",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/sdkwork-ai/deepseek-harness-desktop",
+      "description": "DeepSeek Harness: Everything is a Plugin.",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 28,
+      "seed_rank": 6,
+      "forks_count": 4,
+      "pushed_at": "2026-08-21T17:06:57Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "312b82f5c92710097f608c951cfbb267c73cbc59",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1334653579",
+      "github_id": 1334653579,
+      "node_id": "R_kgDOT40yiw",
+      "full_name": "rpmalouin/deepseek-harness",
+      "owner": "rpmalouin",
+      "name": "deepseek-harness",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/rpmalouin/deepseek-harness",
+      "description": "DeepSeek Harness: Everything is a Plugin.",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 20,
+      "seed_rank": 7,
+      "forks_count": 2,
+      "pushed_at": "2026-08-29T21:58:09Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "b98d9a7c60f19084587b4358b1e30615bf3b0353",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333729559",
+      "github_id": 1333729559,
+      "node_id": "R_kgDOT38ZFw",
+      "full_name": "cipherTing/deepseek-harness-desktop-pure",
+      "owner": "cipherTing",
+      "name": "deepseek-harness-desktop-pure",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/cipherTing/deepseek-harness-desktop-pure",
+      "description": "DeepSeek Harness桌面端",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 20,
+      "seed_rank": 8,
+      "forks_count": 0,
+      "pushed_at": "2026-08-31T10:35:38Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "384bd4d432308cb2a69bbc723905f7bca1186d7f",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1337824038",
+      "github_id": 1337824038,
+      "node_id": "R_kgDOT72TJg",
+      "full_name": "Akunimal/free-code-deepseek-harness",
+      "owner": "Akunimal",
+      "name": "free-code-deepseek-harness",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/Akunimal/free-code-deepseek-harness",
+      "description": "Portable cross-platform GUI fork of DeepSeek Harness for almost-free OpenCode vibecoding.",
+      "description_origin": "author_declared",
+      "topics": [],
+      "language": "TypeScript",
+      "github_stars": 16,
+      "seed_rank": 9,
+      "forks_count": 1,
+      "pushed_at": "2026-08-30T14:40:10Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "69455269ed808aca95461056e1f53b559e742498",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333909542",
+      "github_id": 1333909542,
+      "node_id": "R_kgDOT4HYJg",
+      "full_name": "G36maid/deepseek-harness",
+      "owner": "G36maid",
+      "name": "deepseek-harness",
+      "artifact_type": "fork",
+      "source": "github",
+      "repository_url": "https://github.com/G36maid/deepseek-harness",
+      "description": "DeepSeek Harness 繁體中文版 (zh-TW) — Everything is a Plugin.",
+      "description_origin": "author_declared",
+      "topics": [
+        "ai-agents",
+        "chinese",
+        "deepseek-harness",
+        "dsh-plugin",
+        "taiwan",
+        "traditional-chinese",
+        "translation",
+        "zh-tw"
+      ],
+      "language": "TypeScript",
+      "github_stars": 15,
+      "seed_rank": 10,
+      "forks_count": 0,
+      "pushed_at": "2026-08-17T07:26:14Z",
+      "archived": false,
+      "default_branch": "master",
+      "head_sha": "6cff104734bbcbe1cebb292fafaef83e0b39d090",
+      "parent_repository": "deepseek-ai/deepseek-harness",
+      "source_repository": "deepseek-ai/deepseek-harness",
+      "license": {
+        "spdx": "MIT",
+        "status": "github_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null
+      },
+      "analysis_status": "not_analyzed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    }
+  ],
+  "supplemental_entries": []
+}

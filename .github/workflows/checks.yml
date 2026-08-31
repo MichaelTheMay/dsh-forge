@@ -1,0 +1,29 @@
+name: UI and catalog checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Validate the embedded metadata
+        run: |
+          python3 scripts/embed_catalog.py
+          git diff --exit-code -- web/index.html
+      - name: Test catalog behavior
+        run: node --test tests/catalog.test.cjs
+      - name: Test metadata safety and the static server
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Produce the portable preview
+        run: python3 scripts/package_preview.py dist/DSH_Forge_Public_Repos.html
