@@ -9,4 +9,7 @@ coverage/
 *.sqlite-shm
 *.sqlite-wal
 .DS_Store
-
+__pycache__/
+*.py[cod]
+*.bundle
+*.patch
