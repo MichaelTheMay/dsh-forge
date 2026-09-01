@@ -155,6 +155,50 @@ class ScannerAndRunner(LauncherFixture):
             stopped = self.launcher.stop(cell["id"])
             self.assertEqual(stopped["state"], "stopped")
 
+    def test_parallel_web_cells_get_unique_ports_homes_and_workspaces(self):
+        with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
+            first = self.launcher.launch({
+                "tree_id": self.tree()["id"], "surface": "web", "port": "auto",
+                "home_mode": "fresh", "workspace": "managed"
+            })
+            second = self.launcher.launch({
+                "tree_id": self.tree()["id"], "surface": "web", "port": "auto",
+                "home_mode": "fresh", "workspace": "managed"
+            })
+            self.assertNotEqual(first["port"], second["port"])
+            self.assertNotEqual(first["home"], second["home"])
+            self.assertNotEqual(first["workspace"], second["workspace"])
+            self.assertEqual(first["workspace_isolation"], "managed empty")
+            self.assertFalse(first["resources"]["enforced"])
+            self.assertIn(first["agent_state"], {"working", "idle"})
+            self.assertIsInstance(first["recent_logs"], list)
+            self.launcher.stop(first["id"])
+            self.launcher.stop(second["id"])
+
+    def test_clone_session_gets_another_port_and_sanitized_state_copy(self):
+        with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
+            source = self.launcher.launch({
+                "tree_id": self.tree()["id"], "surface": "web", "port": "auto",
+                "home_mode": "fresh", "workspace": "managed"
+            })
+            source_private = self.launcher._cells[source["id"]]
+            home = Path(source_private["real_home"])
+            workspace = Path(source_private["real_workspace"])
+            (home / "sessions").mkdir()
+            (home / "sessions" / "one.jsonl").write_text("session", encoding="utf-8")
+            (home / ".env").write_text("SECRET=value", encoding="utf-8")
+            (workspace / "artifact.txt").write_text("artifact", encoding="utf-8")
+            cloned = self.launcher.clone(source["id"])
+            cloned_private = self.launcher._cells[cloned["id"]]
+            self.assertNotEqual(source["id"], cloned["id"])
+            self.assertNotEqual(source["port"], cloned["port"])
+            self.assertEqual((Path(cloned_private["real_home"]) / "sessions" / "one.jsonl").read_text(), "session")
+            self.assertFalse((Path(cloned_private["real_home"]) / ".env").exists())
+            self.assertEqual((Path(cloned_private["real_workspace"]) / "artifact.txt").read_text(), "artifact")
+            self.assertEqual(self.launcher.artifacts(cloned["id"])[0]["path"], "artifact.txt")
+            self.launcher.stop(source["id"])
+            self.launcher.stop(cloned["id"])
+
     def test_persisted_identity_is_recovered_and_can_be_stopped(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
             cell = self.launcher.launch({
@@ -323,6 +367,8 @@ class LauncherServer(LauncherFixture):
             cookie = response.headers["Set-Cookie"]
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
+        self.assertEqual(payload["sandbox"]["mode"], "local-isolation-preview")
+        self.assertFalse(payload["sandbox"]["hostile_code_isolation"])
 
     def test_api_does_not_accept_non_loopback_host(self):
         request = urllib.request.Request(self.url + "/api/v1/status", headers={"Host": "example.com"})

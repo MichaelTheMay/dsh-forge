@@ -451,10 +451,25 @@ class Launcher:
         else:
             cell["http"] = "n/a"
 
+    def _activity_state(self, cell: dict[str, Any]) -> str:
+        """Map process and recent log evidence to the fleet's small state vocabulary."""
+        if cell.get("process") != "alive" or cell.get("state") in {"stopped", "exited", "identity-mismatch"}:
+            return "exited"
+        if cell.get("blocked") is True:
+            return "blocked"
+        try:
+            age = time.time() - Path(cell["log_path"]).stat().st_mtime
+        except (KeyError, OSError):
+            age = float("inf")
+        return "working" if cell.get("state") == "starting" or age < 15 else "idle"
+
     def _public_cell(self, cell: dict[str, Any]) -> dict[str, Any]:
         self._refresh_cell(cell)
-        public = {k: v for k, v in cell.items() if k not in {"launch_spec", "log_path", "process_birth", "real_home", "open_url"}}
+        public = {k: v for k, v in cell.items() if k not in {"launch_spec", "log_path", "process_birth", "real_home", "real_workspace", "open_url"}}
         public["open_ready"] = bool(cell.get("open_url"))
+        public["agent_state"] = self._activity_state(cell)
+        public["state_source"] = "process identity + recent log activity"
+        public["recent_logs"] = [line["msg"] for line in self.logs(cell["id"], limit=3)]
         return public
 
     def status(self) -> dict[str, Any]:
@@ -470,6 +485,12 @@ class Launcher:
             "coverage_gaps": list(self._coverage_gaps),
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
+            "sandbox": {
+                "mode": "local-isolation-preview",
+                "hostile_code_isolation": False,
+                "enforced": ["loopback ports", "separate process groups", "separate writable homes", "managed workspaces"],
+                "not_enforced": ["CPU quota", "GPU quota", "RAM quota", "network policy", "filesystem confinement"],
+            },
         }
 
     def _tree(self, tree_id: str) -> dict[str, Any]:
@@ -493,10 +514,14 @@ class Launcher:
             raise LauncherError("Custom profile contains unsupported characters")
         port = None
         if surface != "headless":
-            try:
-                port = int(raw.get("port"))
-            except (TypeError, ValueError):
-                raise LauncherError("Choose a numeric port") from None
+            requested_port = raw.get("port")
+            if requested_port in {None, "", "auto"}:
+                port = self.suggested_port()
+            else:
+                try:
+                    port = int(requested_port)
+                except (TypeError, ValueError):
+                    raise LauncherError("Choose a numeric port or use automatic assignment") from None
             if port in self.protected_ports:
                 raise LauncherError(f"Port {port} is protected and cannot be used by a cell")
             with self._lock:
@@ -508,8 +533,9 @@ class Launcher:
         home_mode = str(raw.get("home_mode", "fresh"))
         if home_mode not in {"exclusive", "fresh", "clone"}:
             raise LauncherError("Home mode must be exclusive, fresh, or clone")
-        workspace_raw = str(raw.get("workspace") or "").strip()
-        workspace = Path(workspace_raw).expanduser().resolve() if workspace_raw and workspace_raw != "none" else None
+        workspace_raw = str(raw.get("workspace") or "managed").strip()
+        workspace_mode = workspace_raw if workspace_raw in {"none", "managed", "clone"} else "existing"
+        workspace = Path(workspace_raw).expanduser().resolve() if workspace_mode == "existing" else None
         if workspace and not workspace.is_dir():
             raise LauncherError("Workspace must be an existing directory or 'none'")
         clone_source_raw = str(raw.get("clone_source") or "~/.dsh")
@@ -519,6 +545,17 @@ class Launcher:
             raise LauncherError("Enter a task for the one-shot headless surface")
         if len(task) > 20000:
             raise LauncherError("Headless task exceeds the 20,000-character launcher limit")
+        resources_raw = raw.get("resources") if isinstance(raw.get("resources"), dict) else {}
+        resources = {
+            "cpu": str(resources_raw.get("cpu") or "host shared")[:32],
+            "gpu": str(resources_raw.get("gpu") or "inherit allocation")[:32],
+            "ram": str(resources_raw.get("ram") or "host shared")[:32],
+            "enforced": False,
+            "note": "display request only; quotas are not enforced in the local preview",
+        }
+        for value in (resources["cpu"], resources["gpu"], resources["ram"]):
+            if not re.fullmatch(r"[A-Za-z0-9 ._+:/-]{1,32}", value):
+                raise LauncherError("Resource labels contain unsupported characters")
         cwd = workspace or (self.launch_cwd if tree["kind"] in {"npm", "bin"} else Path(tree["real_path"]))
         return {
             "tree": tree,
@@ -529,9 +566,13 @@ class Launcher:
             "open_browser": bool(raw.get("open_browser", True)),
             "home_mode": home_mode,
             "clone_source": str(clone_source),
-            "workspace": str(workspace) if workspace else None,
+            "workspace": str(workspace) if workspace else workspace_mode,
+            "workspace_mode": workspace_mode,
+            "workspace_clone_source": str(raw.get("workspace_clone_source") or ""),
             "cwd": str(cwd),
             "task": task,
+            "include_sessions": bool(raw.get("include_sessions", False)),
+            "resources": resources,
         }
 
     def _home_preview(self, spec: dict[str, Any], cell_id: str = "<generated>") -> str:
@@ -563,15 +604,25 @@ class Launcher:
             "cwd": spec["cwd"],
             "home": self._home_preview(spec),
             "home_mode": spec["home_mode"],
+            "workspace": self._workspace_preview(spec),
+            "resources": spec["resources"],
             "environment_keys": env_keys,
             "credential_keys": [name for name in SECRET_NAMES if os.environ.get(name)],
             "notes": [
                 "No repository code was executed during discovery.",
                 "The process will start in a new session and process group.",
                 "State isolation is not a hostile-code security boundary.",
+                "CPU, GPU, and RAM labels are preview requests and are not quota-enforced.",
                 "Loader health is reported as not observed until an adapter exists.",
             ],
         }
+
+    def _workspace_preview(self, spec: dict[str, Any], cell_id: str = "<generated>") -> str:
+        if spec["workspace_mode"] == "managed":
+            return _display_path(self.cells_root / cell_id / "workspace") + " (managed empty)"
+        if spec["workspace_mode"] == "clone":
+            return _display_path(self.cells_root / cell_id / "workspace") + " (session clone)"
+        return _display_path(Path(spec["workspace"])) if spec["workspace_mode"] == "existing" else "none"
 
     def _prepare_home(self, spec: dict[str, Any], cell_id: str) -> tuple[Path, str]:
         if spec["home_mode"] == "exclusive":
@@ -597,7 +648,7 @@ class Launcher:
                 lower = name.lower()
                 if (
                     (Path(directory) / name).is_symlink()
-                    or lower in CLONE_EXCLUDES
+                    or (lower in CLONE_EXCLUDES and not (spec["include_sessions"] and lower in {"session", "sessions"}))
                     or lower.endswith((".lock", ".pid", ".sock"))
                     or lower.startswith((".env", "credential", "secret"))
                 ):
@@ -608,6 +659,27 @@ class Launcher:
         os.chmod(target, 0o700)
         return target, "cloned home"
 
+    def _prepare_workspace(self, spec: dict[str, Any], cell_id: str) -> tuple[Path | None, str]:
+        mode = spec["workspace_mode"]
+        if mode == "none":
+            return None, "none"
+        if mode == "existing":
+            return Path(spec["workspace"]), "shared existing"
+        target = self.cells_root / cell_id / "workspace"
+        if mode == "managed":
+            target.mkdir(mode=0o700)
+            return target, "managed empty"
+        source = Path(spec["workspace_clone_source"])
+        if not source.is_dir():
+            raise LauncherError("Workspace clone source is not an existing directory")
+
+        def ignore(_directory: str, names: list[str]) -> set[str]:
+            return {name for name in names if name in {".git", "node_modules", ".cache"} or (Path(_directory) / name).is_symlink()}
+
+        shutil.copytree(source, target, symlinks=False, ignore=ignore)
+        os.chmod(target, 0o700)
+        return target, "cloned workspace"
+
     def launch(self, raw: dict[str, Any]) -> dict[str, Any]:
         with self._mutation_lock:
             return self._launch(raw)
@@ -616,6 +688,9 @@ class Launcher:
         spec = self._normalize_spec(raw)
         cell_id = "cell_" + uuid.uuid4().hex[:10]
         home, isolation = self._prepare_home(spec, cell_id)
+        workspace, workspace_isolation = self._prepare_workspace(spec, cell_id)
+        if workspace:
+            spec["cwd"] = str(workspace)
         argv = self._argv(spec)
         env = {name: value for name in SAFE_ENV_NAMES if (value := os.environ.get(name))}
         env.update({name: value for name in SECRET_NAMES if (value := os.environ.get(name))})
@@ -662,6 +737,8 @@ class Launcher:
             "name": name,
             "state": "starting",
             "treeId": spec["tree_id"],
+            "version": spec["tree"]["version"],
+            "commit": (spec["tree"].get("git") or {}).get("sha") or "package pin",
             "surface": spec["surface"],
             "port": spec["port"],
             "pid": process.pid,
@@ -671,12 +748,20 @@ class Launcher:
             "home": _display_path(home),
             "real_home": str(home),
             "isolation": isolation,
-            "workspace": _display_path(Path(spec["workspace"])) if spec["workspace"] else "none",
+            "workspace": _display_path(workspace) if workspace else "none",
+            "real_workspace": str(workspace) if workspace else "",
+            "workspace_isolation": workspace_isolation,
+            "resources": spec["resources"],
             "http": "pending" if spec["port"] else "n/a",
             "loader": "not observed",
             "process": "alive",
             "log_path": str(log_path),
-            "launch_spec": {k: v for k, v in raw.items() if k != "tree"},
+            "launch_spec": {
+                "tree_id": spec["tree_id"], "surface": spec["surface"], "profile": spec["profile"],
+                "task": spec["task"], "port": spec["port"], "open_browser": spec["open_browser"],
+                "home_mode": spec["home_mode"], "clone_source": spec["clone_source"],
+                "workspace": spec["workspace"], "resources": spec["resources"],
+            },
         }
         with self._lock:
             self._processes[cell_id] = process
@@ -740,6 +825,32 @@ class Launcher:
             raw = dict(cell["launch_spec"])
             if cell["state"] not in {"stopped", "exited"}:
                 self._stop(cell_id, 3.0)
+            raw.update({
+                "port": "auto" if raw.get("port") else None,
+                "home_mode": "clone",
+                "clone_source": cell["real_home"],
+                "include_sessions": True,
+            })
+            if cell.get("real_workspace") and cell.get("workspace_isolation") != "shared existing":
+                raw.update({"workspace": "clone", "workspace_clone_source": cell["real_workspace"]})
+            return self._launch(raw)
+
+    def clone(self, cell_id: str) -> dict[str, Any]:
+        """Start a parallel cell from a sanitized snapshot of a managed session."""
+        with self._mutation_lock:
+            with self._lock:
+                cell = self._cells.get(cell_id)
+            if not cell:
+                raise LauncherError("Unknown cell")
+            raw = dict(cell["launch_spec"])
+            raw.update({
+                "port": "auto" if raw.get("port") else None,
+                "home_mode": "clone",
+                "clone_source": cell["real_home"],
+                "include_sessions": True,
+            })
+            if cell.get("real_workspace") and cell.get("workspace_isolation") != "shared existing":
+                raw.update({"workspace": "clone", "workspace_clone_source": cell["real_workspace"]})
             return self._launch(raw)
 
     def logs(self, cell_id: str, limit: int = 500) -> list[dict[str, str]]:
@@ -770,6 +881,29 @@ class Launcher:
         if not value:
             raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
         return str(value)
+
+    def artifacts(self, cell_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock:
+            cell = self._cells.get(cell_id)
+        if not cell:
+            raise LauncherError("Unknown cell")
+        root_raw = cell.get("real_workspace")
+        if not root_raw or cell.get("workspace_isolation") == "shared existing":
+            return []
+        root = Path(root_raw)
+        if not root.is_dir():
+            return []
+        results = []
+        for path in sorted(root.rglob("*")):
+            if len(results) >= max(1, min(limit, 100)):
+                break
+            if path.is_file() and not path.is_symlink():
+                try:
+                    stat = path.stat()
+                    results.append({"path": str(path.relative_to(root)), "bytes": stat.st_size, "modified": int(stat.st_mtime * 1000)})
+                except OSError:
+                    continue
+        return results
 
     def shutdown(self) -> None:
         """Stop only processes still owned and identity-verified by this instance."""

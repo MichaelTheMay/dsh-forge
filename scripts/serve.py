@@ -152,6 +152,16 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        match = re.fullmatch(r"/api/v1/cells/([^/]+)/artifacts", path)
+        if match:
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json({"artifacts": self.server.launcher.artifacts(match.group(1))})
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.NOT_FOUND)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         if path.startswith("/api/"):
             self._json({"error": "Unknown API endpoint"}, HTTPStatus.NOT_FOUND)
             return
@@ -182,9 +192,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             if path == "/api/v1/cells":
                 self._json(self.server.launcher.launch(body), HTTPStatus.CREATED)
                 return
-            match = re.fullmatch(r"/api/v1/cells/([^/]+)/(stop|restart)", path)
+            match = re.fullmatch(r"/api/v1/cells/([^/]+)/(stop|restart|clone)", path)
             if match:
-                payload = self.server.launcher.stop(match.group(1)) if match.group(2) == "stop" else self.server.launcher.restart(match.group(1))
+                action = match.group(2)
+                payload = self.server.launcher.stop(match.group(1)) if action == "stop" else (
+                    self.server.launcher.restart(match.group(1)) if action == "restart" else self.server.launcher.clone(match.group(1))
+                )
                 self._json(payload)
                 return
             self._json({"error": "Unknown API endpoint"}, HTTPStatus.NOT_FOUND)

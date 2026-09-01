@@ -11,21 +11,18 @@ const TXT = 'oklch(0.86 0.01 255)';
 const BORDER = 'oklch(0.31 0.012 255)';
 const SELB = 'oklch(0.58 0.11 235)';
 
-const PREVIEW_TREES = [
-  { id: 'daily', name: 'dsh-daily', kind: 'npm', version: '0.1.2-alpha.2', path: '~/.npm-global/lib/node_modules/@deepseek-ai/dsh',
-    git: null, trust: 'personal', launchability: 'ready', short: 'daily', exe: '~/.npm-global/bin/dsh', node: '/usr/bin/node · 24.4.1' },
-  { id: 'src', name: 'dsh-src', kind: 'source', version: '0.1.3-dev', path: '~/src/deepseek-harness',
-    git: { branch: 'master', sha: '0a53fb5', dirty: false }, trust: 'readonly', launchability: 'ready', short: 'src',
-    exe: '~/src/deepseek-harness/apps/cli/lib/bin.js', node: '/usr/bin/node · 24.4.1' },
-  { id: 'wt', name: 'forge-wt', kind: 'source', version: '0.1.3-dev', path: '~/Dev/dsh-forge-worktree',
-    git: { branch: 'sidecar/pick', sha: 'c81de40', dirty: true }, trust: 'personal', launchability: 'ready', short: 'wt',
-    exe: '~/Dev/dsh-forge-worktree/apps/cli/lib/bin.js', node: '~/.nvm/versions/node/v22.19.0/bin/node · 22.19.0' },
-  { id: 'bin', name: 'dsh-nightly', kind: 'bin', version: '0.1.4-nightly.7', path: '/usr/local/bin/dsh',
-    git: null, trust: 'personal', launchability: 'ready', short: 'nightly', exe: '/usr/local/bin/dsh', node: 'bundled · 24.4.1' },
-  { id: 'fork', name: 'dsh-rewind (fork)', kind: 'source', version: 'unknown', path: '~/Dev/forks/dsh-rewind',
-    git: { branch: 'main', sha: '77b1c2a', dirty: false }, trust: 'foreign', launchability: 'blocked-by-policy', short: 'rewind',
-    exe: '—', node: '—' }
+const PINNED_RELEASES = [
+  { id: 'official-alpha-3', name: 'Harness alpha.3', version: '0.1.2-alpha.3', tag: 'dsh-v0.1.2-alpha.3', commit: 'dd6322d',
+    releaseUrl: 'https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.3' },
+  { id: 'official-alpha-2', name: 'Harness alpha.2', version: '0.1.2-alpha.2', tag: 'dsh-v0.1.2-alpha.2', commit: '0a53fb5',
+    releaseUrl: 'https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.2' }
 ];
+
+const PREVIEW_TREES = PINNED_RELEASES.map(pin => ({
+  id: pin.id, name: pin.name, kind: 'official release', version: pin.version, path: 'Install this exact official release to enable Launch',
+  git: { branch: pin.tag, sha: pin.commit, dirty: false }, trust: 'readonly', launchability: 'preview-only', short: pin.id,
+  exe: 'not detected', node: 'not detected'
+}));
 
 // CATALOG_SNAPSHOT_START
 const CATALOG_SNAPSHOT = {
@@ -525,13 +522,20 @@ class Component extends DCLogic {
       coverageGaps: [],
       credentials: [],
       previewData: null,
-      logLines: []
+      logLines: [],
+      selectedCell: null,
+      inspectorTab: 'logs',
+      artifacts: []
     };
   }
 
   componentDidMount() {
     this.timer = setInterval(() => this.forceUpdate(), 1000);
     this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
+    this.inspectorTimer = setInterval(() => {
+      const cell = this.state.view === 'launch' && this.state.cells.find(item => item.id === this.state.selectedCell);
+      if (cell) this.inspectCell(cell, this.state.inspectorTab);
+    }, 3000);
     this.hashListener = () => this.setState({ view: window.location.hash === '#public-repos' ? 'catalog' : 'launch' });
     window.addEventListener('hashchange', this.hashListener);
     this.refreshStatus(true);
@@ -539,6 +543,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     clearInterval(this.timer);
     clearInterval(this.statusTimer);
+    clearInterval(this.inspectorTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
@@ -597,9 +602,11 @@ class Component extends DCLogic {
   applyStatus(status) {
     const trees = Array.isArray(status.trees) ? status.trees : [];
     const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
+    const cells = Array.isArray(status.cells) ? status.cells : [];
+    const selectedCell = cells.some(c => c.id === this.state.selectedCell) ? this.state.selectedCell : (cells[0] ? cells[0].id : null);
     this.setState({
       sidecarConnected: true, statusLoaded: true, trees, treeId: current,
-      cells: Array.isArray(status.cells) ? status.cells : [],
+      cells, selectedCell,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
       credentials: Array.isArray(status.credentials) ? status.credentials : []
@@ -630,7 +637,8 @@ class Component extends DCLogic {
       open_browser: s.openBrowser,
       home_mode: s.homeMode,
       clone_source: s.cloneSource,
-      workspace: s.workspace
+      workspace: s.workspace,
+      resources: { cpu: 'host shared', gpu: 'inherit allocation', ram: 'host shared' }
     };
   }
 
@@ -686,10 +694,27 @@ class Component extends DCLogic {
     }
   }
 
+  async quickLaunch(version) {
+    if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
+    if (!version.treeId) return this.flash('That exact official release is not installed. Add its folder, then rescan.');
+    try {
+      const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
+        tree_id: version.treeId, surface: 'web', port: 'auto', open_browser: false,
+        home_mode: 'fresh', workspace: 'managed',
+        resources: { cpu: 'host shared', gpu: 'inherit allocation', ram: 'host shared' }
+      }) });
+      await this.refreshStatus(true);
+      this.setState({ selectedCell: cell.id, inspectorTab: 'logs' });
+      await this.inspectCell(cell, 'logs');
+      this.flash('launched ' + version.version + ' on automatic port ' + cell.port);
+    } catch (error) { this.flash(error.message); }
+  }
+
   async cellAction(cell, action) {
     try {
-      await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/' + action, { method: 'POST', body: '{}' });
+      const result = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/' + action, { method: 'POST', body: '{}' });
       await this.refreshStatus(true);
+      if (action === 'restart' || action === 'clone') this.setState({ selectedCell: result.id, inspectorTab: 'logs' });
       this.flash(action + ' complete · ' + cell.name);
     } catch (error) { this.flash(error.message); }
   }
@@ -720,7 +745,18 @@ class Component extends DCLogic {
   async openLogs(cell) {
     try {
       const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/logs');
-      this.setState({ logCell: cell.id, logLines: payload.lines || [] });
+      this.setState({ logCell: cell.id, selectedCell: cell.id, inspectorTab: 'logs', logLines: payload.lines || [] });
+    } catch (error) { this.flash(error.message); }
+  }
+
+  async inspectCell(cell, tab = 'logs') {
+    this.setState({ selectedCell: cell.id, inspectorTab: tab });
+    try {
+      const [logs, artifacts] = await Promise.all([
+        this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/logs'),
+        this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/artifacts')
+      ]);
+      this.setState({ logCell: cell.id, logLines: logs.lines || [], artifacts: artifacts.artifacts || [] });
     } catch (error) { this.flash(error.message); }
   }
 
@@ -735,6 +771,23 @@ class Component extends DCLogic {
     const isSystem = portNum === 3080 || portNum === 3090;
     const leaseHeld = s.homeMode === 'exclusive' && s.cells.some(c => c.isolation === 'exclusive persistent' && c.state !== 'stopped');
     const confirm = this.props.confirmBeforeLaunch ?? true;
+    const versions = PINNED_RELEASES.map(pin => {
+      const detected = s.trees.find(tr => tr.version === pin.version || (tr.git && String(tr.git.sha || '').startsWith(pin.commit)));
+      const runnablePin = !!detected && s.sidecarConnected && detected.trust !== 'foreign' && detected.launchability === 'ready';
+      return {
+        ...pin,
+        treeId: detected && detected.id,
+        installPath: detected ? detected.path : 'Exact installation not detected',
+        status: runnablePin ? 'ready' : (s.sidecarConnected ? 'not installed' : 'preview pin'),
+        statusColor: runnablePin ? OK : WARN,
+        buttonLabel: runnablePin ? 'Launch cell' : (s.sidecarConnected ? 'Add installation' : 'Preview only'),
+        disabled: !runnablePin,
+        buttonCursor: runnablePin ? 'pointer' : 'not-allowed',
+        buttonBg: runnablePin ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
+        buttonBorder: runnablePin ? 'oklch(0.52 0.13 155)' : BORDER,
+        launch: () => this.quickLaunch({ ...pin, treeId: detected && detected.id })
+      };
+    });
 
     let portNote, portNoteFg = MUTED, portNoteBorder = BORDER, portNoteBg = 'transparent';
     if (s.surface === 'headless') { portNote = 'headless surface binds no HTTP port'; }
@@ -758,8 +811,8 @@ class Component extends DCLogic {
 
     const cells = s.cells.map(c => {
       const ct = this.tree(c.treeId);
-      const running = c.state === 'running';
-      const stateColor = running ? OK : (c.state === 'starting' ? WARN : MUTED);
+      const running = c.process === 'alive';
+      const stateColor = c.agent_state === 'working' ? OK : (c.agent_state === 'blocked' ? WARN : (c.agent_state === 'exited' ? BAD : BLUE));
       const processAlive = c.process === 'alive';
       const httpOk = /^[1-4]\d\d$/.test(String(c.http));
       const health = [
@@ -774,15 +827,32 @@ class Component extends DCLogic {
       });
       return {
         ...c,
-        treeName: ct.name, treeIdentity: ct.kind + ' · ' + ct.version + (ct.git ? ' · ' + ct.git.sha : ''),
+        treeName: ct.name,
+        treeIdentity: (c.version || ct.version || 'unknown') + ' · ' + (c.commit || (ct.git && ct.git.sha) || 'package pin'),
+        workspace_isolation: c.workspace_isolation || 'legacy/shared',
         surface: c.surface, url: c.port ? '127.0.0.1:' + c.port : '—',
         uptime: this.uptime(c.started), stateColor,
-        stateAnim: c.state === 'starting' ? 'dshpulse 1.4s ease-in-out infinite' : 'none',
-        rowBg: s.logCell === c.id ? 'oklch(0.225 0.012 255)' : 'transparent',
+        stateAnim: c.agent_state === 'working' ? 'dshpulse 1.8s ease-in-out infinite' : 'none',
+        rowBg: s.selectedCell === c.id ? 'oklch(0.235 0.018 255)' : 'oklch(0.205 0.009 255)',
+        cardBorder: s.selectedCell === c.id ? SELB : BORDER,
         isolationColor: c.isolation === 'exclusive persistent' ? WARN : MUTED,
         trust: ct.trust, trustColor: ct.trust === 'personal' ? OK : (ct.trust === 'readonly' ? BLUE : BAD),
         trustBorder: ct.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (ct.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
         health,
+        resourcesList: [
+          { label: 'CPU', value: (c.resources && c.resources.cpu) || 'host shared' },
+          { label: 'GPU', value: (c.resources && c.resources.gpu) || 'inherit allocation' },
+          { label: 'RAM', value: (c.resources && c.resources.ram) || 'host shared' }
+        ],
+        recentLogLines: (c.recent_logs || []).map(msg => ({ msg })),
+        open: () => this.openCell(c),
+        stop: () => this.cellAction(c, 'stop'),
+        restart: () => this.cellAction(c, 'restart'),
+        clone: () => this.cellAction(c, 'clone'),
+        inspect: () => this.inspectCell(c),
+        openDisabled: !c.port || !running,
+        stopDisabled: !processAlive,
+        lifecycleDisabled: false,
         actions: [
           act('stop', () => this.cellAction(c, 'stop'), processAlive),
           act('restart', () => this.cellAction(c, 'restart'), running || c.state === 'exited' || c.state === 'stopped'),
@@ -792,6 +862,15 @@ class Component extends DCLogic {
         ]
       };
     });
+    const activeCell = cells.find(c => c.id === s.selectedCell) || cells[0] || null;
+    const inspectorTabs = [
+      { id: 'logs', label: 'Live logs' }, { id: 'prompts', label: 'Prompts' }, { id: 'artifacts', label: 'Artifacts' }
+    ].map(tab => ({
+      ...tab,
+      bg: s.inspectorTab === tab.id ? 'oklch(0.31 0.04 235)' : 'transparent',
+      color: s.inspectorTab === tab.id ? TXT : MUTED,
+      select: () => activeCell ? this.inspectCell(activeCell, tab.id) : undefined
+    }));
 
     const queryTerms = s.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const filtered = CATALOG.filter(a => {
@@ -844,7 +923,7 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
       goCatalog: () => this.navigate('catalog'),
-      modeLabel: s.sidecarConnected ? 'launcher alpha' : 'portable preview',
+      modeLabel: s.sidecarConnected ? 'fleet preview' : 'portable preview',
       sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
       sidecarDot: s.sidecarConnected ? OK : WARN,
       sidecarAddress: typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090',
@@ -859,6 +938,8 @@ class Component extends DCLogic {
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       scanLabel: s.scanning ? 'scanning…' : 'Rescan',
       rescan: () => s.sidecarConnected ? this.rescanLauncher() : this.flash('Start scripts/serve.py to scan local trees'),
+      versions,
+      pinnedCount: PINNED_RELEASES.length + ' immutable official pins',
 
       trees: s.trees.map(tr => {
         const sel = tr.id === s.treeId;
@@ -957,6 +1038,15 @@ class Component extends DCLogic {
       cellColumns: COLUMNS,
       cells,
       noCells: cells.length === 0,
+      hasActiveCell: !!activeCell,
+      activeCell: activeCell || {},
+      inspectorTabs,
+      showInspectorLogs: s.inspectorTab === 'logs',
+      showInspectorPrompts: s.inspectorTab === 'prompts',
+      showInspectorArtifacts: s.inspectorTab === 'artifacts',
+      inspectorLogLines: s.logLines,
+      inspectorArtifacts: s.artifacts.map(item => ({ ...item, sizeLabel: item.bytes.toLocaleString('en-US') + ' B' })),
+      noArtifacts: s.artifacts.length === 0,
 
       logsOpen: !!s.logCell,
       logTitle: 'logs · ' + (s.cells.find(c => c.id === s.logCell) || { name: '' }).name,

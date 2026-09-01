@@ -8,14 +8,19 @@ The public ecosystem crawler and catalog publisher live in the separate
 
 ## Status
 
-The first local launcher alpha and **Public Repos** interface are available.
+The first local fleet launcher and **Public Repos** interface are available.
 The loopback sidecar discovers configured DSH trees without executing candidate
-code, previews an exact launch, starts trusted local trees, and controls only
-processes whose PID and process-start identity it recorded. Public Repos contains
-a dated metadata snapshot of ten real community forks.
+code, pins the two current official release installations, and repeatedly starts
+trusted local cells with automatic ports, separate writable homes, managed
+workspaces, process groups, recent logs, clone/restart controls, and a live
+inspector. It controls only processes whose PID and process-start identity it
+recorded. Public Repos contains a dated metadata snapshot of ten real community
+forks.
 
-This is state isolation, not a hostile-code security sandbox. Public repository
-download, installation, merging, and execution remain disabled.
+This is a **local-isolation sandbox preview**, not a hostile-code security
+sandbox. CPU/GPU/RAM labels are visible planning values but are not quota
+enforced; network and filesystem confinement are also deferred. Public
+repository download, installation, merging, and execution remain disabled.
 
 ## Open the UI
 
@@ -35,6 +40,11 @@ roots at startup when needed:
 ```bash
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
 ```
+
+For the two exact official pins shown in the Versions rail, see
+[Fleet sandbox preview](docs/fleet-sandbox-preview.md). When both built source
+trees are registered, each **Launch cell** click selects a free loopback port and
+creates a separate managed home and workspace.
 
 The alpha supports the current `dsh web` surface and one-shot `dsh headless`
 tasks. It recognizes the current upstream `apps/cli/lib/bin.js` build artifact
@@ -67,11 +77,16 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   never killed or replaced.
 - A writable DSH home has one live writer. Fresh and sanitized-clone homes are
   launcher-managed alternatives.
+- One-click fleet launches allocate ports while holding the launcher mutation
+  lock. Clone Session preserves session state but removes secret-like files,
+  locks, sockets, PIDs, caches, symlinks, and heavyweight workspace dependencies.
 - Mutation APIs require a loopback Host, same-origin request, and an HttpOnly
   session cookie. Credential presence is shown by key only; values are not
   returned to the page or intentionally logged.
 - Loader readiness is honestly reported as `not observed` until a supported
   runtime adapter exists.
+- The fleet's working/idle state is derived from process identity and recent log
+  activity. Blocked is reserved for a future explicit runtime signal.
 
 ## Public Repos
 
