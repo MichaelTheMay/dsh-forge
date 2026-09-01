@@ -92,7 +92,19 @@ class ScannerAndRunner(LauncherFixture):
             json.dumps({"name": "@deepseek-ai/dsh", "version": "0.1.2-alpha.3"}), encoding="utf-8"
         )
         (cli / "lib" / "bin.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
-        detected = serve.Launcher([upstream], state_root=self.root / "upstream-state")
+        # Discovery should be tested independently of whichever tools happen to
+        # be installed on the host running the Python suite. The real launcher
+        # still reports ``missing-node`` when Node is genuinely unavailable.
+        fake_node = self.root / "node"
+        fake_node.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake_node.chmod(0o755)
+        real_which = launcher_module.shutil.which
+
+        def fixture_which(command):
+            return str(fake_node) if command == "node" else real_which(command)
+
+        with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
+            detected = serve.Launcher([upstream], state_root=self.root / "upstream-state")
         try:
             tree = detected.status()["trees"][0]
             preview = detected.preview({
