@@ -152,7 +152,6 @@
       <span>seed {{ snapshotAt }}</span>
       <span style="padding: 3px 7px; border-radius: 4px; border: 1px solid oklch(0.4 0.06 85); color: oklch(0.8 0.13 85);">cached</span>
     </div>
-    <button onClick="{{ rescan }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid oklch(0.34 0.012 255); background: oklch(0.25 0.01 255); color: oklch(0.88 0.01 255); font-size: 12px; cursor: pointer;" style-hover="background: oklch(0.29 0.012 255);">{{ scanLabel }}</button>
   </header>
 
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
@@ -181,10 +180,6 @@
               <button onClick="{{ t.launch }}" disabled="{{ t.disabled }}" style="padding: 8px; border-radius: 6px; border: 1px solid {{ t.buttonBorder }}; background: {{ t.buttonBg }}; color: oklch(0.9 0.02 155); font-size: 11px; font-weight: 600; cursor: {{ t.buttonCursor }};">{{ t.buttonLabel }}</button>
             </div>
           </sc-for>
-        </div>
-        <div style="display: flex; gap: 6px; margin-top: 8px;">
-          <button onClick="{{ addFolder }}" style="flex: 1 1 auto; padding: 7px; border-radius: 6px; border: 1px dashed oklch(0.36 0.012 255); background: transparent; color: oklch(0.72 0.01 255); font-size: 11.5px; cursor: pointer;">Add folder…</button>
-          <button onClick="{{ addFolder }}" style="flex: 1 1 auto; padding: 7px; border-radius: 6px; border: 1px dashed oklch(0.36 0.012 255); background: transparent; color: oklch(0.72 0.01 255); font-size: 11.5px; cursor: pointer;">Scan roots</button>
         </div>
         <div style="margin-top: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.68 0.09 85);">{{ coverageGap }}</div>
       </div>
@@ -430,7 +425,7 @@
         <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}">
           <div style="grid-column:1/-1; align-self:start; margin:18px; padding:42px 24px; border:1px dashed oklch(0.35 0.018 255); border-radius:10px; text-align:center;">
             <div style="font-size:15px; font-weight:600;">Fleet is ready for its first cell</div>
-            <p style="max-width:470px; margin:9px auto 0; color:oklch(0.63 0.012 255); font:10.5px/1.7 'IBM Plex Mono',monospace;">Install either exact official pin, rescan, then use Launch cell. Every click gets an automatic loopback port plus a separate managed home and workspace. This empty state is not a fabricated running process.</p>
+            <p style="max-width:470px; margin:9px auto 0; color:oklch(0.63 0.012 255); font:10.5px/1.7 'IBM Plex Mono',monospace;">Install either exact official pin and start Forge with its location configured. The version becomes launchable automatically. Every launch gets a loopback port plus a separate managed home and workspace.</p>
           </div>
         </sc-if>
       </div>

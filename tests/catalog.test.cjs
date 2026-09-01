@@ -70,6 +70,13 @@ test('fleet preview has two immutable official pins and no fabricated cells', ()
   assert.match(html, /Local isolation preview/);
   assert.match(html, /CPU\/GPU\/RAM quotas[\s\S]*not enforced/);
 });
+test('launcher keeps discovery controls out of the primary UI', () => {
+  assert(!/>\s*Rescan\s*</i.test(html));
+  assert(!/>\s*Scan roots\s*</i.test(html));
+  assert(!/>\s*Add folder(?:…|\.\.\.)?\s*</i.test(html));
+  assert(!/window\.prompt\s*\(/.test(script));
+  assert(!/\b(?:scanLabel|addFolder|rescanLauncher)\b/.test(script));
+});
 test('one-click version launch requests automatic isolation', async () => {
   const c = instance(); let request;
   c.applyStatus({
