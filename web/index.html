@@ -26,6 +26,23 @@
   @keyframes dshpulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
   .mono { font-family: 'IBM Plex Mono', monospace; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .fleet-shell { flex: 1 1 auto; display: grid; grid-template-columns: 270px minmax(460px, 1fr) 360px; min-height: 0; }
+  .versions-rail, .fleet-inspector { min-height: 0; overflow-y: auto; background: oklch(0.2 0.009 255); }
+  .versions-rail { border-right: 1px solid oklch(0.3 0.012 255); padding: 17px 14px; }
+  .fleet-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .fleet-inspector { border-left: 1px solid oklch(0.3 0.012 255); padding: 16px; }
+  .fleet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; padding: 14px; overflow-y: auto; }
+  .fleet-card { border: 1px solid; border-radius: 10px; padding: 14px; min-width: 0; }
+  .fleet-kv { display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 5px 10px; font: 10px/1.55 'IBM Plex Mono', monospace; }
+  .fleet-kv span:nth-child(odd) { color: oklch(0.57 0.015 255); }
+  .fleet-kv span:nth-child(even) { color: oklch(0.78 0.012 255); overflow-wrap: anywhere; }
+  .fleet-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+  .fleet-actions button { padding: 5px 8px; border-radius: 5px; border: 1px solid oklch(0.35 0.014 255); background: oklch(0.24 0.01 255); color: oklch(0.82 0.012 255); font-size: 10.5px; cursor: pointer; }
+  .fleet-actions button:disabled { opacity: .42; cursor: not-allowed; }
+  .inspector-tabs { display: flex; gap: 4px; padding: 3px; border: 1px solid oklch(0.3 0.012 255); border-radius: 7px; background: oklch(0.22 0.01 255); }
+  .inspector-tabs button { flex: 1 1 0; border: 0; border-radius: 5px; padding: 7px 4px; font-size: 10.5px; cursor: pointer; }
+  @media (max-width: 1180px) { .fleet-shell { grid-template-columns: 245px minmax(420px,1fr) 315px; } .fleet-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 920px) { .fleet-shell { display: block; overflow-y: auto; } .versions-rail, .fleet-inspector { overflow: visible; border: 0; } .versions-rail { border-bottom: 1px solid oklch(0.3 0.012 255); } .fleet-center { min-height: 520px; } .fleet-inspector { border-top: 1px solid oklch(0.3 0.012 255); } }
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid oklch(0.74 0.12 235); outline-offset: 3px; }
   .public-browser { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .repo-masthead { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px 28px 22px; background: oklch(0.205 0.01 255); border-bottom: 1px solid oklch(0.3 0.012 255); }
@@ -115,7 +132,7 @@
   <header class="app-header" style="flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 0 16px; height: 52px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255);">
     <div style="display: flex; align-items: baseline; gap: 8px;">
       <span style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">DSH Forge</span>
-      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">sidecar · dsh-pick</span><span class="repo-label">{{ modeLabel }}</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">local fleet · dsh</span><span class="repo-label">{{ modeLabel }}</span>
     </div>
     <div class="header-loopback" title="{{ sidecarTitle }}" style="display: flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.72 0.01 255);">
       <span style="width: 6px; height: 6px; border-radius: 999px; background: {{ sidecarDot }};"></span>
@@ -139,31 +156,29 @@
   </header>
 
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
-  <main style="flex: 1 1 auto; display: grid; grid-template-columns: 430px 1fr; min-height: 0;">
+  <main class="fleet-shell" aria-label="Harness fleet launcher">
 
-    <section style="border-right: 1px solid oklch(0.3 0.012 255); overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; background: oklch(0.2 0.009 255);">
+    <section class="versions-rail" aria-label="Pinned Harness versions">
 
       <div>
         <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.66 0.01 255);">1 · Tree</span>
-          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.56 0.01 255);">{{ treeCountLabel }}</span>
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Versions</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: oklch(0.56 0.01 255);">{{ pinnedCount }}</span>
         </div>
+        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Two immutable official release pins. Launch repeatedly; Forge assigns each cell a fresh port, home, and managed workspace.</p>
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          <sc-for list="{{ trees }}" as="t" hint-placeholder-count="5">
-            <div onClick="{{ t.select }}" style="padding: 9px 10px; border-radius: 8px; border: 1px solid {{ t.border }}; background: {{ t.bg }}; cursor: {{ t.cursor }}; opacity: {{ t.opacity }}; display: flex; flex-direction: column; gap: 5px;">
+          <sc-for list="{{ versions }}" as="t" hint-placeholder-count="2">
+            <div style="padding: 12px; border-radius: 9px; border: 1px solid oklch(0.32 0.014 255); background: oklch(0.22 0.012 255); display: flex; flex-direction: column; gap: 7px;">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-weight: 600; font-size: 12.5px;">{{ t.name }}</span>
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 1px 5px; border-radius: 3px; background: oklch(0.28 0.012 255); color: oklch(0.7 0.01 255);">{{ t.kind }}</span>
-                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.62 0.01 255);">{{ t.version }}</span>
                 <span style="flex: 1 1 auto;"></span>
-                <span style="font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; border: 1px solid {{ t.trustBorder }}; color: {{ t.trustColor }};">{{ t.trust }}</span>
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: {{ t.statusColor }};"></span>
               </div>
-              <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.64 0.01 255); word-break: break-all;">{{ t.path }}</div>
-              <div style="display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.58 0.01 255);">
-                <span>{{ t.gitLine }}</span>
-                <span style="flex: 1 1 auto;"></span>
-                <span style="color: {{ t.launchColor }};">{{ t.launchability }}</span>
+              <div style="font: 10px/1.55 'IBM Plex Mono', monospace; color: oklch(0.72 0.012 255);">
+                <div>{{ t.tag }}</div><div>commit {{ t.commit }}</div><div style="color: oklch(0.57 0.012 255); overflow-wrap: anywhere;">{{ t.installPath }}</div>
               </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; font: 9.5px 'IBM Plex Mono', monospace; color: {{ t.statusColor }};"><span>{{ t.status }}</span><span>official</span></div>
+              <button onClick="{{ t.launch }}" disabled="{{ t.disabled }}" style="padding: 8px; border-radius: 6px; border: 1px solid {{ t.buttonBorder }}; background: {{ t.buttonBg }}; color: oklch(0.9 0.02 155); font-size: 11px; font-weight: 600; cursor: {{ t.buttonCursor }};">{{ t.buttonLabel }}</button>
             </div>
           </sc-for>
         </div>
@@ -174,6 +189,12 @@
         <div style="margin-top: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.68 0.09 85);">{{ coverageGap }}</div>
       </div>
 
+      <div style="margin-top: 14px; padding: 11px; border: 1px solid oklch(0.42 0.07 85); background: oklch(0.245 0.025 85); border-radius: 8px; font-size: 10.5px; line-height: 1.6; color: oklch(0.79 0.06 85);">
+        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Local isolation preview</strong>
+        Ports, process groups, writable homes, and managed workspaces are real. CPU/GPU/RAM quotas, network policy, and hostile-code containment are not enforced in this preview.
+      </div>
+
+      <div style="display:none">
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>
 
       <div>
@@ -296,17 +317,18 @@
         <button onClick="{{ primaryAction }}" disabled="{{ launchDisabled }}" style="flex: 1 1 auto; padding: 10px; border-radius: 7px; border: 1px solid {{ primaryBorder }}; background: {{ primaryBg }}; color: {{ primaryFg }}; font-size: 12.5px; font-weight: 600; cursor: {{ primaryCursor }};">{{ primaryLabel }}</button>
       </div>
       <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.58 0.01 255); line-height: 1.6; padding-bottom: 8px;">{{ launchHint }}</div>
+      </div>
     </section>
 
-    <section style="display: flex; flex-direction: column; min-height: 0; min-width: 0;">
+    <section class="fleet-center" aria-label="Running Harness cells">
       <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid oklch(0.3 0.012 255);">
-        <span style="font-size: 12px; font-weight: 600;">Cells</span>
-        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.6 0.01 255);">state-isolated · process, port, writable home</span>
+        <span style="font-size: 12px; font-weight: 600;">Fleet</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.6 0.01 255);">every cell · independent port + writable state</span>
         <span style="flex: 1 1 auto;"></span>
         <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 3px 7px; border-radius: 4px; border: 1px solid oklch(0.34 0.012 255); color: oklch(0.66 0.01 255);">container-isolated · Phase 2</span>
       </div>
 
-      <div style="flex: 1 1 auto; overflow: auto; min-height: 0;">
+      <div style="display:none; flex: 1 1 auto; overflow: auto; min-height: 0;">
         <table style="width: 100%; border-collapse: collapse; font-size: 11.5px;">
           <thead>
             <tr style="position: sticky; top: 0; background: oklch(0.225 0.01 255); z-index: 1;">
@@ -370,7 +392,50 @@
         </sc-if>
       </div>
 
-      <sc-if value="{{ logsOpen }}" hint-placeholder-val="{{ false }}">
+      <div class="fleet-grid">
+        <sc-for list="{{ cells }}" as="c" hint-placeholder-count="3">
+          <article class="fleet-card" style="border-color: {{ c.cardBorder }}; background: {{ c.rowBg }};" aria-label="Harness cell {{ c.name }}">
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+              <span style="width:8px; height:8px; margin-top:5px; border-radius:50%; background:{{ c.stateColor }}; animation:{{ c.stateAnim }};"></span>
+              <div style="min-width:0; flex:1 1 auto;">
+                <div style="font:600 12.5px 'IBM Plex Mono',monospace; overflow-wrap:anywhere;">{{ c.name }}</div>
+                <div style="margin-top:3px; color:{{ c.stateColor }}; font:10px 'IBM Plex Mono',monospace;">{{ c.agent_state }} · {{ c.state_source }}</div>
+              </div>
+              <span style="padding:2px 6px; border:1px solid {{ c.trustBorder }}; border-radius:4px; color:{{ c.trustColor }}; font:9px 'IBM Plex Mono',monospace;">{{ c.trust }}</span>
+            </div>
+            <div class="fleet-kv" style="margin-top:12px;">
+              <span>version</span><span>{{ c.treeIdentity }}</span>
+              <span>endpoint</span><span>{{ c.url }} · {{ c.uptime }}</span>
+              <span>home</span><span>{{ c.home }} · {{ c.isolation }}</span>
+              <span>workspace</span><span>{{ c.workspace }} · {{ c.workspace_isolation }}</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:11px;">
+              <sc-for list="{{ c.resourcesList }}" as="r" hint-placeholder-count="3">
+                <span style="padding:3px 6px; border:1px solid oklch(0.33 0.014 255); border-radius:4px; color:oklch(0.68 0.012 255); font:9px 'IBM Plex Mono',monospace;">{{ r.label }} · {{ r.value }}</span>
+              </sc-for>
+              <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">quota unenforced</span>
+            </div>
+            <div style="margin-top:11px; padding:8px; min-height:48px; background:oklch(0.175 0.008 255); border-radius:6px; font:9.5px/1.55 'IBM Plex Mono',monospace; color:oklch(0.64 0.012 255); overflow:hidden;">
+              <sc-for list="{{ c.recentLogLines }}" as="l" hint-placeholder-count="2"><div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.msg }}</div></sc-for>
+            </div>
+            <div class="fleet-actions">
+              <button onClick="{{ c.open }}" disabled="{{ c.openDisabled }}">Open</button>
+              <button onClick="{{ c.stop }}" disabled="{{ c.stopDisabled }}">Stop</button>
+              <button onClick="{{ c.restart }}">Restart</button>
+              <button onClick="{{ c.clone }}">Clone Session</button>
+              <button onClick="{{ c.inspect }}">Inspect</button>
+            </div>
+          </article>
+        </sc-for>
+        <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}">
+          <div style="grid-column:1/-1; align-self:start; margin:18px; padding:42px 24px; border:1px dashed oklch(0.35 0.018 255); border-radius:10px; text-align:center;">
+            <div style="font-size:15px; font-weight:600;">Fleet is ready for its first cell</div>
+            <p style="max-width:470px; margin:9px auto 0; color:oklch(0.63 0.012 255); font:10.5px/1.7 'IBM Plex Mono',monospace;">Install either exact official pin, rescan, then use Launch cell. Every click gets an automatic loopback port plus a separate managed home and workspace. This empty state is not a fabricated running process.</p>
+          </div>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{ false }}" hint-placeholder-val="{{ false }}">
         <div style="flex: 0 0 auto; height: 236px; border-top: 1px solid oklch(0.3 0.012 255); display: flex; flex-direction: column; background: oklch(0.17 0.008 255);">
           <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid oklch(0.27 0.012 255);">
             <span style="font-size: 11.5px; font-weight: 600;">{{ logTitle }}</span>
@@ -390,6 +455,36 @@
         </div>
       </sc-if>
     </section>
+
+    <aside class="fleet-inspector" aria-label="Cell inspector">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div><div style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.72 0.012 255);">Inspector</div><div style="margin-top:5px; font:10px 'IBM Plex Mono',monospace; color:oklch(0.58 0.012 255);">{{ activeCell.name }}</div></div>
+        <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">sandbox preview</span>
+      </div>
+      <div class="inspector-tabs" style="margin-top:14px;">
+        <sc-for list="{{ inspectorTabs }}" as="tab" hint-placeholder-count="3"><button onClick="{{ tab.select }}" style="background:{{ tab.bg }}; color:{{ tab.color }};">{{ tab.label }}</button></sc-for>
+      </div>
+      <sc-if value="{{ hasActiveCell }}" hint-placeholder-val="{{ false }}">
+        <div class="fleet-kv" style="margin:14px 0; padding-bottom:14px; border-bottom:1px solid oklch(0.29 0.012 255);">
+          <span>cell</span><span>{{ activeCell.id }}</span><span>pid</span><span>{{ activeCell.pid }}</span><span>state</span><span style="color:{{ activeCell.stateColor }};">{{ activeCell.agent_state }}</span><span>port</span><span>{{ activeCell.url }}</span>
+        </div>
+        <sc-if value="{{ showInspectorLogs }}" hint-placeholder-val="{{ true }}">
+          <div style="height:330px; overflow:auto; padding:10px; border-radius:7px; background:oklch(0.17 0.008 255); font:10px/1.7 'IBM Plex Mono',monospace;">
+            <sc-for list="{{ inspectorLogLines }}" as="l" hint-placeholder-count="8"><div style="display:flex; gap:7px;"><span style="color:{{ l.color }};">{{ l.level }}</span><span style="color:oklch(0.77 0.012 255); overflow-wrap:anywhere;">{{ l.msg }}</span></div></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showInspectorPrompts }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px; border:1px dashed oklch(0.35 0.014 255); border-radius:7px; color:oklch(0.64 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Prompt streaming is not observed by the current Harness adapter. No prompt data is fabricated. This tab is the integration seam for the session-log adapter.</div>
+        </sc-if>
+        <sc-if value="{{ showInspectorArtifacts }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:12px;">
+            <sc-for list="{{ inspectorArtifacts }}" as="a" hint-placeholder-count="4"><div style="padding:8px; border:1px solid oklch(0.3 0.012 255); border-radius:6px; font:10px 'IBM Plex Mono',monospace;"><div style="overflow-wrap:anywhere;">{{ a.path }}</div><div style="margin-top:3px; color:oklch(0.57 0.012 255);">{{ a.sizeLabel }}</div></div></sc-for>
+            <sc-if value="{{ noArtifacts }}" hint-placeholder-val="{{ true }}"><div style="padding:14px; color:oklch(0.6 0.012 255); font:10px/1.6 'IBM Plex Mono',monospace;">No files observed in this managed workspace.</div></sc-if>
+          </div>
+        </sc-if>
+      </sc-if>
+      <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}"><div style="margin-top:18px; padding:18px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Launch or select a real cell to inspect its logs and managed-workspace artifacts.</div></sc-if>
+    </aside>
   </main>
   </sc-if>
 

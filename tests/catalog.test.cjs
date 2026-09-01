@@ -57,8 +57,39 @@ test('live status replaces preview inventory instead of merging it', () => {
   });
   assert.equal(c.state.trees.length, 1);
   assert.equal(c.state.trees[0].id, 'real');
-  assert.equal(c.renderVals().modeLabel, 'launcher alpha');
+  assert.equal(c.renderVals().modeLabel, 'fleet preview');
   assert.equal(c.renderVals().suggested, 3210);
+});
+test('fleet preview has two immutable official pins and no fabricated cells', () => {
+  const c = instance(); const values = c.renderVals();
+  assert.equal(values.versions.length, 2);
+  assert.deepEqual(values.versions.map(v => v.version), ['0.1.2-alpha.3', '0.1.2-alpha.2']);
+  assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
+  assert(values.versions.every(v => v.disabled));
+  assert.equal(values.cells.length, 0);
+  assert.match(html, /Local isolation preview/);
+  assert.match(html, /CPU\/GPU\/RAM quotas[\s\S]*not enforced/);
+});
+test('one-click version launch requests automatic isolation', async () => {
+  const c = instance(); let request;
+  c.applyStatus({
+    trees: [
+      { id: 'a3', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.3', path: '~/a3', exe: '~/a3/dsh', node: 'node', git: { sha: 'dd6322dabc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' },
+      { id: 'a2', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.2', path: '~/a2', exe: '~/a2/dsh', node: 'node', git: { sha: '0a53fb5abc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' }
+    ], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: []
+  });
+  c.api = async (url, options) => {
+    if (url === '/api/v1/cells') { request = JSON.parse(options.body); return { id: 'cell-one', name: 'cell', port: 3100 }; }
+    return { trees: c.state.trees, cells: [], suggested_port: 3101, coverage_gaps: [], credentials: [] };
+  };
+  c.refreshStatus = async () => {};
+  const version = c.renderVals().versions[0];
+  assert.equal(version.disabled, false);
+  await version.launch();
+  assert.equal(request.port, 'auto');
+  assert.equal(request.home_mode, 'fresh');
+  assert.equal(request.workspace, 'managed');
+  assert.equal(request.tree_id, 'a3');
 });
 test('most-starred order retains GitHub order for ties', () => {
   const rows = instance().renderVals().results;
