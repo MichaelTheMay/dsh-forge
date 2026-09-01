@@ -1763,7 +1763,23 @@
       if (parsed.props) r.propsMeta = parsed.props;
       if (parsed.preview) r.preview = parsed.preview;
       if (parsed.template) updateHtml(name, parsed.template);
-      if (parsed.js) updateJs(name, parsed.js);
+      const factories = window.__dcPrecompiledLogicFactories;
+      const precompiled = factories && (factories[name] || name === rootName && factories.$root);
+      if (typeof precompiled === "function") {
+        try {
+          const Cls = precompiled(StreamableLogic);
+          if (typeof Cls !== "function") {
+            throw new Error("precompiled logic factory did not return a component class");
+          }
+          r.logicError = null;
+          r.Logic = Cls;
+          registry.bump(name);
+        } catch (e) {
+          console.error("[dc-runtime] precompiled logic FAILED for", name, e);
+          r.logicError = name + ": " + (e instanceof Error && e.message ? e.message : String(e));
+          registry.bump(name);
+        }
+      } else if (parsed.js) updateJs(name, parsed.js);
     }
     return {
       registry,

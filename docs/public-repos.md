@@ -8,7 +8,9 @@ for the seed; it does not add Forge-native stars, accounts, or social voting.
 ## Current implementation
 
 `web/index.html` retains the supplied DC template and launcher layout. Its
-catalog is replaced by the Public Repos page. `web/support.js` remains unchanged.
+catalog is replaced by the Public Repos page. The application logic is a
+precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
+that class without evaluating the inline design export as JavaScript.
 The new page supports search, sort, filters, details, source links, and copying a
 captured commit URL. The Plugins filter has an honest empty state.
 
@@ -39,10 +41,11 @@ repository URL, it can be added separately with `seed_rank: null`; do not insert
 it into the top ten unless it actually ranks there. Classify plugins based on
 evidence, not just a repository name or the presence of some plugin code.
 
-The future sidecar should import a validated, signed, versioned snapshot from
-the registry transactionally and use its local index. This prototype does not
-implement that backend. Its unsigned status, absent source analysis, unknown
-compatibility, and lack of security verification remain visible.
+The future registry adapter should import a validated, signed, versioned
+snapshot from the registry transactionally and use its local index. This
+prototype does not implement that backend. Its unsigned status, absent source
+analysis, unknown compatibility, and lack of security verification remain
+visible.
 
 Metadata is rendered as text. The embedding script rejects noncanonical source
 URLs, checks identity and commit shape, and escapes script delimiters. It will
@@ -62,11 +65,13 @@ Do not promise automatic integration of every fork.
 
 ## Readiness
 
-The Python server is a static loopback-only preview server, not the proposed
-sidecar API. Local launcher controls retain sample state and are labeled as a
-prototype. They do not control `dsh-runtime` or persist process records.
+The Python server now supplies a loopback-only launcher alpha API. It discovers
+only strong DSH signatures in configured roots, previews exact argv and
+environment keys, and controls processes it started after verifying process
+identity. The portable HTML export remains an explicitly disconnected preview
+with no fake live cells.
 
-Tests cover catalog behavior, metadata safety, serving assets, and the absence
-of mutation endpoints. Browser layout testing and real local-runner integration
-remain release tasks. A successful UI PR must not be described as a complete
-production launcher or tested foreign-code execution system.
+Tests cover catalog behavior, metadata safety, session-protected API access,
+scanner false positives, protected ports, process ownership, logs, and stop.
+Browser layout testing and production runtime adapters remain release tasks.
+This is not a complete production launcher or a foreign-code sandbox.

@@ -5,17 +5,28 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
-const script = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
+const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
 }
-const windowStub = { location: { hash: '' } };
+const windowStub = { location: { hash: '' }, __dcPrecompiledLogicFactories: {} };
 const clipboard = [];
 const navigatorStub = { clipboard: { writeText: async value => { clipboard.push(value); } } };
-const { Component, CATALOG, CATALOG_SNAPSHOT } = new Function('DCLogic', 'window', 'navigator', script + '\nreturn {Component, CATALOG, CATALOG_SNAPSHOT};')(Logic, windowStub, navigatorStub);
+new Function('window', 'navigator', script)(windowStub, navigatorStub);
+const Component = windowStub.__dcPrecompiledLogicFactories.$root(Logic);
+const CATALOG = Component.catalog;
+const CATALOG_SNAPSHOT = Component.catalogSnapshot;
 function instance(props = {}) { const c = new Component(props); c.flash = value => { c.lastMessage = value; }; return c; }
+
+test('browser entrypoint uses precompiled logic under the strict CSP', () => {
+  const inline = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
+  assert.equal(inline.trim(), '');
+  assert.match(html, /<script src="\.\/launcher\.js"><\/script>/);
+  assert(!/\beval\s*\(|new Function\s*\(/.test(script));
+  assert.equal(typeof Component, 'function');
+});
 
 test('embedded snapshot exactly matches the JSON and GitHub top-ten response', () => {
   assert.deepEqual(CATALOG_SNAPSHOT, snapshot);
@@ -27,9 +38,27 @@ test('embedded snapshot exactly matches the JSON and GitHub top-ten response', (
 });
 test('launcher remains the default and Public Repos is a separate view', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
+  assert.equal(c.state.cells.length, 0);
+  assert.equal(c.renderVals().modeLabel, 'portable preview');
+  assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'public-repos');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
+});
+test('preview contains no personal-name or private-home leakage', () => {
+  assert(!/michael(?:the)?may|\/home\/[^/]+\//i.test(html));
+  assert(!/pid:\s*4\d{4}|loader settled|process alive · pid/i.test(html));
+});
+test('live status replaces preview inventory instead of merging it', () => {
+  const c = instance();
+  c.applyStatus({
+    trees: [{ id: 'real', name: 'detected', short: 'detected', kind: 'source', version: '1', path: '~/dsh', exe: '~/dsh/dsh', node: 'bundled', git: null, trust: 'personal', launchability: 'ready' }],
+    cells: [], suggested_port: 3210, coverage_gaps: [], credentials: []
+  });
+  assert.equal(c.state.trees.length, 1);
+  assert.equal(c.state.trees[0].id, 'real');
+  assert.equal(c.renderVals().modeLabel, 'launcher alpha');
+  assert.equal(c.renderVals().suggested, 3210);
 });
 test('most-starred order retains GitHub order for ties', () => {
   const rows = instance().renderVals().results;

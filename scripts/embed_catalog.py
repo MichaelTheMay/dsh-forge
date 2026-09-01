@@ -75,7 +75,7 @@ def encode(snapshot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, default=ROOT / "data/public-repos.seed.json")
-    parser.add_argument("--html", type=Path, default=ROOT / "web/index.html")
+    parser.add_argument("--html", type=Path, default=ROOT / "web/launcher.js", help="JavaScript source containing the snapshot markers")
     args = parser.parse_args()
     if args.snapshot.stat().st_size > 2_000_000:
         raise ValueError("Snapshot exceeds 2 MB")
