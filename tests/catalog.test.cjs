@@ -5,17 +5,28 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
-const script = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
+const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
 }
-const windowStub = { location: { hash: '' } };
+const windowStub = { location: { hash: '' }, __dcPrecompiledLogicFactories: {} };
 const clipboard = [];
 const navigatorStub = { clipboard: { writeText: async value => { clipboard.push(value); } } };
-const { Component, CATALOG, CATALOG_SNAPSHOT } = new Function('DCLogic', 'window', 'navigator', script + '\nreturn {Component, CATALOG, CATALOG_SNAPSHOT};')(Logic, windowStub, navigatorStub);
+new Function('window', 'navigator', script)(windowStub, navigatorStub);
+const Component = windowStub.__dcPrecompiledLogicFactories.$root(Logic);
+const CATALOG = Component.catalog;
+const CATALOG_SNAPSHOT = Component.catalogSnapshot;
 function instance(props = {}) { const c = new Component(props); c.flash = value => { c.lastMessage = value; }; return c; }
+
+test('browser entrypoint uses precompiled logic under the strict CSP', () => {
+  const inline = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
+  assert.equal(inline.trim(), '');
+  assert.match(html, /<script src="\.\/launcher\.js"><\/script>/);
+  assert(!/\beval\s*\(|new Function\s*\(/.test(script));
+  assert.equal(typeof Component, 'function');
+});
 
 test('embedded snapshot exactly matches the JSON and GitHub top-ten response', () => {
   assert.deepEqual(CATALOG_SNAPSHOT, snapshot);

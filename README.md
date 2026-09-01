@@ -90,10 +90,12 @@ executed. The browser never contacts GitHub itself.
 
 ## Development
 
-No frontend dependencies need to be installed. The supplied export runtime is
-preserved in `web/support.js`; pinned React 18.3.1 files and their MIT license
-are included in `web/vendor/`. Google Fonts is optional; system fonts are used
-when it is unavailable.
+No frontend dependencies need to be installed. The supplied export runtime
+remains in `web/support.js` with a precompiled-logic adapter, while the launcher
+logic is precompiled in `web/launcher.js` so the loopback server can retain a
+CSP that disallows string evaluation. Pinned React 18.3.1 files and their MIT
+license are included in `web/vendor/`. Google Fonts is optional; system fonts
+are used when unavailable.
 
 ```bash
 python3 scripts/embed_catalog.py

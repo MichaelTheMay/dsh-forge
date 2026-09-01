@@ -8,7 +8,9 @@ for the seed; it does not add Forge-native stars, accounts, or social voting.
 ## Current implementation
 
 `web/index.html` retains the supplied DC template and launcher layout. Its
-catalog is replaced by the Public Repos page. `web/support.js` remains unchanged.
+catalog is replaced by the Public Repos page. The application logic is a
+precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
+that class without evaluating the inline design export as JavaScript.
 The new page supports search, sort, filters, details, source links, and copying a
 captured commit URL. The Plugins filter has an honest empty state.
 

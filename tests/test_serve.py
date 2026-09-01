@@ -282,10 +282,13 @@ class LauncherServer(LauncherFixture):
         )
 
     def test_index_and_local_dependencies(self):
-        for path in ["/", "/support.js", "/vendor/react.production.min.js", "/vendor/react-dom.production.min.js"]:
+        for path in ["/", "/launcher.js", "/support.js", "/vendor/react.production.min.js", "/vendor/react-dom.production.min.js"]:
             with urllib.request.urlopen(self.url + path, timeout=3) as response:
                 self.assertEqual(response.status, 200)
                 self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+                csp = response.headers["Content-Security-Policy"]
+                self.assertIn("script-src 'self'", csp)
+                self.assertNotIn("'unsafe-eval'", csp)
                 self.assertGreater(len(response.read()), 1000)
 
     def test_source_git_and_directory_listings_are_not_served(self):
