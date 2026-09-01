@@ -105,6 +105,11 @@ executed. The browser never contacts GitHub itself.
 
 ## Development
 
+All feature and fix pull requests target `development`; `main` is reserved for
+tested release promotions. See the
+[development and release workflow](docs/development-workflow.md) for the branch
+policy, required checks, and tagged release process.
+
 No frontend dependencies need to be installed. The supplied export runtime
 remains in `web/support.js` with a precompiled-logic adapter, while the launcher
 logic is precompiled in `web/launcher.js` so the loopback server can retain a
