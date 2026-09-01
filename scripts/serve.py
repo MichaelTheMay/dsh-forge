@@ -230,7 +230,7 @@ def main():
     status = launcher.status()
     print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Public Repos remains metadata-only.", flush=True)
     if not status["trees"]:
-        print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness or use Add folder in the UI.", flush=True)
+        print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness.", flush=True)
     print("The sidecar is loopback-only. Press Ctrl+C to stop it and its owned cells.", flush=True)
     with server:
         try:

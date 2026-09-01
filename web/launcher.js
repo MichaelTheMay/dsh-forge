@@ -514,7 +514,6 @@ class Component extends DCLogic {
       knownLicenseOnly: false,
       artifactId: CATALOG[0] ? CATALOG[0].id : null,
       toast: '',
-      scanning: false,
       cells: [],
       sidecarConnected: false,
       statusLoaded: false,
@@ -582,7 +581,7 @@ class Component extends DCLogic {
 
   tree(id) {
     return this.state.trees.find(t => t.id === id) || this.state.trees[0] || {
-      id: '', name: 'No DSH tree detected', short: 'dsh', kind: '—', version: '—', path: 'Add a scan root to begin',
+      id: '', name: 'No DSH tree detected', short: 'dsh', kind: '—', version: '—', path: 'Configure a scan root to begin',
       exe: '—', node: '—', git: null, trust: 'readonly', launchability: 'not-detected'
     };
   }
@@ -649,23 +648,6 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
-  async rescanLauncher(roots) {
-    this.setState({ scanning: true });
-    try {
-      const body = roots ? { roots } : {};
-      const status = await this.api('/api/v1/scan', { method: 'POST', body: JSON.stringify(body) });
-      this.applyStatus(status);
-      this.flash('scan complete · ' + status.trees.length + ' tree(s) detected');
-    } catch (error) { this.flash(error.message); }
-    finally { this.setState({ scanning: false }); }
-  }
-
-  async addFolder() {
-    if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to register local scan roots');
-    const root = window.prompt('Absolute path to a DeepSeek Harness checkout or parent scan root:');
-    if (root) await this.rescanLauncher([root]);
-  }
-
   uptime(started) {
     const s = Math.max(0, Math.floor((Date.now() - started) / 1000));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -696,7 +678,7 @@ class Component extends DCLogic {
 
   async quickLaunch(version) {
     if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
-    if (!version.treeId) return this.flash('That exact official release is not installed. Add its folder, then rescan.');
+    if (!version.treeId) return this.flash('That exact official release is not configured. Start Forge with its install path as a scan root.');
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId, surface: 'web', port: 'auto', open_browser: false,
@@ -936,8 +918,6 @@ class Component extends DCLogic {
       catalogTabBorder: s.view === 'catalog' ? 'oklch(0.42 0.03 255)' : 'transparent',
       cellsSummary: s.cells.length + ' cells · ' + s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
-      scanLabel: s.scanning ? 'scanning…' : 'Rescan',
-      rescan: () => s.sidecarConnected ? this.rescanLauncher() : this.flash('Start scripts/serve.py to scan local trees'),
       versions,
       pinnedCount: PINNED_RELEASES.length + ' immutable official pins',
 
@@ -959,8 +939,6 @@ class Component extends DCLogic {
       }),
       treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
       coverageGap: s.coverageGaps.length ? s.coverageGaps.length + ' coverage gap(s): ' + s.coverageGaps.join('; ') : (s.sidecarConnected ? 'Configured roots scanned; candidate code was not executed.' : 'Preview records are illustrative and cannot be launched.'),
-      addFolder: () => this.addFolder(),
-
       surfaces: [
         { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }
       ].map(x => ({
@@ -1024,7 +1002,7 @@ class Component extends DCLogic {
       primaryAction: () => {
         if (!s.sidecarConnected) return this.flash('Run python3 scripts/serve.py to connect the launcher');
         if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees are view-only until the container backend ships' : 'select a launch-ready detected tree');
-        if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then rescan');
+        if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then restart Forge');
         if (confirm) return this.previewLaunch();
         this.startCell();
       },

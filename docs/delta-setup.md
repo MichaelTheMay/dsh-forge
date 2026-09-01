@@ -21,7 +21,7 @@ git pull --ff-only origin main
 python3 scripts/serve.py
 ```
 
-If `command -v dsh` prints nothing, use **Add folder** in the UI or restart with
+If `command -v dsh` prints nothing, restart with
 `--scan-root /path/to/deepseek-harness`. The scanner reads only bounded evidence
 under that root and never executes candidate code.
 
