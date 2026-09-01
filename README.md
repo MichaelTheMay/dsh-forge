@@ -17,10 +17,12 @@ inspector. It controls only processes whose PID and process-start identity it
 recorded. Public Repos contains a dated metadata snapshot of ten real community
 forks.
 
-This is a **local-isolation sandbox preview**, not a hostile-code security
-sandbox. CPU/GPU/RAM labels are visible planning values but are not quota
-enforced; network and filesystem confinement are also deferred. Public
-repository download, installation, merging, and execution remain disabled.
+The trusted fleet path remains **local process isolation**, not a hostile-code
+security sandbox; its CPU/GPU/RAM labels are planning values rather than host
+quotas. A separate, fail-closed Apptainer backend can now run a networkless,
+resource-limited CLI capability probe for an already-present clean community
+checkout. It does not install, merge, promote, or host-launch that checkout.
+Public repository acquisition remains disabled.
 
 ## Open the UI
 
@@ -57,6 +59,8 @@ only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
 port with `--port 3091`; the script does not stop existing processes.
 
 See [Delta setup](docs/delta-setup.md) for remote access through an SSH tunnel.
+See [Apptainer community-code test sandbox](docs/apptainer-sandbox.md) to pin a
+SIF and enable the compact **Test** action for detected community trees.
 To produce a single HTML file that can be downloaded and opened locally as a
 disconnected, non-runnable preview:
 
@@ -69,10 +73,11 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 - Discovery is bounded to configured roots plus a `dsh` executable on `PATH`.
 - Scanning reads recognized artifacts, package metadata, and Git identity; it
   never runs repository code or package scripts.
-- Trees whose Git remote is not the canonical upstream are view-only until the
-  container backend is available. The later import/integration skill will
-  validate, sandbox-test, and explicitly promote compatible forks before this
-  launcher may run them.
+- Trees whose Git remote is not the canonical upstream can only run a bounded
+  CLI help probe in the configured networkless Apptainer sandbox. They remain
+  ineligible for direct host launch even after passing. The later
+  import/integration skill must validate and explicitly promote compatible
+  forks through a separate policy.
 - Ports 3080 and 3090 are protected. An unmanaged occupant is reported and is
   never killed or replaced.
 - A writable DSH home has one live writer. Fresh and sanitized-clone homes are
@@ -87,6 +92,9 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   runtime adapter exists.
 - The fleet's working/idle state is derived from process identity and recent log
   activity. Blocked is reserved for a future explicit runtime signal.
+- Sandbox tests require a clean Git revision and a read-only SIF matching an
+  explicit SHA-256 pin. The source is mounted read-only; home and workspace are
+  disposable; launcher secrets and network access are excluded.
 
 ## Public Repos
 

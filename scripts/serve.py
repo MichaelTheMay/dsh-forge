@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import secrets
 import sys
@@ -21,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from dsh_forge.launcher import Launcher, LauncherError  # noqa: E402
+from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError  # noqa: E402
 
 
 class LauncherHTTPServer(ThreadingHTTPServer):
@@ -192,6 +194,10 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             if path == "/api/v1/cells":
                 self._json(self.server.launcher.launch(body), HTTPStatus.CREATED)
                 return
+            match = re.fullmatch(r"/api/v1/trees/([^/]+)/sandbox-test", path)
+            if match:
+                self._json(self.server.launcher.sandbox_test(match.group(1)))
+                return
             match = re.fullmatch(r"/api/v1/cells/([^/]+)/(stop|restart|clone)", path)
             if match:
                 action = match.group(2)
@@ -217,10 +223,32 @@ def main():
     parser.add_argument("--port", type=int, default=3090)
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
+    parser.add_argument("--sandbox-image", type=Path, help="Pinned Apptainer SIF used for networkless foreign-code tests")
+    parser.add_argument("--sandbox-image-sha256", help="Expected SHA-256 for --sandbox-image")
+    parser.add_argument("--sandbox-binary", help="Apptainer executable name or absolute path")
+    parser.add_argument("--sandbox-cpus", help="CPU limit required by the sandbox capability probe")
+    parser.add_argument("--sandbox-memory", help="Memory limit required by the sandbox capability probe, for example 8G")
+    parser.add_argument("--sandbox-pids-limit", type=int, help="PID limit required by the sandbox capability probe")
+    parser.add_argument("--sandbox-timeout", type=int, help="Maximum sandbox test duration in seconds")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("Choose an unprivileged port between 1024 and 65535")
-    launcher = Launcher(args.scan_root, state_root=args.state_dir)
+    configured_state = args.state_dir or os.environ.get("DSH_FORGE_STATE_DIR")
+    state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
+    try:
+        sandbox_config = SandboxConfig.from_values(
+            image=args.sandbox_image or os.environ.get("DSH_FORGE_SANDBOX_IMAGE"),
+            image_sha256=args.sandbox_image_sha256 or os.environ.get("DSH_FORGE_SANDBOX_IMAGE_SHA256"),
+            binary=args.sandbox_binary or os.environ.get("DSH_FORGE_SANDBOX_BINARY", "apptainer"),
+            cpus=args.sandbox_cpus or os.environ.get("DSH_FORGE_SANDBOX_CPUS", "4"),
+            memory=args.sandbox_memory or os.environ.get("DSH_FORGE_SANDBOX_MEMORY", "8G"),
+            pids_limit=args.sandbox_pids_limit if args.sandbox_pids_limit is not None else int(os.environ.get("DSH_FORGE_SANDBOX_PIDS_LIMIT", "256")),
+            timeout_seconds=args.sandbox_timeout if args.sandbox_timeout is not None else int(os.environ.get("DSH_FORGE_SANDBOX_TIMEOUT", "30")),
+        )
+    except (SandboxError, ValueError) as error:
+        parser.error(str(error))
+    sandbox = ApptainerSandbox(sandbox_config, state_root / "sandbox")
+    launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox)
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
         server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)
@@ -231,6 +259,8 @@ def main():
     print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Public Repos remains metadata-only.", flush=True)
     if not status["trees"]:
         print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness.", flush=True)
+    sandbox_status = status["sandbox"]
+    print(f"Sandbox: {sandbox_status['mode']} · {'ready' if sandbox_status['ready'] else sandbox_status['reason']}", flush=True)
     print("The sidecar is loopback-only. Press Ctrl+C to stop it and its owned cells.", flush=True)
     with server:
         try:

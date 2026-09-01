@@ -88,6 +88,14 @@ Stop the server and tunnel with Ctrl+C in their respective terminals. No GPU
 or extra Conda environment is needed to serve and inspect the launcher; a cell
 may have its own runtime requirements.
 
+## Enable the community-code test sandbox
+
+DeltaAI supplies Apptainer. The optional sandbox uses a pinned, read-only SIF,
+no network, no inherited launcher secrets, a read-only source mount, disposable
+writable state, and runtime-accepted CPU/RAM/PID limits. It never turns a
+community checkout into a host process. Follow the complete setup and threat
+boundary in [Apptainer community-code test sandbox](apptainer-sandbox.md).
+
 ## Download instead of running a server
 
 On Delta, produce a standalone file:

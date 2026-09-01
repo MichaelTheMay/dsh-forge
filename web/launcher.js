@@ -520,6 +520,11 @@ class Component extends DCLogic {
       suggestedPort: Number(props.defaultPort ?? 3100),
       coverageGaps: [],
       credentials: [],
+      sandbox: {
+        mode: 'unavailable', ready: false, hostile_code_isolation: false,
+        reason: 'Start the sidecar with a pinned Apptainer image to test community trees.'
+      },
+      sandboxTesting: null,
       previewData: null,
       logLines: [],
       selectedCell: null,
@@ -608,7 +613,8 @@ class Component extends DCLogic {
       cells, selectedCell,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
-      credentials: Array.isArray(status.credentials) ? status.credentials : []
+      credentials: Array.isArray(status.credentials) ? status.credentials : [],
+      sandbox: status.sandbox || this.state.sandbox
     });
   }
 
@@ -692,6 +698,24 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
+  async sandboxTest(tree) {
+    if (!this.state.sidecarConnected || !this.state.sandbox.ready) {
+      return this.flash(this.state.sandbox.reason || 'Configure the Apptainer sandbox first');
+    }
+    this.setState({ sandboxTesting: tree.id });
+    try {
+      const result = await this.api('/api/v1/trees/' + encodeURIComponent(tree.id) + '/sandbox-test', {
+        method: 'POST', body: '{}'
+      });
+      await this.refreshStatus(true);
+      this.flash('sandbox test ' + result.status + ' · network none · no launcher secrets');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ sandboxTesting: null });
+    }
+  }
+
   async cellAction(cell, action) {
     try {
       const result = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/' + action, { method: 'POST', body: '{}' });
@@ -753,6 +777,7 @@ class Component extends DCLogic {
     const isSystem = portNum === 3080 || portNum === 3090;
     const leaseHeld = s.homeMode === 'exclusive' && s.cells.some(c => c.isolation === 'exclusive persistent' && c.state !== 'stopped');
     const confirm = this.props.confirmBeforeLaunch ?? true;
+    const sandbox = s.sandbox || {};
     const versions = PINNED_RELEASES.map(pin => {
       const detected = s.trees.find(tr => tr.version === pin.version || (tr.git && String(tr.git.sha || '').startsWith(pin.commit)));
       const runnablePin = !!detected && s.sidecarConnected && detected.trust !== 'foreign' && detected.launchability === 'ready';
@@ -768,6 +793,25 @@ class Component extends DCLogic {
         buttonBg: runnablePin ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
         buttonBorder: runnablePin ? 'oklch(0.52 0.13 155)' : BORDER,
         launch: () => this.quickLaunch({ ...pin, treeId: detected && detected.id })
+      };
+    });
+    const communityTrees = s.trees.filter(tr => tr.trust === 'foreign').map(tr => {
+      const result = tr.sandbox_test || {};
+      const canTest = s.sidecarConnected && !!sandbox.ready && !['needs-build', 'not-executable'].includes(tr.launchability);
+      const testing = s.sandboxTesting === tr.id;
+      const passed = result.status === 'passed';
+      const failed = ['failed', 'timeout'].includes(result.status);
+      return {
+        ...tr,
+        revision: tr.git && tr.git.sha ? tr.git.sha : 'unknown revision',
+        testState: passed ? 'passed capability probe' : (failed ? result.status : tr.launchability),
+        stateColor: passed ? OK : (failed ? BAD : WARN),
+        buttonLabel: testing ? 'Testing…' : (result.status ? 'Retest' : 'Test'),
+        disabled: !canTest || testing,
+        buttonCursor: canTest && !testing ? 'pointer' : 'not-allowed',
+        buttonBg: canTest ? 'oklch(0.30 0.055 235)' : 'oklch(0.25 0.01 255)',
+        buttonBorder: canTest ? 'oklch(0.48 0.09 235)' : BORDER,
+        run: () => this.sandboxTest(tr)
       };
     });
 
@@ -920,6 +964,16 @@ class Component extends DCLogic {
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       versions,
       pinnedCount: PINNED_RELEASES.length + ' immutable official pins',
+      communityTrees,
+      hasCommunityTrees: communityTrees.length > 0,
+      sandboxTitle: sandbox.ready ? 'Community test sandbox ready' : 'Community test sandbox unavailable',
+      sandboxReason: sandbox.reason || 'No capability result is available.',
+      sandboxColor: sandbox.ready ? OK : WARN,
+      sandboxBorder: sandbox.ready ? 'oklch(0.42 0.08 155)' : 'oklch(0.42 0.07 85)',
+      sandboxBg: sandbox.ready ? 'oklch(0.235 0.025 155)' : 'oklch(0.245 0.025 85)',
+      sandboxPolicy: sandbox.ready
+        ? 'Network none · launcher secrets excluded · source read-only · ' + ((sandbox.resource_limits || {}).cpus || '—') + ' CPU · ' + ((sandbox.resource_limits || {}).memory || '—') + ' RAM'
+        : 'Foreign code remains blocked. Configure a pinned SIF and pass the runtime capability probe.',
 
       trees: s.trees.map(tr => {
         const sel = tr.id === s.treeId;
@@ -934,7 +988,7 @@ class Component extends DCLogic {
           trustColor: tr.trust === 'personal' ? OK : (tr.trust === 'readonly' ? BLUE : BAD),
           trustBorder: tr.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (tr.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
           launchColor: tr.launchability === 'ready' ? OK : (tr.launchability === 'needs-build' ? WARN : BAD),
-          select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees are view-only until the container backend ships')
+          select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees can be capability-tested only; host launch stays blocked')
         };
       }),
       treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
@@ -998,10 +1052,10 @@ class Component extends DCLogic {
       needsBuild,
       buildCommands: 'Build orchestration deferred · use the tree’s documented build steps',
 
-      primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'View only — foreign tree' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
+      primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'Sandbox test only' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
       primaryAction: () => {
         if (!s.sidecarConnected) return this.flash('Run python3 scripts/serve.py to connect the launcher');
-        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees are view-only until the container backend ships' : 'select a launch-ready detected tree');
+        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees never launch on the host; use the community sandbox test' : 'select a launch-ready detected tree');
         if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then restart Forge');
         if (confirm) return this.previewLaunch();
         this.startCell();

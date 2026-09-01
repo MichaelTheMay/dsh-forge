@@ -67,8 +67,9 @@ test('fleet preview has two immutable official pins and no fabricated cells', ()
   assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
   assert(values.versions.every(v => v.disabled));
   assert.equal(values.cells.length, 0);
-  assert.match(html, /Local isolation preview/);
-  assert.match(html, /CPU\/GPU\/RAM quotas[\s\S]*not enforced/);
+  assert.match(html, /Trusted host fleet/);
+  assert.match(html, /CPU\/GPU\/RAM labels are requests, not host quotas/);
+  assert.match(script, /Community test sandbox/);
 });
 test('launcher keeps discovery controls out of the primary UI', () => {
   assert(!/>\s*Rescan\s*</i.test(html));
@@ -97,6 +98,36 @@ test('one-click version launch requests automatic isolation', async () => {
   assert.equal(request.home_mode, 'fresh');
   assert.equal(request.workspace, 'managed');
   assert.equal(request.tree_id, 'a3');
+});
+test('detected community trees use the sandbox endpoint and never become host launches', async () => {
+  const c = instance(); let request;
+  const foreign = {
+    id: 'fork-1', name: 'community fork', short: 'fork', kind: 'source', version: '1.0.0',
+    path: '~/fork', exe: '~/fork/dsh.js', node: 'sandbox',
+    git: { sha: 'abc123', branch: 'main', dirty: false }, trust: 'foreign', launchability: 'sandbox-testable'
+  };
+  c.applyStatus({
+    trees: [foreign], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: {
+      mode: 'apptainer-networkless-test', ready: true, reason: 'capability probe passed',
+      hostile_code_isolation: false, resource_limits: { cpus: '4', memory: '8G' }
+    }
+  });
+  c.api = async (url, options) => {
+    request = { url, method: options.method, body: options.body };
+    return { status: 'passed' };
+  };
+  c.refreshStatus = async () => {};
+  const values = c.renderVals();
+  assert.equal(values.communityTrees.length, 1);
+  assert.equal(values.communityTrees[0].disabled, false);
+  assert.equal(values.launchDisabled, true);
+  assert.equal(values.primaryLabel, 'Sandbox test only');
+  await values.communityTrees[0].run();
+  assert.deepEqual(request, {
+    url: '/api/v1/trees/fork-1/sandbox-test', method: 'POST', body: '{}'
+  });
+  assert.match(c.lastMessage, /sandbox test passed/);
 });
 test('most-starred order retains GitHub order for ties', () => {
   const rows = instance().renderVals().results;
