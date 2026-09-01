@@ -101,7 +101,9 @@ node --test tests/catalog.test.cjs
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Node 18+ is required only for the JavaScript tests; CI uses Node 22.
+Node 18+ is required only for the DSH Forge JavaScript tests; CI uses Node 22.
+Launching the current upstream DeepSeek Harness additionally requires the
+upstream-supported Node `^22.19.0` or `>=24.0.0` runtime.
 To deliberately refresh the manual seed, run `python3 scripts/seed_catalog.py`
 and then the development checks above. This bounded maintenance script never
 runs on app startup and is not the registry crawler. An optional `GITHUB_TOKEN`

@@ -29,6 +29,30 @@ Leave that terminal open. The server uses `127.0.0.1:3090`, not a public bind
 address. If the PR has not merged, the new files are available only on its
 feature branch.
 
+## Create a compatible runtime environment
+
+Serving and browsing DSH Forge needs only Python. Running the JavaScript checks
+or launching the current upstream DeepSeek Harness also needs Node. Keep that
+runtime out of the base environment:
+
+```bash
+conda create -n dsh-forge -c conda-forge python=3.11 nodejs=22.19.0 -y
+conda activate dsh-forge
+python3 --version
+node --version
+```
+
+The Node version should print `v22.19.0`. Current upstream Harness declares
+`^22.19.0 || >=24.0.0`; an older Node release may pass DSH Forge's frontend
+tests but is not a supported Harness runtime.
+
+Run both local suites from the repository root:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+node --test tests/catalog.test.cjs
+```
+
 ## Open an SSH tunnel from the Mac
 
 In a **new terminal on the Mac**, not inside the Delta shell:
