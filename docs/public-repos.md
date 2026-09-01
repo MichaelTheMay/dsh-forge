@@ -53,9 +53,12 @@ not treat a production signature as verified without a real verifier.
 
 ## Deferred actions
 
-Download/open locally, integration into an existing version, and sandbox testing
-are disabled. No code from any public fork is cloned, installed, built, tested,
-or executed by the UI. An isolated port or writable home is not a security
+Download/open locally and integration into an existing version remain disabled.
+No code from a Public Repos catalog entry is cloned, installed, built, or
+executed by the browser. If a community checkout is already present in an
+explicit scan root, the launcher can run only its captured CLI help probe in the
+separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
+enable host launch. An isolated port or writable home alone is not a security
 sandbox.
 
 The intended later skill must pin revisions, assess compatibility, preserve
@@ -74,4 +77,5 @@ with no fake live cells.
 Tests cover catalog behavior, metadata safety, session-protected API access,
 scanner false positives, protected ports, process ownership, logs, and stop.
 Browser layout testing and production runtime adapters remain release tasks.
-This is not a complete production launcher or a foreign-code sandbox.
+This is not a complete production launcher. The bounded Apptainer probe is an
+initial foreign-code test boundary, not a claim of complete hostile-code safety.

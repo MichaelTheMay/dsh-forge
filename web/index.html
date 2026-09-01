@@ -185,9 +185,30 @@
       </div>
 
       <div style="margin-top: 14px; padding: 11px; border: 1px solid oklch(0.42 0.07 85); background: oklch(0.245 0.025 85); border-radius: 8px; font-size: 10.5px; line-height: 1.6; color: oklch(0.79 0.06 85);">
-        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Local isolation preview</strong>
-        Ports, process groups, writable homes, and managed workspaces are real. CPU/GPU/RAM quotas, network policy, and hostile-code containment are not enforced in this preview.
+        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Trusted host fleet</strong>
+        Official cells have separate ports, process groups, writable homes, and managed workspaces. Their CPU/GPU/RAM labels are requests, not host quotas; do not use this path for foreign code.
       </div>
+
+      <div style="margin-top: 8px; padding: 11px; border: 1px solid {{ sandboxBorder }}; background: {{ sandboxBg }}; border-radius: 8px; font-size: 10.5px; line-height: 1.55; color: oklch(0.76 0.02 255);">
+        <div style="display:flex; gap:7px; align-items:center;"><span style="width:6px; height:6px; border-radius:50%; background:{{ sandboxColor }};"></span><strong style="color:oklch(0.9 0.01 255);">{{ sandboxTitle }}</strong></div>
+        <div style="margin-top:5px;">{{ sandboxPolicy }}</div>
+        <div style="margin-top:4px; color:oklch(0.59 0.012 255);">{{ sandboxReason }}</div>
+      </div>
+
+      <sc-if value="{{ hasCommunityTrees }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:12px;">
+          <div style="font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.66 0.01 255); margin-bottom:6px;">Detected community trees</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <sc-for list="{{ communityTrees }}" as="f" hint-placeholder-count="1">
+              <div style="padding:9px; border:1px solid oklch(0.32 0.014 255); border-radius:7px; background:oklch(0.215 0.01 255);">
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:11px; font-weight:600; overflow-wrap:anywhere;">{{ f.name }}</span><span style="flex:1 1 auto;"></span><span style="width:5px; height:5px; border-radius:50%; background:{{ f.stateColor }};"></span></div>
+                <div style="margin-top:4px; font:9.5px/1.5 'IBM Plex Mono',monospace; color:oklch(0.58 0.012 255);">{{ f.revision }} · {{ f.testState }}</div>
+                <button onClick="{{ f.run }}" disabled="{{ f.disabled }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid {{ f.buttonBorder }}; background:{{ f.buttonBg }}; color:oklch(0.86 0.03 235); font-size:10.5px; font-weight:600; cursor:{{ f.buttonCursor }};">{{ f.buttonLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
 
       <div style="display:none">
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>

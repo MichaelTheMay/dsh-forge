@@ -367,8 +367,34 @@ class LauncherServer(LauncherFixture):
             cookie = response.headers["Set-Cookie"]
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
-        self.assertEqual(payload["sandbox"]["mode"], "local-isolation-preview")
+        self.assertEqual(payload["sandbox"]["mode"], "unavailable")
+        self.assertFalse(payload["sandbox"]["ready"])
         self.assertFalse(payload["sandbox"]["hostile_code_isolation"])
+
+    def test_sandbox_mutation_requires_session_and_uses_tree_endpoint(self):
+        tree = self.launcher._trees[self.tree()["id"]]
+        tree["trust"] = "foreign"
+        tree["launchability"] = "sandbox-testable"
+        self.launcher.sandbox = mock.Mock()
+        self.launcher.sandbox.status.return_value = {
+            "ready": True, "image_sha256": "b" * 64, "hostile_code_isolation": False
+        }
+        self.launcher.sandbox.test_tree.return_value = {
+            "status": "passed", "exit_code": 0, "duration_ms": 1, "output": "help",
+            "network": "none", "secrets_forwarded": False, "image_sha256": "b" * 64,
+            "command_summary": "captured CLI help probe",
+        }
+        path = "/api/v1/trees/" + tree["id"] + "/sandbox-test"
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            self.request(path, {})
+        self.assertEqual(context.exception.code, 403)
+        cookie, _ = self.establish_session()
+        with mock.patch.object(self.launcher, "scan", return_value=self.launcher.status()):
+            tree["git"] = {"sha": "abc123", "branch": "main", "dirty": False}
+            with self.request(path, {}, cookie=cookie) as response:
+                payload = json.load(response)
+        self.assertEqual(payload["status"], "passed")
+        self.launcher.sandbox.test_tree.assert_called_once()
 
     def test_api_does_not_accept_non_loopback_host(self):
         request = urllib.request.Request(self.url + "/api/v1/status", headers={"Host": "example.com"})

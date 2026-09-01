@@ -20,6 +20,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
+from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
+
 
 PROTECTED_PORTS = {3080, 3090}
 SECRET_NAMES = (
@@ -77,6 +79,17 @@ def _read_json(path: Path) -> dict[str, Any]:
         return value if isinstance(value, dict) else {}
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
+
+
+def _file_sha256(path: Path) -> str | None:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return None
 
 
 def _run_git(root: Path, *args: str) -> str | None:
@@ -216,7 +229,12 @@ def _trust_for(root: Path, remote: str | None) -> str:
 class Launcher:
     """Own scanner configuration and processes started by this sidecar instance."""
 
-    def __init__(self, scan_roots: Iterable[str | Path] = (), state_root: str | Path | None = None):
+    def __init__(
+        self,
+        scan_roots: Iterable[str | Path] = (),
+        state_root: str | Path | None = None,
+        sandbox: ApptainerSandbox | None = None,
+    ):
         configured_state = state_root or os.environ.get("DSH_FORGE_STATE_DIR")
         self.state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
         self.launch_cwd = Path.cwd().resolve()
@@ -228,12 +246,15 @@ class Launcher:
         self.cells_root.mkdir(exist_ok=True, mode=0o700)
         self.roots_file = self.state_root / "scan-roots.json"
         self.cells_file = self.state_root / "cells.json"
+        self.sandbox_results_file = self.state_root / "sandbox-results.json"
         self._lock = threading.RLock()
         self._mutation_lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
         self._cells: dict[str, dict[str, Any]] = self._load_cells()
         self._trees: dict[str, dict[str, Any]] = {}
         self._coverage_gaps: list[str] = []
+        self.sandbox = sandbox or ApptainerSandbox(SandboxConfig(), self.state_root / "sandbox")
+        self._sandbox_results = self._load_sandbox_results()
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
         roots.extend(Path(p).expanduser() for p in env_roots.split(os.pathsep) if p)
@@ -241,6 +262,32 @@ class Launcher:
         roots.extend(Path(p).expanduser() for p in saved if isinstance(p, str))
         self._scan_roots = self._dedupe_paths(roots)
         self.scan()
+
+    def _load_sandbox_results(self) -> dict[str, dict[str, Any]]:
+        raw = _read_json(self.sandbox_results_file).get("results", {})
+        if not isinstance(raw, dict):
+            return {}
+        return {str(key): value for key, value in raw.items() if isinstance(value, dict)}
+
+    def _save_sandbox_results(self) -> None:
+        temporary = self.sandbox_results_file.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"results": self._sandbox_results}, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(self.sandbox_results_file)
+
+    def _sandbox_key(self, tree: dict[str, Any]) -> str:
+        revision = str((tree.get("git") or {}).get("sha") or "unknown")
+        image = str(self.sandbox.status().get("image_sha256") or "unconfigured")
+        executable = str(tree.get("executable_sha256") or "unknown")
+        material = "\0".join((str(tree.get("real_path")), revision, executable, image))
+        return hashlib.sha256(material.encode()).hexdigest()
+
+    @staticmethod
+    def _sandbox_summary(result: dict[str, Any]) -> dict[str, Any]:
+        return {key: result.get(key) for key in (
+            "status", "exit_code", "duration_ms", "tested_at", "network",
+            "secrets_forwarded", "image_sha256", "executable_sha256", "command_summary",
+        )}
 
     def _load_cells(self) -> dict[str, dict[str, Any]]:
         raw = _read_json(self.cells_file).get("cells", [])
@@ -311,17 +358,17 @@ class Launcher:
         trust = _trust_for(root, remote)
         node = shutil.which("node") if executable.suffix in {".js", ".ts"} else None
         launchability = "ready"
-        if trust == "foreign":
-            launchability = "blocked-by-policy"
-        elif executable.suffix == ".ts":
+        if executable.suffix == ".ts":
             launchability = "needs-build"
         elif not os.access(executable, os.R_OK) or (executable.suffix != ".js" and not os.access(executable, os.X_OK)):
             launchability = "not-executable"
-        elif executable.suffix == ".js" and not node:
+        elif trust != "foreign" and executable.suffix == ".js" and not node:
             launchability = "missing-node"
+        elif trust == "foreign":
+            launchability = "sandbox-testable" if self.sandbox.ready else "sandbox-unavailable"
         name = str(package.get("name") or root.name or "dsh")
         version = str(package.get("version") or "unknown")
-        return {
+        record = {
             "id": _tree_id(root),
             "name": name,
             "short": re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24] or "dsh",
@@ -331,6 +378,7 @@ class Launcher:
             "real_path": str(root.resolve()),
             "exe": _display_path(executable),
             "real_exe": str(executable.resolve()),
+            "executable_sha256": _file_sha256(executable),
             "node": (node + " · detected") if node else ("bundled" if executable.suffix != ".js" else "—"),
             "real_node": node,
             "git": git,
@@ -338,6 +386,12 @@ class Launcher:
             "launchability": launchability,
             "evidence": ["recognized CLI artifact", "package metadata" if package else "PATH executable"],
         }
+        if trust == "foreign":
+            previous = self._sandbox_results.get(self._sandbox_key(record))
+            if previous:
+                record["sandbox_test"] = self._sandbox_summary(previous)
+                record["launchability"] = "sandbox-tested" if previous.get("status") == "passed" else "sandbox-test-failed"
+        return record
 
     def scan(self) -> dict[str, Any]:
         trees: dict[str, dict[str, Any]] = {}
@@ -485,13 +539,47 @@ class Launcher:
             "coverage_gaps": list(self._coverage_gaps),
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
-            "sandbox": {
-                "mode": "local-isolation-preview",
-                "hostile_code_isolation": False,
-                "enforced": ["loopback ports", "separate process groups", "separate writable homes", "managed workspaces"],
-                "not_enforced": ["CPU quota", "GPU quota", "RAM quota", "network policy", "filesystem confinement"],
-            },
+            "sandbox": self.sandbox.status(),
         }
+
+    def sandbox_test(self, tree_id: str) -> dict[str, Any]:
+        """Execute a bounded CLI help probe in a networkless pinned container."""
+        with self._mutation_lock:
+            # Refresh Git and filesystem evidence immediately before executing a
+            # captured CLI. Persisted results are tied to this observed revision.
+            self.scan()
+            with self._lock:
+                tree = self._trees.get(tree_id)
+            if not tree:
+                raise LauncherError("Select a detected DSH tree")
+            if tree.get("trust") != "foreign":
+                raise LauncherError("Sandbox testing is reserved for foreign/community trees")
+            git = tree.get("git") or {}
+            if not git or git.get("sha") in {None, "", "unknown"} or git.get("dirty") is not False:
+                raise LauncherError("Community tree must have a recorded Git revision with no tracked changes before sandbox testing")
+            if tree.get("launchability") in {"needs-build", "not-executable"}:
+                raise LauncherError(f"Tree cannot be sandbox-tested yet: {tree['launchability']}")
+            try:
+                result = self.sandbox.test_tree(tree)
+            except SandboxError as error:
+                raise LauncherError(str(error)) from error
+            output = str(result.get("output") or "")
+            for name in SECRET_NAMES:
+                if value := os.environ.get(name):
+                    output = output.replace(value, "<redacted>")
+            result.update({
+                "tree_id": tree_id,
+                "revision": str((tree.get("git") or {}).get("sha") or "unknown"),
+                "tested_at": int(time.time() * 1000),
+                "output": output,
+                "verdict": "Capability evidence only; this is not a security or compatibility guarantee.",
+            })
+            key = self._sandbox_key(tree)
+            self._sandbox_results[key] = result
+            self._save_sandbox_results()
+            tree["sandbox_test"] = self._sandbox_summary(result)
+            tree["launchability"] = "sandbox-tested" if result.get("status") == "passed" else "sandbox-test-failed"
+            return dict(result)
 
     def _tree(self, tree_id: str) -> dict[str, Any]:
         with self._lock:
@@ -499,7 +587,7 @@ class Launcher:
         if not tree:
             raise LauncherError("Select a detected DSH tree")
         if tree["trust"] == "foreign":
-            raise LauncherError("Foreign trees are view-only until the container backend is available")
+            raise LauncherError("Foreign trees may be tested in the networkless sandbox but cannot launch as host processes")
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree

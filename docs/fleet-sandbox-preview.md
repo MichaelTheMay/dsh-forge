@@ -52,8 +52,10 @@ home, and workspace from a sanitized snapshot; the source cell keeps running.
 That v1 snapshot is best-effort rather than filesystem-atomic, so do not clone a
 cell while it is writing irreplaceable state.
 
-CPU, GPU, and RAM are display requests in this release. The local backend does
-not enforce cgroup quotas, GPU partitioning, a network policy, or a confined
-root filesystem. Only trusted official installations are runnable. Community
-forks remain metadata-only until the container backend and promotion workflow
-are available.
+CPU, GPU, and RAM are display requests for these trusted host cells. That path
+does not enforce cgroup quotas, GPU partitioning, a network policy, or a
+confined root filesystem. Only trusted official installations are runnable.
+
+Community checkouts use a separate path: Forge can run a bounded, networkless
+CLI probe inside a pinned Apptainer SIF, but cannot start them as fleet cells or
+promote them. See [Apptainer community-code test sandbox](apptainer-sandbox.md).
