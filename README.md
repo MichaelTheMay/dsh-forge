@@ -8,20 +8,32 @@ The public ecosystem crawler and catalog publisher live in the separate
 
 ## Status
 
-The first launcher and **Public Repos** interface is available as a local UI
-prototype. Public Repos contains a dated snapshot of ten real community forks;
-the original local launcher controls still use sample state. This is not yet a
-process controller, installer, merger, or security sandbox.
+The first local launcher alpha and **Public Repos** interface are available.
+The loopback sidecar discovers configured DSH trees without executing candidate
+code, previews an exact launch, starts trusted local trees, and controls only
+processes whose PID and process-start identity it recorded. Public Repos contains
+a dated metadata snapshot of ten real community forks.
+
+This is state isolation, not a hostile-code security sandbox. Public repository
+download, installation, merging, and execution remain disabled.
 
 ## Open the UI
 
 Python 3.9+ is sufficient to serve the app. There is no package installation or
 build step, and no API key is needed.
 
+From an existing checkout:
+
 ```bash
-git clone https://github.com/MichaelTheMay/dsh-forge.git
-cd dsh-forge
+cd ~/dsh-forge
 python3 scripts/serve.py
+```
+
+The launcher automatically detects `dsh` on `PATH`. Register one or more source
+roots at startup when needed:
+
+```bash
+python3 scripts/serve.py --scan-root ~/src/deepseek-harness
 ```
 
 Open <http://127.0.0.1:3090/> for Launch, or
@@ -30,11 +42,29 @@ only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
 port with `--port 3091`; the script does not stop existing processes.
 
 See [Delta setup](docs/delta-setup.md) for remote access through an SSH tunnel.
-To produce a single HTML file that can be downloaded and opened locally:
+To produce a single HTML file that can be downloaded and opened locally as a
+disconnected, non-runnable preview:
 
 ```bash
-python3 scripts/package_preview.py dist/DSH_Forge_Public_Repos.html
+python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 ```
+
+## Launcher safety boundary
+
+- Discovery is bounded to configured roots plus a `dsh` executable on `PATH`.
+- Scanning reads recognized artifacts, package metadata, and Git identity; it
+  never runs repository code or package scripts.
+- Trees whose Git remote is not the canonical upstream are view-only until the
+  container backend is available.
+- Ports 3080 and 3090 are protected. An unmanaged occupant is reported and is
+  never killed or replaced.
+- A writable DSH home has one live writer. Fresh and sanitized-clone homes are
+  launcher-managed alternatives.
+- Mutation APIs require a loopback Host, same-origin request, and an HttpOnly
+  session cookie. Credential presence is shown by key only; values are not
+  returned to the page or intentionally logged.
+- Loader readiness is honestly reported as `not observed` until a supported
+  runtime adapter exists.
 
 ## Public Repos
 

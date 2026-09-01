@@ -27,9 +27,27 @@ test('embedded snapshot exactly matches the JSON and GitHub top-ten response', (
 });
 test('launcher remains the default and Public Repos is a separate view', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
+  assert.equal(c.state.cells.length, 0);
+  assert.equal(c.renderVals().modeLabel, 'portable preview');
+  assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'public-repos');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
+});
+test('preview contains no personal-name or private-home leakage', () => {
+  assert(!/michael(?:the)?may|\/home\/[^/]+\//i.test(html));
+  assert(!/pid:\s*4\d{4}|loader settled|process alive · pid/i.test(html));
+});
+test('live status replaces preview inventory instead of merging it', () => {
+  const c = instance();
+  c.applyStatus({
+    trees: [{ id: 'real', name: 'detected', short: 'detected', kind: 'source', version: '1', path: '~/dsh', exe: '~/dsh/dsh', node: 'bundled', git: null, trust: 'personal', launchability: 'ready' }],
+    cells: [], suggested_port: 3210, coverage_gaps: [], credentials: []
+  });
+  assert.equal(c.state.trees.length, 1);
+  assert.equal(c.state.trees[0].id, 'real');
+  assert.equal(c.renderVals().modeLabel, 'launcher alpha');
+  assert.equal(c.renderVals().suggested, 3210);
 });
 test('most-starred order retains GitHub order for ties', () => {
   const rows = instance().renderVals().results;

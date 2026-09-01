@@ -114,12 +114,12 @@
   <header class="app-header" style="flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 0 16px; height: 52px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255);">
     <div style="display: flex; align-items: baseline; gap: 8px;">
       <span style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">DSH Forge</span>
-      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">sidecar · dsh-pick</span><span class="repo-label">UI prototype</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">sidecar · dsh-pick</span><span class="repo-label">{{ modeLabel }}</span>
     </div>
-    <div class="header-loopback" title="Intended sidecar address; no local runner is connected in this export." style="display: flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.72 0.01 255);">
-      <span style="width: 6px; height: 6px; border-radius: 999px; background: oklch(0.74 0.15 155);"></span>
-      127.0.0.1:3090
-      <span style="color: oklch(0.55 0.01 255);">loopback</span>
+    <div class="header-loopback" title="{{ sidecarTitle }}" style="display: flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.72 0.01 255);">
+      <span style="width: 6px; height: 6px; border-radius: 999px; background: {{ sidecarDot }};"></span>
+      {{ sidecarAddress }}
+      <span style="color: oklch(0.55 0.01 255);">{{ sidecarState }}</span>
     </div>
     <nav style="display: flex; gap: 4px; margin-left: 8px;">
       <button onClick="{{ goLaunch }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ launchTabBorder }}; background: {{ launchTabBg }}; color: {{ launchTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Launch</button>
@@ -537,18 +537,18 @@ const TXT = 'oklch(0.86 0.01 255)';
 const BORDER = 'oklch(0.31 0.012 255)';
 const SELB = 'oklch(0.58 0.11 235)';
 
-const TREES = [
+const PREVIEW_TREES = [
   { id: 'daily', name: 'dsh-daily', kind: 'npm', version: '0.1.2-alpha.2', path: '~/.npm-global/lib/node_modules/@deepseek-ai/dsh',
     git: null, trust: 'personal', launchability: 'ready', short: 'daily', exe: '~/.npm-global/bin/dsh', node: '/usr/bin/node · 24.4.1' },
-  { id: 'src', name: 'dsh-src', kind: 'source', version: '0.1.3-dev', path: '/home/michaelmay/dsh-src',
+  { id: 'src', name: 'dsh-src', kind: 'source', version: '0.1.3-dev', path: '~/src/deepseek-harness',
     git: { branch: 'master', sha: '0a53fb5', dirty: false }, trust: 'readonly', launchability: 'ready', short: 'src',
-    exe: '/home/michaelmay/dsh-src/packages/cli/bin/dsh.js', node: '/usr/bin/node · 24.4.1' },
-  { id: 'wt', name: 'forge-wt', kind: 'source', version: '0.1.3-dev', path: '/home/michaelmay/Dev/dsh-forge-wt',
-    git: { branch: 'sidecar/pick', sha: 'c81de40', dirty: true }, trust: 'personal', launchability: 'needs-build', short: 'wt',
-    exe: '/home/michaelmay/Dev/dsh-forge-wt/packages/cli/bin/dsh.js', node: '~/.nvm/versions/node/v22.19.0/bin/node · 22.19.0' },
+    exe: '~/src/deepseek-harness/packages/cli/bin/dsh.js', node: '/usr/bin/node · 24.4.1' },
+  { id: 'wt', name: 'forge-wt', kind: 'source', version: '0.1.3-dev', path: '~/Dev/dsh-forge-worktree',
+    git: { branch: 'sidecar/pick', sha: 'c81de40', dirty: true }, trust: 'personal', launchability: 'ready', short: 'wt',
+    exe: '~/Dev/dsh-forge-worktree/packages/cli/bin/dsh.js', node: '~/.nvm/versions/node/v22.19.0/bin/node · 22.19.0' },
   { id: 'bin', name: 'dsh-nightly', kind: 'bin', version: '0.1.4-nightly.7', path: '/usr/local/bin/dsh',
     git: null, trust: 'personal', launchability: 'ready', short: 'nightly', exe: '/usr/local/bin/dsh', node: 'bundled · 24.4.1' },
-  { id: 'fork', name: 'dsh-rewind (fork)', kind: 'source', version: 'unknown', path: '/home/michaelmay/Dev/forks/dsh-rewind',
+  { id: 'fork', name: 'dsh-rewind (fork)', kind: 'source', version: 'unknown', path: '~/Dev/forks/dsh-rewind',
     git: { branch: 'main', sha: '77b1c2a', dirty: false }, trust: 'foreign', launchability: 'blocked-by-policy', short: 'rewind',
     exe: '—', node: '—' }
 ];
@@ -1014,18 +1014,6 @@ const CATALOG = [...CATALOG_SNAPSHOT.entries, ...(CATALOG_SNAPSHOT.supplemental_
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
 }));
 
-const LOGS = [
-  { t: '09:12:04.118', level: 'launch', msg: 'cell created · nonce 7f3a91 · process group 41822', color: BLUE },
-  { t: '09:12:04.230', level: 'home', msg: 'writer lease acquired: ~/.dsh (exclusive persistent)', color: OK },
-  { t: '09:12:04.402', level: 'spawn', msg: 'node ~/.npm-global/lib/.../dsh.js --profile web --port 3080', color: MUTED },
-  { t: '09:12:05.061', level: 'health', msg: 'process alive · pid 41822 · start-time verified', color: OK },
-  { t: '09:12:06.884', level: 'health', msg: 'http probe 200 on / after 2.48s', color: OK },
-  { t: '09:12:09.317', level: 'loader', msg: 'plugin rows resolved: 14 · duplicates 0', color: OK },
-  { t: '09:12:09.402', level: 'loader', msg: 'settled — cell marked running', color: OK },
-  { t: '09:41:22.700', level: 'probe', msg: 'periodic http probe 200 · sample bounded at 500 rows', color: MUTED },
-  { t: '10:02:51.004', level: 'env', msg: 'DEEPSEEK_API_KEY injected from credential ref (value not logged)', color: MUTED }
-];
-
 const COLUMNS = ['Cell / state', 'Tree', 'Surface', 'URL', 'Process identity', 'Uptime', 'Home / isolation', 'Workspace', 'Trust', 'Health', 'Actions'];
 
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -1033,17 +1021,18 @@ function pad(n) { return n < 10 ? '0' + n : '' + n; }
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    const now = Date.now();
     this.state = {
       view: typeof window !== 'undefined' && window.location.hash === '#public-repos' ? 'catalog' : 'launch',
-      treeId: 'src',
+      treeId: PREVIEW_TREES[0].id,
+      trees: PREVIEW_TREES,
       surface: 'web',
+      profile: 'tui-min',
       port: String(props.defaultPort ?? 3100),
       openBrowser: true,
       homeMode: 'fresh',
       cloneSource: '~/.dsh',
       excludeSessions: true,
-      workspace: '/home/michaelmay/Dev/forge',
+      workspace: 'none',
       advancedOpen: false,
       preview: null,
       logCell: null,
@@ -1054,28 +1043,28 @@ class Component extends DCLogic {
       artifactId: CATALOG[0] ? CATALOG[0].id : null,
       toast: '',
       scanning: false,
-      seq: 4,
-      cells: [
-        { id: 'c1', name: 'daily-web-3080', state: 'running', treeId: 'daily', surface: 'web', port: 3080, pid: 41822,
-          procStart: '09:12:04', started: now - 3_540_000, home: '~/.dsh', isolation: 'exclusive persistent',
-          workspace: '~/Dev/forge', http: 'ok', loader: 'settled' },
-        { id: 'c2', name: 'src-headless', state: 'running', treeId: 'src', surface: 'headless', port: null, pid: 41930,
-          procStart: '09:31:47', started: now - 2_360_000, home: 'cells/clone-02', isolation: 'cloned home',
-          workspace: '~/Dev/scratch', http: 'n/a', loader: 'settled' },
-        { id: 'c3', name: 'wt-web-3101', state: 'starting', treeId: 'wt', surface: 'web', port: 3101, pid: 42011,
-          procStart: '10:04:12', started: now - 41_000, home: 'cells/cell-7f3a', isolation: 'fresh empty',
-          workspace: 'none', http: 'ok', loader: 'unsettled' }
-      ]
+      seq: 0,
+      cells: [],
+      sidecarConnected: false,
+      statusLoaded: false,
+      suggestedPort: Number(props.defaultPort ?? 3100),
+      coverageGaps: [],
+      credentials: [],
+      previewData: null,
+      logLines: []
     };
   }
 
   componentDidMount() {
     this.timer = setInterval(() => this.forceUpdate(), 1000);
+    this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
     this.hashListener = () => this.setState({ view: window.location.hash === '#public-repos' ? 'catalog' : 'launch' });
     window.addEventListener('hashchange', this.hashListener);
+    this.refreshStatus(true);
   }
   componentWillUnmount() {
     clearInterval(this.timer);
+    clearInterval(this.statusTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
@@ -1112,7 +1101,87 @@ class Component extends DCLogic {
     this.toastTimer = setTimeout(() => this.setState({ toast: '' }), 2600);
   }
 
-  tree(id) { return TREES.find(t => t.id === id) || TREES[0]; }
+  tree(id) {
+    return this.state.trees.find(t => t.id === id) || this.state.trees[0] || {
+      id: '', name: 'No DSH tree detected', short: 'dsh', kind: '—', version: '—', path: 'Add a scan root to begin',
+      exe: '—', node: '—', git: null, trust: 'readonly', launchability: 'not-detected'
+    };
+  }
+
+  async api(path, options = {}) {
+    const response = await fetch(path, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+    });
+    let payload = {};
+    try { payload = await response.json(); } catch {}
+    if (!response.ok) throw new Error(payload.error || ('Launcher request failed (' + response.status + ')'));
+    return payload;
+  }
+
+  applyStatus(status) {
+    const trees = Array.isArray(status.trees) ? status.trees : [];
+    const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
+    this.setState({
+      sidecarConnected: true, statusLoaded: true, trees, treeId: current,
+      cells: Array.isArray(status.cells) ? status.cells : [],
+      suggestedPort: status.suggested_port || this.state.suggestedPort,
+      coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
+      credentials: Array.isArray(status.credentials) ? status.credentials : []
+    });
+  }
+
+  async refreshStatus(silent = false) {
+    if (typeof fetch === 'undefined' || typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) {
+      this.setState({ statusLoaded: true, sidecarConnected: false });
+      return;
+    }
+    try {
+      this.applyStatus(await this.api('/api/v1/status'));
+    } catch (error) {
+      this.setState({ statusLoaded: true, sidecarConnected: false, cells: [] });
+      if (!silent) this.flash(error.message);
+    }
+  }
+
+  launchSpec() {
+    const s = this.state;
+    return {
+      tree_id: s.treeId,
+      surface: s.surface,
+      profile: s.profile || 'tui-min',
+      port: s.surface === 'headless' ? null : Number(s.port),
+      open_browser: s.openBrowser,
+      home_mode: s.homeMode,
+      clone_source: s.cloneSource,
+      workspace: s.workspace
+    };
+  }
+
+  async previewLaunch() {
+    try {
+      const previewData = await this.api('/api/v1/launches/preview', { method: 'POST', body: JSON.stringify(this.launchSpec()) });
+      this.setState({ preview: 'launch', previewData });
+    } catch (error) { this.flash(error.message); }
+  }
+
+  async rescanLauncher(roots) {
+    this.setState({ scanning: true });
+    try {
+      const body = roots ? { roots } : {};
+      const status = await this.api('/api/v1/scan', { method: 'POST', body: JSON.stringify(body) });
+      this.applyStatus(status);
+      this.flash('scan complete · ' + status.trees.length + ' tree(s) detected');
+    } catch (error) { this.flash(error.message); }
+    finally { this.setState({ scanning: false }); }
+  }
+
+  async addFolder() {
+    if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to register local scan roots');
+    const root = window.prompt('Absolute path to a DeepSeek Harness checkout or parent scan root:');
+    if (root) await this.rescanLauncher([root]);
+  }
 
   uptime(started) {
     const s = Math.max(0, Math.floor((Date.now() - started) / 1000));
@@ -1122,7 +1191,7 @@ class Component extends DCLogic {
 
   freePort() {
     const used = new Set(this.state.cells.map(c => c.port).filter(Boolean).concat([3080, 3090]));
-    let p = 3100;
+    let p = Number(this.state.suggestedPort) || 3100;
     while (used.has(p)) p++;
     return p;
   }
@@ -1143,32 +1212,43 @@ class Component extends DCLogic {
     return '~/.dsh-forge/cells/clone-0' + s.seq + ' ← ' + s.cloneSource;
   }
 
-  startCell() {
-    const t = this.tree(this.state.treeId);
-    const s = this.state;
-    const port = s.surface === 'headless' ? null : parseInt(s.port, 10);
-    const cell = {
-      id: 'c' + (s.seq + 1),
-      name: t.short + '-' + s.surface + (port ? '-' + port : ''),
-      state: 'starting', treeId: t.id, surface: s.surface, port,
-      pid: 42000 + s.seq * 37, procStart: new Date().toTimeString().slice(0, 8),
-      started: Date.now(), home: this.homeTarget().split(' ')[0].replace('~/.dsh-forge/', ''),
-      isolation: s.homeMode === 'exclusive' ? 'exclusive persistent' : (s.homeMode === 'fresh' ? 'fresh empty' : 'cloned home'),
-      workspace: s.workspace && s.workspace !== 'none' ? s.workspace : 'none',
-      http: port ? 'pending' : 'n/a', loader: 'pending'
-    };
-    this.setState({ cells: [...s.cells, cell], seq: s.seq + 1, preview: null, port: String(this.freePort() + 1) });
-    setTimeout(() => this.setState(st => ({
-      cells: st.cells.map(c => c.id === cell.id ? { ...c, state: 'running', http: c.port ? 'ok' : 'n/a', loader: 'settled' } : c)
-    })), 2200);
-    this.flash('cell ' + cell.name + ' spawned in its own process group');
+  async startCell() {
+    try {
+      const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify(this.launchSpec()) });
+      this.setState({ preview: null, previewData: null });
+      await this.refreshStatus(true);
+      this.setState({ port: String(this.freePort()) });
+      this.flash('cell ' + cell.name + ' started in its own process group');
+      if (this.state.openBrowser && cell.port) window.open('http://127.0.0.1:' + cell.port + '/', '_blank', 'noopener');
+    } catch (error) { this.flash(error.message); }
+  }
+
+  async cellAction(cell, action) {
+    try {
+      await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/' + action, { method: 'POST', body: '{}' });
+      await this.refreshStatus(true);
+      this.flash(action + ' complete · ' + cell.name);
+    } catch (error) { this.flash(error.message); }
+  }
+
+  async copyCellUrl(cell) {
+    const value = 'http://127.0.0.1:' + cell.port + '/';
+    try { await navigator.clipboard.writeText(value); this.flash('copied ' + value); }
+    catch { this.flash('clipboard unavailable · ' + value); }
+  }
+
+  async openLogs(cell) {
+    try {
+      const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/logs');
+      this.setState({ logCell: cell.id, logLines: payload.lines || [] });
+    } catch (error) { this.flash(error.message); }
   }
 
   renderVals() {
     const s = this.state;
     const catalogEnabled = this.props.catalogEnabled ?? true;
     const t = this.tree(s.treeId);
-    const runnable = t.trust !== 'foreign';
+    const runnable = s.sidecarConnected && !!t.id && t.trust !== 'foreign' && t.launchability === 'ready';
     const needsBuild = t.launchability === 'needs-build';
     const portNum = parseInt(s.port, 10);
     const occupyingCell = s.cells.find(c => c.port === portNum);
@@ -1180,7 +1260,8 @@ class Component extends DCLogic {
     if (s.surface === 'headless') { portNote = 'headless surface binds no HTTP port'; }
     else if (occupyingCell) { portNote = portNum + ' occupied by managed cell ' + occupyingCell.name + ' — stop it or use ' + this.freePort(); portNoteFg = WARN; portNoteBorder = 'oklch(0.42 0.09 85)'; portNoteBg = 'oklch(0.245 0.03 85)'; }
     else if (isSystem) { portNote = portNum + ' reserved (' + (portNum === 3080 ? 'operator DSH' : 'this sidecar') + ') — never replaced implicitly'; portNoteFg = BAD; portNoteBorder = 'oklch(0.42 0.1 25)'; portNoteBg = 'oklch(0.25 0.04 25)'; }
-    else { portNote = portNum + ' free · reserved immediately before spawn'; portNoteFg = OK; }
+    else if (!s.sidecarConnected) { portNote = 'Portable preview only · start scripts/serve.py to validate and launch'; portNoteFg = WARN; }
+    else { portNote = portNum + ' will be checked on loopback immediately before spawn'; portNoteFg = OK; }
 
     const homeModes = [
       { id: 'exclusive', label: 'Exclusive persistent home', tag: 'writer lease', detail: '~/.dsh — second launch is rejected or cloned' },
@@ -1199,10 +1280,12 @@ class Component extends DCLogic {
       const ct = this.tree(c.treeId);
       const running = c.state === 'running';
       const stateColor = running ? OK : (c.state === 'starting' ? WARN : MUTED);
+      const processAlive = c.process === 'alive';
+      const httpOk = /^2\d\d$/.test(String(c.http));
       const health = [
-        { label: 'process alive', color: OK },
-        { label: c.http === 'ok' ? 'http 200' : (c.http === 'n/a' ? 'http n/a' : 'http pending'), color: c.http === 'ok' ? OK : (c.http === 'n/a' ? MUTED : WARN) },
-        { label: c.loader === 'settled' ? 'loader settled' : 'loader ' + c.loader, color: c.loader === 'settled' ? OK : WARN }
+        { label: 'process ' + (c.process || c.state), color: processAlive ? OK : MUTED },
+        { label: c.http === 'n/a' ? 'http n/a' : (httpOk ? 'http ' + c.http : 'http ' + (c.http || 'pending')), color: httpOk ? OK : (c.http === 'n/a' ? MUTED : WARN) },
+        { label: 'loader ' + (c.loader || 'not observed'), color: c.loader === 'settled' ? OK : MUTED }
       ];
       const act = (label, on, enabled) => ({
         label, run: enabled ? on : (() => {}), disabled: !enabled,
@@ -1221,11 +1304,11 @@ class Component extends DCLogic {
         trustBorder: ct.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (ct.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
         health,
         actions: [
-          act('stop', () => this.setState(st => ({ cells: st.cells.filter(x => x.id !== c.id), logCell: st.logCell === c.id ? null : st.logCell })) || this.flash('SIGTERM sent to verified pid ' + c.pid + ' · draining 8s'), true),
-          act('restart', () => this.flash('restart queued for ' + c.name), running),
-          act('open', () => this.flash('opening http://127.0.0.1:' + c.port), !!c.port && running),
-          act('copy', () => this.flash('copied http://127.0.0.1:' + c.port), !!c.port),
-          act('logs', () => this.setState({ logCell: c.id }), true)
+          act('stop', () => this.cellAction(c, 'stop'), processAlive),
+          act('restart', () => this.cellAction(c, 'restart'), running || c.state === 'exited' || c.state === 'stopped'),
+          act('open', () => window.open('http://127.0.0.1:' + c.port + '/', '_blank', 'noopener'), !!c.port && running),
+          act('copy', () => this.copyCellUrl(c), !!c.port),
+          act('logs', () => this.openLogs(c), true)
         ]
       };
     });
@@ -1264,33 +1347,24 @@ class Component extends DCLogic {
     ];
 
     const previewIsBuild = s.preview === 'build';
+    const livePreview = s.previewData;
     const previewLines = previewIsBuild ? [
       { k: 'tree', v: t.path + '  (' + t.trust + ', ' + (t.git && t.git.dirty ? 'dirty' : 'clean') + ')', color: TXT },
       { k: 'cwd', v: t.path, color: TXT },
-      { k: 'run', v: 'pnpm install --frozen-lockfile', color: 'oklch(0.86 0.11 85)' },
-      { k: 'run', v: 'pnpm run build', color: 'oklch(0.86 0.11 85)' },
-      { k: 'scripts', v: 'lifecycle scripts WILL run', color: BAD },
-      { k: 'network', v: 'registry access required', color: WARN },
-      { k: 'writes', v: 'node_modules/, dist/, pnpm-lock.yaml', color: TXT }
-    ] : [
-      { k: 'tree', v: t.path + '  (' + t.trust + ', ' + t.launchability + ')', color: TXT },
-      { k: 'exec', v: t.node.split(' · ')[0] + ' ' + t.exe, color: TXT },
-      { k: 'argv', v: this.argv(t), color: 'oklch(0.86 0.11 155)' },
-      { k: 'home', v: 'DSH_HOME=' + this.homeTarget(), color: TXT },
-      { k: 'env', v: 'DSH_PROFILE, DSH_PORT, NODE_ENV, PATH (non-secret keys shown)', color: MUTED },
-      { k: 'env', v: 'DEEPSEEK_API_KEY=<injected · present>', color: MUTED },
-      { k: 'group', v: 'new process group + session; nonce recorded with pid and start-time', color: MUTED }
-    ];
+      { k: 'status', v: 'Build orchestration is not part of this launcher PR.', color: WARN }
+    ] : livePreview ? [
+      { k: 'tree', v: livePreview.tree.path + '  (' + livePreview.tree.trust + ', ' + livePreview.tree.launchability + ')', color: TXT },
+      { k: 'cwd', v: livePreview.cwd, color: TXT },
+      { k: 'argv', v: livePreview.argv.join(' '), color: 'oklch(0.86 0.11 155)' },
+      { k: 'home', v: 'DSH_HOME=' + livePreview.home, color: TXT },
+      { k: 'env', v: (livePreview.environment_keys || []).join(', ') + ' (keys only)', color: MUTED },
+      { k: 'secrets', v: (livePreview.credential_keys || []).length ? livePreview.credential_keys.join(', ') + ' = <injected>' : 'no credential keys present', color: MUTED },
+      { k: 'group', v: 'new process group + session; PID and start identity recorded', color: MUTED }
+    ] : [];
     const previewNotes = previewIsBuild ? [
-      'readonly trees cannot be built in place — this tree is ' + t.trust + '.',
-      'A cloned worktree is available instead: ~/Dev/dsh-forge-wt.',
-      'No install or build ever runs on scan or page load.'
-    ] : [
-      s.homeMode === 'exclusive' ? 'Writer lease will be taken on ~/.dsh; a second launch against it is rejected.' : 'No other running cell can hold this writable home.',
-      'Readiness: process alive → http probe → loader settled, each with a bounded deadline.',
-      'state-isolated only. This is not a hostile-code boundary.',
-      s.openBrowser ? 'Browser opens on ready.' : 'Browser will not open automatically.'
-    ];
+      'No install or build runs during scanning or page load.',
+      'Build support is intentionally deferred; follow the selected tree’s own build documentation.'
+    ] : (livePreview ? livePreview.notes : []);
 
     return {
       catalogEnabled,
@@ -1298,6 +1372,11 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
       goCatalog: () => this.navigate('catalog'),
+      modeLabel: s.sidecarConnected ? 'launcher alpha' : 'portable preview',
+      sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
+      sidecarDot: s.sidecarConnected ? OK : WARN,
+      sidecarAddress: typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090',
+      sidecarState: s.sidecarConnected ? 'connected' : 'offline',
       launchTabBg: s.view === 'launch' ? 'oklch(0.3 0.02 255)' : 'transparent',
       launchTabFg: s.view === 'launch' ? 'oklch(0.95 0.01 255)' : MUTED,
       launchTabBorder: s.view === 'launch' ? 'oklch(0.42 0.03 255)' : 'transparent',
@@ -1307,9 +1386,9 @@ class Component extends DCLogic {
       cellsSummary: s.cells.length + ' cells · ' + s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       scanLabel: s.scanning ? 'scanning…' : 'Rescan',
-      rescan: () => { this.setState({ scanning: true }); setTimeout(() => { this.setState({ scanning: false }); this.flash('scan complete · 5 trees · 2 coverage gaps'); }, 1400); },
+      rescan: () => s.sidecarConnected ? this.rescanLauncher() : this.flash('Start scripts/serve.py to scan local trees'),
 
-      trees: TREES.map(tr => {
+      trees: s.trees.map(tr => {
         const sel = tr.id === s.treeId;
         const ok = tr.trust !== 'foreign';
         return {
@@ -1325,9 +1404,9 @@ class Component extends DCLogic {
           select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees are view-only until the container backend ships')
         };
       }),
-      treeCountLabel: TREES.length + ' detected · evidence-based',
-      coverageGap: '2 coverage gaps: ~/work (permission denied), /mnt/data (excluded)',
-      addFolder: () => this.flash('folder registered as a scan root — nothing launched, nothing executed'),
+      treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
+      coverageGap: s.coverageGaps.length ? s.coverageGaps.length + ' coverage gap(s): ' + s.coverageGaps.join('; ') : (s.sidecarConnected ? 'Configured roots scanned; candidate code was not executed.' : 'Preview records are illustrative and cannot be launched.'),
+      addFolder: () => this.addFolder(),
 
       surfaces: [
         { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }, { id: 'custom', label: 'custom profile' }
@@ -1339,8 +1418,8 @@ class Component extends DCLogic {
       })),
       isCustomSurface: s.surface === 'custom',
       profiles: ['tui-min', 'web-debug', 'agent-eval'],
-      profile: 'tui-min',
-      setProfile: () => {},
+      profile: s.profile,
+      setProfile: e => this.setState({ profile: e.target.value }),
 
       port: s.port,
       setPort: e => this.setState({ port: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) }),
@@ -1358,7 +1437,7 @@ class Component extends DCLogic {
       excludeSessions: s.excludeSessions,
       toggleExcludeSessions: () => this.setState({ excludeSessions: !s.excludeSessions }),
       leaseWarning: leaseHeld,
-      leaseWarningText: 'daily-web-3080 already holds the writer lease on ~/.dsh. Launching exclusive will be rejected — clone the home instead.',
+      leaseWarningText: 'A running cell already holds the writer lease on ~/.dsh. Launching exclusive will be rejected — clone the home instead.',
 
       workspace: s.workspace,
       setWorkspace: e => this.setState({ workspace: e.target.value }),
@@ -1368,33 +1447,30 @@ class Component extends DCLogic {
       advancedCaret: s.advancedOpen ? '▾' : '▸',
       toggleAdvanced: () => this.setState({ advancedOpen: !s.advancedOpen }),
       advancedRows: [
-        { label: 'Patch overlays (ordered)', value: '2 rows · cordis.patch.yml', color: TXT },
-        { label: 'Resolved config preview', value: 'digest 9f21c4…', color: BLUE },
-        { label: 'Agent preset', value: 'default', color: MUTED },
-        { label: 'Tools / permission mode', value: 'standard · prompt on shell', color: MUTED },
-        { label: 'Env file references', value: '.env.forge (keys only)', color: MUTED },
+        { label: 'Discovery policy', value: 'configured roots · bounded · no code execution', color: OK },
+        { label: 'Process identity', value: 'PID + OS process-start identity', color: BLUE },
         { label: 'Trusted hosts', value: 'localhost, 127.0.0.1', color: MUTED },
-        { label: 'Watch / HMR', value: s.surface === 'web' ? 'off' : 'n/a', color: MUTED },
-        { label: 'Telemetry', value: 'off', color: OK },
-        { label: 'CPU / memory / timeout', value: '2 cpu · 4096 MiB · 30 min', color: MUTED },
+        { label: 'Loader readiness', value: 'not observed · adapter deferred', color: MUTED },
+        { label: 'Telemetry', value: 'none in launcher sidecar', color: OK },
         { label: 'Executable', value: t.exe, color: TXT },
         { label: 'Node binary', value: t.node, color: TXT }
       ],
-      credentials: [
-        { label: 'DEEPSEEK_API_KEY · present', color: OK, border: 'oklch(0.42 0.1 155)' },
-        { label: 'OPENAI_API_KEY · present', color: OK, border: 'oklch(0.42 0.1 155)' },
-        { label: 'GITHUB_TOKEN · absent', color: MUTED, border: BORDER }
-      ],
+      credentials: s.credentials.map(item => ({
+        label: item.name + ' · ' + (item.present ? 'present' : 'absent'),
+        color: item.present ? OK : MUTED,
+        border: item.present ? 'oklch(0.42 0.1 155)' : BORDER
+      })),
 
       needsBuild,
-      buildCommands: 'pnpm install → pnpm run build → pnpm run dev:web',
+      buildCommands: 'Build orchestration deferred · use the tree’s documented build steps',
       openBuildPreview: () => this.setState({ preview: 'build' }),
 
-      primaryLabel: !runnable ? 'View only — foreign tree' : (needsBuild ? 'Preview build & launch…' : (confirm ? 'Preview launch…' : 'Start cell')),
+      primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'View only — foreign tree' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
       primaryAction: () => {
-        if (!runnable) return this.flash('foreign trees are never launched in v1');
-        if (needsBuild) return this.setState({ preview: 'build' });
-        if (confirm) return this.setState({ preview: 'launch' });
+        if (!s.sidecarConnected) return this.flash('Run python3 scripts/serve.py to connect the launcher');
+        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees are view-only until the container backend ships' : 'select a launch-ready detected tree');
+        if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then rescan');
+        if (confirm) return this.previewLaunch();
         this.startCell();
       },
       launchDisabled: !runnable,
@@ -1402,7 +1478,7 @@ class Component extends DCLogic {
       primaryFg: runnable ? 'oklch(0.95 0.05 155)' : 'oklch(0.55 0.01 255)',
       primaryBorder: runnable ? 'oklch(0.52 0.13 155)' : BORDER,
       primaryCursor: runnable ? 'pointer' : 'not-allowed',
-      launchHint: 'UI prototype: launch controls use sample data and reset on refresh. No local runner is connected.',
+      launchHint: s.sidecarConnected ? 'Live local launcher. Scans never execute candidate code; only an explicitly confirmed launch starts a process.' : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
 
       cellColumns: COLUMNS,
       cells,
@@ -1410,8 +1486,8 @@ class Component extends DCLogic {
 
       logsOpen: !!s.logCell,
       logTitle: 'logs · ' + (s.cells.find(c => c.id === s.logCell) || { name: '' }).name,
-      logLines: LOGS,
-      closeLogs: () => this.setState({ logCell: null }),
+      logLines: s.logLines,
+      closeLogs: () => this.setState({ logCell: null, logLines: [] }),
 
       query: s.query,
       setQuery: e => this.setState({ query: e.target.value }),
@@ -1447,7 +1523,7 @@ class Component extends DCLogic {
       idemKey: 'idm_' + (7000 + s.seq * 131).toString(16),
       previewLines,
       previewNotes,
-      closePreview: () => this.setState({ preview: null }),
+      closePreview: () => this.setState({ preview: null, previewData: null }),
       confirmPreview: () => {
         if (previewIsBuild) { this.setState({ preview: null }); this.flash('build refused — readonly tree cannot be built in place'); }
         else this.startCell();

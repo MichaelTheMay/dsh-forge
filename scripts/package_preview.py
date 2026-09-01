@@ -16,8 +16,7 @@ def main():
         if "</script" in source.lower():
             raise ValueError(f"Unsafe inline-script delimiter in {name}")
         html = html.replace(f'<script src="./{name}"></script>', '<script>\n' + source + '\n</script>')
-    # The portable preview opens directly on the new page; Launch remains accessible.
-    html = html.replace('<head>', '<head>\n<script>if (!location.hash) location.hash = "public-repos";</script>', 1)
+    # Launch remains the default. This export is an honest disconnected preview.
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(html, encoding="utf-8")
     print(f"Created self-contained preview: {args.output}")
