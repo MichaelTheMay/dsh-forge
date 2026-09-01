@@ -15,11 +15,24 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("serve", ROOT / "scripts/serve.py")
 serve = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(serve)
+import dsh_forge.launcher as launcher_module
 
 
 FAKE_DSH = """#!/bin/sh
 trap 'exit 0' TERM INT
 echo 'fake dsh ready'
+mode="$1"
+port=""
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--port" ]; then
+        shift
+        port="$1"
+    fi
+    shift
+done
+if [ "$mode" = "web" ]; then
+    echo "dsh web: http://127.0.0.1:${port}/?token=test-capability"
+fi
 while true; do
     sleep 1
 done
@@ -50,6 +63,12 @@ class LauncherFixture(unittest.TestCase):
 
 
 class ScannerAndRunner(LauncherFixture):
+    def test_only_canonical_upstream_remotes_are_official(self):
+        self.assertTrue(launcher_module._official_remote("https://github.com/deepseek-ai/deepseek-harness.git"))
+        self.assertTrue(launcher_module._official_remote("git@github.com:deepseek-ai/deepseek-harness.git"))
+        self.assertFalse(launcher_module._official_remote("https://example.com/deepseek-ai/deepseek-harness.git"))
+        self.assertFalse(launcher_module._official_remote("https://github.com/community/deepseek-harness.git"))
+
     def test_scanner_uses_strong_artifacts_without_execution(self):
         status = self.launcher.status()
         self.assertEqual(len(status["trees"]), 1)
@@ -65,12 +84,36 @@ class ScannerAndRunner(LauncherFixture):
         status = self.launcher.add_scan_roots([str(unrelated)])
         self.assertTrue(any("no strong DSH signature" in gap for gap in status["coverage_gaps"]))
 
+    def test_current_upstream_source_layout_and_cli_shape(self):
+        upstream = self.root / "upstream-layout"
+        cli = upstream / "apps" / "cli"
+        (cli / "lib").mkdir(parents=True)
+        (cli / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/dsh", "version": "0.1.2-alpha.3"}), encoding="utf-8"
+        )
+        (cli / "lib" / "bin.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        detected = serve.Launcher([upstream], state_root=self.root / "upstream-state")
+        try:
+            tree = detected.status()["trees"][0]
+            preview = detected.preview({
+                "tree_id": tree["id"], "surface": "web", "port": detected.suggested_port(),
+                "home_mode": "fresh", "workspace": "none"
+            })
+            self.assertEqual(tree["version"], "0.1.2-alpha.3")
+            self.assertIn("apps/cli/lib/bin.js", tree["exe"])
+            self.assertEqual(preview["argv"][-6:-5], ["web"])
+            self.assertIn("--host", preview["argv"])
+            self.assertIn("--no-open", preview["argv"])
+            self.assertNotIn("--workspace", preview["argv"])
+        finally:
+            detected.shutdown()
+
     def test_preview_lists_keys_not_secret_values(self):
         old = os.environ.get("DEEPSEEK_API_KEY")
         os.environ["DEEPSEEK_API_KEY"] = "never-return-this-secret"
         try:
             preview = self.launcher.preview({
-                "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "fresh", "workspace": "none"
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"
             })
         finally:
             if old is None:
@@ -87,7 +130,7 @@ class ScannerAndRunner(LauncherFixture):
         # OS birth-identity probe is mocked while the ownership checks remain.
         with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
             cell = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "fresh", "workspace": "none"
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"
             })
             self.assertGreater(cell["pid"], 1)
             self.assertEqual(cell["loader"], "not observed")
@@ -103,7 +146,7 @@ class ScannerAndRunner(LauncherFixture):
     def test_persisted_identity_is_recovered_and_can_be_stopped(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
             cell = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "fresh", "workspace": "none"
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"
             })
             recovered = serve.Launcher([self.tree_root], state_root=self.root / "state")
             try:
@@ -130,14 +173,39 @@ class ScannerAndRunner(LauncherFixture):
                 })
             self.assertGreater(occupant.fileno(), -1)
 
+    def test_authenticated_web_url_is_explicit_and_not_in_cell_status(self):
+        port = self.launcher.suggested_port()
+        with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
+            cell = self.launcher.launch({
+                "tree_id": self.tree()["id"], "surface": "web", "port": port,
+                "home_mode": "fresh", "workspace": "none"
+            })
+            for _ in range(20):
+                try:
+                    url = self.launcher.open_url(cell["id"])
+                    break
+                except serve.LauncherError:
+                    import time
+                    time.sleep(0.02)
+            else:
+                self.fail("authenticated web URL was not observed")
+            self.assertIn("token=test-capability", url)
+            public = next(item for item in self.launcher.status()["cells"] if item["id"] == cell["id"])
+            self.assertNotIn("open_url", public)
+            self.assertTrue(public["open_ready"])
+            rendered_logs = json.dumps(self.launcher.logs(cell["id"]))
+            self.assertNotIn("token=test-capability", rendered_logs)
+            self.assertIn("authenticated URL redacted", rendered_logs)
+            self.launcher.stop(cell["id"])
+
     def test_exclusive_home_has_one_writer(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
             first = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "exclusive", "workspace": "none"
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
             })
             with self.assertRaisesRegex(serve.LauncherError, "writable-home lease"):
                 self.launcher.launch({
-                    "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "exclusive", "workspace": "none"
+                    "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
                 })
             self.launcher.stop(first["id"])
 
@@ -152,7 +220,7 @@ class ScannerAndRunner(LauncherFixture):
         (source / "linked-secret").symlink_to(self.root / "outside-secret")
         with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
             cell = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "home_mode": "clone",
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "clone",
                 "clone_source": str(source), "workspace": "none"
             })
             cloned = Path(self.launcher._cells[cell["id"]]["real_home"])
@@ -215,7 +283,7 @@ class LauncherServer(LauncherFixture):
             self.assertEqual(context.exception.code, 404)
 
     def test_mutations_require_the_launcher_session(self):
-        body = {"tree_id": self.tree()["id"], "surface": "headless", "home_mode": "fresh", "workspace": "none"}
+        body = {"tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"}
         with self.assertRaises(urllib.error.HTTPError) as context:
             self.request("/api/v1/launches/preview", body)
         self.assertEqual(context.exception.code, 403)

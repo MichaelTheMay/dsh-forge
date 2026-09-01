@@ -36,6 +36,11 @@ roots at startup when needed:
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
 ```
 
+The alpha supports the current `dsh web` surface and one-shot `dsh headless`
+tasks. It recognizes the current upstream `apps/cli/lib/bin.js` build artifact
+as well as older compatible CLI layouts. Because upstream is still a developer
+preview, the exact command is always shown for confirmation before launch.
+
 Open <http://127.0.0.1:3090/> for Launch, or
 <http://127.0.0.1:3090/#public-repos> for the separate browser. The server binds
 only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
@@ -55,7 +60,9 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 - Scanning reads recognized artifacts, package metadata, and Git identity; it
   never runs repository code or package scripts.
 - Trees whose Git remote is not the canonical upstream are view-only until the
-  container backend is available.
+  container backend is available. The later import/integration skill will
+  validate, sandbox-test, and explicitly promote compatible forks before this
+  launcher may run them.
 - Ports 3080 and 3090 are protected. An unmanaged occupant is reported and is
   never killed or replaced.
 - A writable DSH home has one live writer. Fresh and sanitized-clone homes are

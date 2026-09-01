@@ -189,6 +189,9 @@
             </sc-for>
           </select>
         </sc-if>
+        <sc-if value="{{ isHeadlessSurface }}" hint-placeholder-val="{{ false }}">
+          <textarea value="{{ task }}" onChange="{{ setTask }}" placeholder="One-shot task for dsh headless…" rows="3" style="margin-top: 7px; width: 100%; resize: vertical; padding: 8px 9px; border-radius: 6px; border: 1px solid oklch(0.32 0.012 255); background: oklch(0.23 0.01 255); color: oklch(0.9 0.01 255); font-family: 'IBM Plex Mono', monospace; font-size: 11px;"></textarea>
+        </sc-if>
       </div>
 
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>
@@ -284,7 +287,7 @@
         <div style="padding: 10px 11px; border-radius: 8px; border: 1px solid oklch(0.42 0.09 85); background: oklch(0.245 0.035 85);">
           <div style="font-size: 12px; font-weight: 600; color: oklch(0.88 0.11 85);">Build artifacts missing or stale</div>
           <div style="margin-top: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.8 0.05 85); line-height: 1.6;">{{ buildCommands }}</div>
-          <button onClick="{{ openBuildPreview }}" style="margin-top: 8px; padding: 6px 11px; border-radius: 6px; border: 1px solid oklch(0.5 0.1 85); background: transparent; color: oklch(0.88 0.11 85); font-size: 11.5px; cursor: pointer;">Preview build…</button>
+          <button disabled title="Build orchestration is deferred" style="margin-top: 8px; padding: 6px 11px; border-radius: 6px; border: 1px solid oklch(0.36 0.04 85); background: transparent; color: oklch(0.62 0.04 85); font-size: 11.5px; cursor: not-allowed;">Build deferred</button>
         </div>
       </sc-if>
 
@@ -542,10 +545,10 @@ const PREVIEW_TREES = [
     git: null, trust: 'personal', launchability: 'ready', short: 'daily', exe: '~/.npm-global/bin/dsh', node: '/usr/bin/node · 24.4.1' },
   { id: 'src', name: 'dsh-src', kind: 'source', version: '0.1.3-dev', path: '~/src/deepseek-harness',
     git: { branch: 'master', sha: '0a53fb5', dirty: false }, trust: 'readonly', launchability: 'ready', short: 'src',
-    exe: '~/src/deepseek-harness/packages/cli/bin/dsh.js', node: '/usr/bin/node · 24.4.1' },
+    exe: '~/src/deepseek-harness/apps/cli/lib/bin.js', node: '/usr/bin/node · 24.4.1' },
   { id: 'wt', name: 'forge-wt', kind: 'source', version: '0.1.3-dev', path: '~/Dev/dsh-forge-worktree',
     git: { branch: 'sidecar/pick', sha: 'c81de40', dirty: true }, trust: 'personal', launchability: 'ready', short: 'wt',
-    exe: '~/Dev/dsh-forge-worktree/packages/cli/bin/dsh.js', node: '~/.nvm/versions/node/v22.19.0/bin/node · 22.19.0' },
+    exe: '~/Dev/dsh-forge-worktree/apps/cli/lib/bin.js', node: '~/.nvm/versions/node/v22.19.0/bin/node · 22.19.0' },
   { id: 'bin', name: 'dsh-nightly', kind: 'bin', version: '0.1.4-nightly.7', path: '/usr/local/bin/dsh',
     git: null, trust: 'personal', launchability: 'ready', short: 'nightly', exe: '/usr/local/bin/dsh', node: 'bundled · 24.4.1' },
   { id: 'fork', name: 'dsh-rewind (fork)', kind: 'source', version: 'unknown', path: '~/Dev/forks/dsh-rewind',
@@ -1027,6 +1030,7 @@ class Component extends DCLogic {
       trees: PREVIEW_TREES,
       surface: 'web',
       profile: 'tui-min',
+      task: '',
       port: String(props.defaultPort ?? 3100),
       openBrowser: true,
       homeMode: 'fresh',
@@ -1043,7 +1047,6 @@ class Component extends DCLogic {
       artifactId: CATALOG[0] ? CATALOG[0].id : null,
       toast: '',
       scanning: false,
-      seq: 0,
       cells: [],
       sidecarConnected: false,
       statusLoaded: false,
@@ -1151,6 +1154,7 @@ class Component extends DCLogic {
       tree_id: s.treeId,
       surface: s.surface,
       profile: s.profile || 'tui-min',
+      task: s.task,
       port: s.surface === 'headless' ? null : Number(s.port),
       open_browser: s.openBrowser,
       home_mode: s.homeMode,
@@ -1196,31 +1200,19 @@ class Component extends DCLogic {
     return p;
   }
 
-  argv(t) {
-    const s = this.state;
-    const parts = [];
-    if (s.surface === 'headless') parts.push('--headless'); else parts.push('--profile', s.surface === 'web' ? 'web' : 'tui-min');
-    if (s.surface !== 'headless') parts.push('--port', s.port);
-    if (s.workspace && s.workspace !== 'none') parts.push('--workspace', s.workspace);
-    return parts.join(' ');
-  }
-
-  homeTarget() {
-    const s = this.state;
-    if (s.homeMode === 'exclusive') return '~/.dsh (writer lease)';
-    if (s.homeMode === 'fresh') return '~/.dsh-forge/cells/cell-' + (1000 + s.seq * 7).toString(16) + ' (fresh)';
-    return '~/.dsh-forge/cells/clone-0' + s.seq + ' ← ' + s.cloneSource;
-  }
-
   async startCell() {
+    const pendingWindow = this.state.openBrowser && this.state.surface === 'web' ? window.open('about:blank', '_blank') : null;
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify(this.launchSpec()) });
       this.setState({ preview: null, previewData: null });
       await this.refreshStatus(true);
       this.setState({ port: String(this.freePort()) });
       this.flash('cell ' + cell.name + ' started in its own process group');
-      if (this.state.openBrowser && cell.port) window.open('http://127.0.0.1:' + cell.port + '/', '_blank', 'noopener');
-    } catch (error) { this.flash(error.message); }
+      if (pendingWindow) this.openCell(cell, pendingWindow);
+    } catch (error) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash(error.message);
+    }
   }
 
   async cellAction(cell, action) {
@@ -1232,9 +1224,26 @@ class Component extends DCLogic {
   }
 
   async copyCellUrl(cell) {
-    const value = 'http://127.0.0.1:' + cell.port + '/';
-    try { await navigator.clipboard.writeText(value); this.flash('copied ' + value); }
-    catch { this.flash('clipboard unavailable · ' + value); }
+    try {
+      const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+      await navigator.clipboard.writeText(payload.url);
+      this.flash('copied authenticated DSH Web URL');
+    } catch (error) { this.flash(error.message || 'clipboard unavailable'); }
+  }
+
+  async openCell(cell, existingWindow = null) {
+    const target = existingWindow || window.open('about:blank', '_blank');
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+        if (target) target.location.replace(payload.url);
+        return;
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    if (target) target.close();
+    this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
   }
 
   async openLogs(cell) {
@@ -1281,7 +1290,7 @@ class Component extends DCLogic {
       const running = c.state === 'running';
       const stateColor = running ? OK : (c.state === 'starting' ? WARN : MUTED);
       const processAlive = c.process === 'alive';
-      const httpOk = /^2\d\d$/.test(String(c.http));
+      const httpOk = /^[1-4]\d\d$/.test(String(c.http));
       const health = [
         { label: 'process ' + (c.process || c.state), color: processAlive ? OK : MUTED },
         { label: c.http === 'n/a' ? 'http n/a' : (httpOk ? 'http ' + c.http : 'http ' + (c.http || 'pending')), color: httpOk ? OK : (c.http === 'n/a' ? MUTED : WARN) },
@@ -1306,7 +1315,7 @@ class Component extends DCLogic {
         actions: [
           act('stop', () => this.cellAction(c, 'stop'), processAlive),
           act('restart', () => this.cellAction(c, 'restart'), running || c.state === 'exited' || c.state === 'stopped'),
-          act('open', () => window.open('http://127.0.0.1:' + c.port + '/', '_blank', 'noopener'), !!c.port && running),
+          act('open', () => this.openCell(c), !!c.port && running),
           act('copy', () => this.copyCellUrl(c), !!c.port),
           act('logs', () => this.openLogs(c), true)
         ]
@@ -1346,13 +1355,8 @@ class Component extends DCLogic {
       { k: 'Trust', v: 'Unsigned development seed', color: WARN }
     ];
 
-    const previewIsBuild = s.preview === 'build';
     const livePreview = s.previewData;
-    const previewLines = previewIsBuild ? [
-      { k: 'tree', v: t.path + '  (' + t.trust + ', ' + (t.git && t.git.dirty ? 'dirty' : 'clean') + ')', color: TXT },
-      { k: 'cwd', v: t.path, color: TXT },
-      { k: 'status', v: 'Build orchestration is not part of this launcher PR.', color: WARN }
-    ] : livePreview ? [
+    const previewLines = livePreview ? [
       { k: 'tree', v: livePreview.tree.path + '  (' + livePreview.tree.trust + ', ' + livePreview.tree.launchability + ')', color: TXT },
       { k: 'cwd', v: livePreview.cwd, color: TXT },
       { k: 'argv', v: livePreview.argv.join(' '), color: 'oklch(0.86 0.11 155)' },
@@ -1361,10 +1365,7 @@ class Component extends DCLogic {
       { k: 'secrets', v: (livePreview.credential_keys || []).length ? livePreview.credential_keys.join(', ') + ' = <injected>' : 'no credential keys present', color: MUTED },
       { k: 'group', v: 'new process group + session; PID and start identity recorded', color: MUTED }
     ] : [];
-    const previewNotes = previewIsBuild ? [
-      'No install or build runs during scanning or page load.',
-      'Build support is intentionally deferred; follow the selected tree’s own build documentation.'
-    ] : (livePreview ? livePreview.notes : []);
+    const previewNotes = livePreview ? livePreview.notes : [];
 
     return {
       catalogEnabled,
@@ -1409,7 +1410,7 @@ class Component extends DCLogic {
       addFolder: () => this.addFolder(),
 
       surfaces: [
-        { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }, { id: 'custom', label: 'custom profile' }
+        { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }
       ].map(x => ({
         ...x,
         bg: s.surface === x.id ? 'oklch(0.33 0.03 255)' : 'transparent',
@@ -1417,9 +1418,12 @@ class Component extends DCLogic {
         select: () => this.setState({ surface: x.id })
       })),
       isCustomSurface: s.surface === 'custom',
+      isHeadlessSurface: s.surface === 'headless',
       profiles: ['tui-min', 'web-debug', 'agent-eval'],
       profile: s.profile,
       setProfile: e => this.setState({ profile: e.target.value }),
+      task: s.task,
+      setTask: e => this.setState({ task: e.target.value.slice(0, 20000) }),
 
       port: s.port,
       setPort: e => this.setState({ port: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) }),
@@ -1463,7 +1467,6 @@ class Component extends DCLogic {
 
       needsBuild,
       buildCommands: 'Build orchestration deferred · use the tree’s documented build steps',
-      openBuildPreview: () => this.setState({ preview: 'build' }),
 
       primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'View only — foreign tree' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
       primaryAction: () => {
@@ -1518,16 +1521,13 @@ class Component extends DCLogic {
       copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
       previewOpen: !!s.preview,
-      previewTitle: previewIsBuild ? 'Confirm install & build' : 'Confirm launch — exact argv and environment keys',
-      previewConfirmLabel: previewIsBuild ? 'Run these commands' : 'Start cell',
-      idemKey: 'idm_' + (7000 + s.seq * 131).toString(16),
+      previewTitle: 'Confirm launch — exact argv and environment keys',
+      previewConfirmLabel: 'Start cell',
+      idemKey: 'preview-' + (s.treeId || 'no-tree') + '-' + (s.port || 'headless'),
       previewLines,
       previewNotes,
       closePreview: () => this.setState({ preview: null, previewData: null }),
-      confirmPreview: () => {
-        if (previewIsBuild) { this.setState({ preview: null }); this.flash('build refused — readonly tree cannot be built in place'); }
-        else this.startCell();
-      },
+      confirmPreview: () => this.startCell(),
 
       toast: s.toast
     };

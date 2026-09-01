@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import uuid
 from pathlib import Path
 from typing import Any, Iterable
@@ -170,14 +171,23 @@ def _candidate_dirs(root: Path, max_depth: int = 3, max_nodes: int = 500) -> Ite
 
 def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     package = _read_json(root / "package.json")
+    cli_package = _read_json(root / "apps" / "cli" / "package.json")
     package_name = str(package.get("name", "")).lower()
     signatures = [
-        root / "packages" / "cli" / "bin" / "dsh.js",
-        root / "packages" / "cli" / "dist" / "bin" / "dsh.js",
-        root / "bin" / "dsh",
-        root / "dsh",
+        (root / "apps" / "cli" / "lib" / "bin.js", cli_package),
+        (root / "apps" / "cli" / "src" / "bin.ts", cli_package),
+        (root / "lib" / "bin.js", package),
+        (root / "src" / "bin.ts", package),
+        (root / "packages" / "cli" / "bin" / "dsh.js", package),
+        (root / "packages" / "cli" / "dist" / "bin" / "dsh.js", package),
+        (root / "bin" / "dsh", package),
+        (root / "dsh", package),
     ]
-    executable = next((p for p in signatures if p.is_file()), None)
+    selected = next(((path, metadata) for path, metadata in signatures if path.is_file()), None)
+    executable, selected_package = selected if selected else (None, {})
+    if selected_package:
+        package = selected_package
+        package_name = str(package.get("name", "")).lower()
     named_package = any(token in package_name for token in ("deepseek-harness", "deepseek-ai/dsh"))
     recognized_root = named_package or root.name.lower() in {"deepseek-harness", "dsh"}
     recognized_layout = bool(package and executable and executable.parts[-4:-1] in {
@@ -189,8 +199,16 @@ def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     return executable, package
 
 
+def _official_remote(remote: str) -> bool:
+    value = remote.strip().lower().rstrip("/")
+    return bool(re.fullmatch(
+        r"(?:https?://github\.com/|git@github\.com:|ssh://git@github\.com/)deepseek-ai/deepseek-harness(?:\.git)?",
+        value,
+    ))
+
+
 def _trust_for(root: Path, remote: str | None) -> str:
-    if remote and "deepseek-ai/deepseek-harness" not in remote.lower():
+    if remote and not _official_remote(remote):
         return "foreign"
     return "personal" if os.access(root, os.W_OK) else "readonly"
 
@@ -201,6 +219,8 @@ class Launcher:
     def __init__(self, scan_roots: Iterable[str | Path] = (), state_root: str | Path | None = None):
         configured_state = state_root or os.environ.get("DSH_FORGE_STATE_DIR")
         self.state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
+        self.launch_cwd = Path.cwd().resolve()
+        self.protected_ports = set(PROTECTED_PORTS)
         self.state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.logs_root = self.state_root / "logs"
         self.cells_root = self.state_root / "cells"
@@ -289,10 +309,12 @@ class Launcher:
     def _tree_record(self, root: Path, executable: Path, package: dict[str, Any], kind: str) -> dict[str, Any]:
         git, remote = _git_metadata(root)
         trust = _trust_for(root, remote)
-        node = shutil.which("node") if executable.suffix == ".js" else None
+        node = shutil.which("node") if executable.suffix in {".js", ".ts"} else None
         launchability = "ready"
         if trust == "foreign":
             launchability = "blocked-by-policy"
+        elif executable.suffix == ".ts":
+            launchability = "needs-build"
         elif not os.access(executable, os.R_OK) or (executable.suffix != ".js" and not os.access(executable, os.X_OK)):
             launchability = "not-executable"
         elif executable.suffix == ".js" and not node:
@@ -324,8 +346,15 @@ class Launcher:
         if path_dsh:
             executable = Path(path_dsh).resolve()
             root = executable.parent
-            record = self._tree_record(root, executable, {}, "bin")
+            package = {}
+            for parent in [executable.parent, *list(executable.parents)[:3]]:
+                candidate_package = _read_json(parent / "package.json")
+                if "deepseek-ai/dsh" in str(candidate_package.get("name", "")).lower():
+                    root, package = parent, candidate_package
+                    break
+            record = self._tree_record(root, executable, package, "npm" if package else "bin")
             trees[record["id"]] = record
+        seen_executables = {tree["real_exe"] for tree in trees.values()}
         for root in self._scan_roots:
             if not root.exists():
                 gaps.append(f"{_display_path(root)} · missing")
@@ -339,8 +368,12 @@ class Launcher:
                 if not match:
                     continue
                 executable, package = match
+                if str(executable.resolve()) in seen_executables:
+                    found = True
+                    continue
                 record = self._tree_record(candidate, executable, package, "source")
                 trees[record["id"]] = record
+                seen_executables.add(record["real_exe"])
                 found = True
             if not found:
                 gaps.append(f"{_display_path(root)} · no strong DSH signature")
@@ -355,7 +388,7 @@ class Launcher:
     def suggested_port(self) -> int:
         with self._lock:
             managed = {c.get("port") for c in self._cells.values() if c.get("state") not in {"stopped", "exited"}}
-        protected = PROTECTED_PORTS | {p for p in managed if isinstance(p, int)}
+        protected = self.protected_ports | {p for p in managed if isinstance(p, int)}
         for port in range(3100, 65536):
             if port not in protected and _port_available(port):
                 return port
@@ -397,6 +430,17 @@ class Launcher:
             cell["process"] = "alive"
             cell["state"] = "running"
         if cell.get("port"):
+            if not cell.get("open_url"):
+                try:
+                    log_tail = Path(cell["log_path"]).read_text(encoding="utf-8", errors="replace")[-65536:]
+                except OSError:
+                    log_tail = ""
+                urls = re.findall(r"dsh web:\s+(https?://[^\s]+)", log_tail)
+                if urls:
+                    candidate = urls[-1].rstrip(".,;)")
+                    parsed = urlsplit(candidate)
+                    if parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"} and parsed.port == cell["port"]:
+                        cell["open_url"] = candidate
             try:
                 with urllib.request.urlopen(f"http://127.0.0.1:{cell['port']}/", timeout=0.2) as response:
                     cell["http"] = str(response.status)
@@ -409,7 +453,9 @@ class Launcher:
 
     def _public_cell(self, cell: dict[str, Any]) -> dict[str, Any]:
         self._refresh_cell(cell)
-        return {k: v for k, v in cell.items() if k not in {"launch_spec", "log_path", "process_birth", "real_home"}}
+        public = {k: v for k, v in cell.items() if k not in {"launch_spec", "log_path", "process_birth", "real_home", "open_url"}}
+        public["open_ready"] = bool(cell.get("open_url"))
+        return public
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -440,8 +486,8 @@ class Launcher:
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
         tree = self._tree(str(raw.get("tree_id", "")))
         surface = str(raw.get("surface", "web"))
-        if surface not in {"web", "headless", "custom"}:
-            raise LauncherError("Surface must be web, headless, or custom")
+        if surface not in {"web", "headless"}:
+            raise LauncherError("This launcher alpha supports the web and headless surfaces")
         profile = str(raw.get("profile", "tui-min"))
         if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", profile):
             raise LauncherError("Custom profile contains unsupported characters")
@@ -451,7 +497,7 @@ class Launcher:
                 port = int(raw.get("port"))
             except (TypeError, ValueError):
                 raise LauncherError("Choose a numeric port") from None
-            if port in PROTECTED_PORTS:
+            if port in self.protected_ports:
                 raise LauncherError(f"Port {port} is protected and cannot be used by a cell")
             with self._lock:
                 managed = next((c for c in self._cells.values() if c.get("port") == port and c.get("state") not in {"stopped", "exited"}), None)
@@ -468,6 +514,12 @@ class Launcher:
             raise LauncherError("Workspace must be an existing directory or 'none'")
         clone_source_raw = str(raw.get("clone_source") or "~/.dsh")
         clone_source = Path(clone_source_raw).expanduser().resolve()
+        task = str(raw.get("task") or "").strip()
+        if surface == "headless" and not task:
+            raise LauncherError("Enter a task for the one-shot headless surface")
+        if len(task) > 20000:
+            raise LauncherError("Headless task exceeds the 20,000-character launcher limit")
+        cwd = workspace or (self.launch_cwd if tree["kind"] in {"npm", "bin"} else Path(tree["real_path"]))
         return {
             "tree": tree,
             "tree_id": tree["id"],
@@ -478,6 +530,8 @@ class Launcher:
             "home_mode": home_mode,
             "clone_source": str(clone_source),
             "workspace": str(workspace) if workspace else None,
+            "cwd": str(cwd),
+            "task": task,
         }
 
     def _home_preview(self, spec: dict[str, Any], cell_id: str = "<generated>") -> str:
@@ -494,11 +548,9 @@ class Launcher:
         if tree["real_node"]:
             argv.insert(0, tree["real_node"])
         if spec["surface"] == "headless":
-            argv.append("--headless")
+            argv.extend(["headless", spec["task"]])
         else:
-            argv.extend(["--profile", "web" if spec["surface"] == "web" else spec["profile"], "--port", str(spec["port"])])
-        if spec["workspace"]:
-            argv.extend(["--workspace", spec["workspace"]])
+            argv.extend(["web", "--host", "127.0.0.1", "--port", str(spec["port"]), "--no-open"])
         return argv
 
     def preview(self, raw: dict[str, Any]) -> dict[str, Any]:
@@ -508,7 +560,7 @@ class Launcher:
         return {
             "tree": self._public_tree(spec["tree"]),
             "argv": self._argv(spec),
-            "cwd": spec["workspace"] or spec["tree"]["real_path"],
+            "cwd": spec["cwd"],
             "home": self._home_preview(spec),
             "home_mode": spec["home_mode"],
             "environment_keys": env_keys,
@@ -576,7 +628,7 @@ class Launcher:
         try:
             process = subprocess.Popen(
                 argv,
-                cwd=spec["workspace"] or spec["tree"]["real_path"],
+                cwd=spec["cwd"],
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
@@ -704,8 +756,20 @@ class Launcher:
         for raw in lines:
             for secret in secret_values:
                 raw = raw.replace(secret, "<redacted>")
+            raw = re.sub(r"(dsh web:\s+)https?://\S+", r"\1<authenticated URL redacted; use Open>", raw)
             result.append({"t": "", "level": "process", "msg": raw, "color": "oklch(0.72 0.01 255)"})
         return result
+
+    def open_url(self, cell_id: str) -> str:
+        with self._lock:
+            cell = self._cells.get(cell_id)
+        if not cell:
+            raise LauncherError("Unknown cell")
+        self._refresh_cell(cell)
+        value = cell.get("open_url")
+        if not value:
+            raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
+        return str(value)
 
     def shutdown(self) -> None:
         """Stop only processes still owned and identity-verified by this instance."""

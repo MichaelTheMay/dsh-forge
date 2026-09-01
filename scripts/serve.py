@@ -30,6 +30,7 @@ class LauncherHTTPServer(ThreadingHTTPServer):
         self.launcher = launcher
         self.session_token = session_token or secrets.token_urlsafe(32)
         super().__init__(address, handler)
+        self.launcher.protected_ports.add(self.server_address[1])
 
 
 class LauncherUIHandler(SimpleHTTPRequestHandler):
@@ -138,6 +139,16 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     self._json({"lines": self.server.launcher.logs(match.group(1))})
                 except LauncherError as error:
                     self._json({"error": str(error)}, HTTPStatus.NOT_FOUND)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
+        match = re.fullmatch(r"/api/v1/cells/([^/]+)/open-url", path)
+        if match:
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json({"url": self.server.launcher.open_url(match.group(1))})
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
