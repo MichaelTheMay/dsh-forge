@@ -1,0 +1,264 @@
+"""Stable command-line contract for the DSH Forge local cell registry."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from typing import Any, Callable, Sequence
+
+from .launcher import Launcher, LauncherError
+
+
+CLI_API_VERSION = "dsh-forge.cli/v1"
+
+
+class CliError(Exception):
+    """A structured CLI policy or capability failure."""
+
+    def __init__(self, message: str, code: str, exit_code: int = 2):
+        super().__init__(message)
+        self.code = code
+        self.exit_code = exit_code
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python3 -m dsh_forge",
+        description="Discover Harness versions and control persistent local cells.",
+    )
+    parser.add_argument("--scan-root", action="append", default=[], metavar="PATH", help="add a bounded Harness scan root")
+    parser.add_argument("--state-dir", metavar="PATH", help="override the persistent DSH Forge state directory")
+    parser.add_argument("--json", action="store_true", help="emit the stable compact JSON envelope")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    commands.add_parser("doctor", help="report runtime capabilities and registry health")
+
+    versions = commands.add_parser("versions", help="inspect detected Harness versions")
+    version_commands = versions.add_subparsers(dest="versions_command", required=True)
+    version_commands.add_parser("list", help="list detected local Harness versions")
+
+    cells = commands.add_parser("cells", help="control persistent local cells")
+    cell_commands = cells.add_subparsers(dest="cells_command", required=True)
+    cell_commands.add_parser("list", help="list cells, including recovered processes")
+
+    inspect_command = cell_commands.add_parser("inspect", help="inspect one cell and its lineage")
+    inspect_command.add_argument("cell_id")
+
+    start = cell_commands.add_parser("start", help="start a trusted local host-preview cell")
+    start.add_argument("--tree", required=True, dest="tree_id", help="detected tree ID from versions list")
+    start.add_argument("--surface", choices=("web", "headless"), default="web")
+    start.add_argument("--task", default="", help="required task text for the headless surface")
+    start.add_argument("--port", default="auto", help="web port or 'auto'")
+    start.add_argument("--profile", default="tui-min")
+    start.add_argument("--home", choices=("fresh", "exclusive"), default="fresh", dest="home_mode")
+    start.add_argument("--workspace", default="managed", help="managed, none, or an existing path")
+    start.add_argument("--cpu", default="host shared", help="display request; not enforced by the preview backend")
+    start.add_argument("--gpu", default="inherit allocation", help="display request; not enforced by the preview backend")
+    start.add_argument("--ram", default="host shared", help="display request; not enforced by the preview backend")
+    start.add_argument(
+        "--allow-host-preview",
+        action="store_true",
+        help="acknowledge that this release starts a trusted local process without a sandbox",
+    )
+
+    stop = cell_commands.add_parser("stop", help="stop one identity-verified cell process group")
+    stop.add_argument("cell_id")
+    stop.add_argument("--timeout", type=float, default=3.0)
+
+    restart = cell_commands.add_parser("restart", help="restart a cell from a sanitized state clone")
+    restart.add_argument("cell_id")
+    restart.add_argument("--allow-host-preview", action="store_true")
+
+    clone = cell_commands.add_parser("clone", help="start a parallel cell from a sanitized state clone")
+    clone.add_argument("cell_id")
+    clone.add_argument("--allow-host-preview", action="store_true")
+
+    logs = cell_commands.add_parser("logs", help="read captured process stdout and stderr")
+    logs.add_argument("cell_id")
+    logs.add_argument("--limit", type=int, default=100)
+    logs.add_argument("--follow", action="store_true")
+
+    open_url = cell_commands.add_parser("open-url", help="print a cell's authenticated loopback URL")
+    open_url.add_argument("cell_id")
+
+    artifacts = cell_commands.add_parser("artifacts", help="list files in a managed cell workspace")
+    artifacts.add_argument("cell_id")
+    artifacts.add_argument("--limit", type=int, default=100)
+
+    prompt = cell_commands.add_parser("prompt", help="deliver a prompt when a verified adapter is available")
+    prompt.add_argument("cell_id")
+    prompt.add_argument("prompt")
+
+    session_log = cell_commands.add_parser("session-log", help="read a normalized Harness session when an adapter is available")
+    session_log.add_argument("cell_id")
+
+    return parser
+
+
+def _command_name(args: argparse.Namespace) -> str:
+    if args.command == "cells":
+        return f"cells.{args.cells_command}"
+    if args.command == "versions":
+        return f"versions.{args.versions_command}"
+    return str(args.command)
+
+
+def _envelope(command: str, ok: bool, *, data: Any = None, error: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"api_version": CLI_API_VERSION, "ok": ok, "command": command}
+    if ok:
+        payload["data"] = data
+    else:
+        payload["error"] = error or {"code": "unknown", "message": "Unknown error"}
+    return payload
+
+
+def _write(payload: dict[str, Any], compact: bool, *, stream: Any = None) -> None:
+    if stream is None:
+        stream = sys.stdout
+    if compact:
+        stream.write(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n")
+    else:
+        stream.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    stream.flush()
+
+
+def _require_host_preview(args: argparse.Namespace) -> None:
+    if not args.allow_host_preview:
+        raise CliError(
+            "This release can only start trusted local host-preview cells. Re-run with --allow-host-preview after reviewing the boundary.",
+            "host_preview_consent_required",
+            3,
+        )
+
+
+def _start_spec(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "tree_id": args.tree_id,
+        "surface": args.surface,
+        "task": args.task,
+        "port": args.port if args.surface == "web" else None,
+        "profile": args.profile,
+        "home_mode": args.home_mode,
+        "workspace": args.workspace,
+        "open_browser": False,
+        "resources": {"cpu": args.cpu, "gpu": args.gpu, "ram": args.ram},
+    }
+
+
+def _follow_logs(launcher: Launcher, args: argparse.Namespace, command: str) -> None:
+    seen: list[dict[str, str]] = []
+    try:
+        while True:
+            current = launcher.logs(args.cell_id, limit=500)
+            common = 0
+            for old, new in zip(seen, current):
+                if old != new:
+                    break
+                common += 1
+            for line in current[common:]:
+                if args.json:
+                    _write(_envelope(command, True, data={"cell_id": args.cell_id, "line": line}), True)
+                else:
+                    print(line["msg"], flush=True)
+            seen = current
+            state = launcher.cell(args.cell_id).get("state")
+            if state in {"stopped", "exited", "identity-mismatch"}:
+                return
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        return
+
+
+def run(
+    argv: Sequence[str] | None = None,
+    *,
+    launcher_factory: Callable[..., Launcher] = Launcher,
+) -> int:
+    parser = _parser()
+    args = parser.parse_args(argv)
+    command = _command_name(args)
+    try:
+        launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+        if command == "doctor":
+            status = launcher.status()
+            data = {
+                "mode": status["mode"],
+                "registry": status["registry"],
+                "sandbox": status["sandbox"],
+                "capabilities": status["capabilities"],
+                "tree_count": len(status["trees"]),
+                "cell_count": len(status["cells"]),
+            }
+        elif command == "versions.list":
+            status = launcher.status()
+            data = {"versions": status["trees"], "coverage_gaps": status["coverage_gaps"]}
+        elif command == "cells.list":
+            status = launcher.status()
+            data = {"cells": status["cells"], "registry": status["registry"]}
+        elif command == "cells.inspect":
+            data = launcher.cell(args.cell_id)
+        elif command == "cells.start":
+            _require_host_preview(args)
+            data = launcher.launch(_start_spec(args))
+        elif command == "cells.stop":
+            if args.timeout <= 0 or args.timeout > 30:
+                raise CliError("Stop timeout must be greater than 0 and at most 30 seconds.", "invalid_argument")
+            data = launcher.stop(args.cell_id, timeout=args.timeout)
+        elif command == "cells.restart":
+            _require_host_preview(args)
+            data = launcher.restart(args.cell_id)
+        elif command == "cells.clone":
+            _require_host_preview(args)
+            data = launcher.clone(args.cell_id)
+        elif command == "cells.logs":
+            if args.follow:
+                _follow_logs(launcher, args, command)
+                return 0
+            data = {"cell_id": args.cell_id, "lines": launcher.logs(args.cell_id, limit=args.limit)}
+        elif command == "cells.open-url":
+            data = {"cell_id": args.cell_id, "url": launcher.open_url(args.cell_id)}
+        elif command == "cells.artifacts":
+            data = {"cell_id": args.cell_id, "artifacts": launcher.artifacts(args.cell_id, limit=args.limit)}
+        elif command == "cells.prompt":
+            raise CliError(
+                "Prompt delivery is unavailable until a versioned Harness transport adapter is verified.",
+                "capability_unavailable",
+                4,
+            )
+        elif command == "cells.session-log":
+            raise CliError(
+                "A normalized Harness session transcript is unavailable; use cells logs for process output.",
+                "capability_unavailable",
+                4,
+            )
+        else:
+            raise CliError("Unknown command", "unknown_command")
+    except CliError as error:
+        _write(
+            _envelope(command, False, error={"code": error.code, "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return error.exit_code
+    except LauncherError as error:
+        _write(
+            _envelope(command, False, error={"code": "launcher_error", "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return 2
+    except (OSError, ValueError) as error:
+        _write(
+            _envelope(command, False, error={"code": "local_io_error", "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return 2
+    _write(_envelope(command, True, data=data), args.json)
+    return 0
+
+
+def main() -> int:
+    return run()

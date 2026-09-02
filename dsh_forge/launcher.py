@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -20,10 +21,14 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
+import fcntl
+
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
 
 PROTECTED_PORTS = {3080, 3090}
+CELL_REGISTRY_SCHEMA_VERSION = 1
+CELL_REGISTRY_EVENT_LIMIT = 64
 SECRET_NAMES = (
     "DEEPSEEK_API_KEY",
     "OPENAI_API_KEY",
@@ -246,10 +251,12 @@ class Launcher:
         self.cells_root.mkdir(exist_ok=True, mode=0o700)
         self.roots_file = self.state_root / "scan-roots.json"
         self.cells_file = self.state_root / "cells.json"
+        self.cells_lock_file = self.state_root / "cells.lock"
         self.sandbox_results_file = self.state_root / "sandbox-results.json"
         self._lock = threading.RLock()
         self._mutation_lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
+        self._registry_generation = 0
         self._cells: dict[str, dict[str, Any]] = self._load_cells()
         self._trees: dict[str, dict[str, Any]] = {}
         self._coverage_gaps: list[str] = []
@@ -289,14 +296,40 @@ class Launcher:
             "secrets_forwarded", "image_sha256", "executable_sha256", "command_summary",
         )}
 
+    @contextmanager
+    def _registry_file_lock(self):
+        """Serialize registry mutations across the sidecar and CLI processes."""
+        descriptor = os.open(self.cells_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
     def _load_cells(self) -> dict[str, dict[str, Any]]:
-        raw = _read_json(self.cells_file).get("cells", [])
+        payload = _read_json(self.cells_file)
+        schema_version = payload.get("schema_version", CELL_REGISTRY_SCHEMA_VERSION)
+        if schema_version != CELL_REGISTRY_SCHEMA_VERSION:
+            raise LauncherError(
+                f"Unsupported cell registry schema {schema_version}; expected {CELL_REGISTRY_SCHEMA_VERSION}"
+            )
+        generation = payload.get("generation", 0)
+        self._registry_generation = generation if isinstance(generation, int) and generation >= 0 else 0
+        raw = payload.get("cells", [])
         cells: dict[str, dict[str, Any]] = {}
         for cell in raw if isinstance(raw, list) else []:
             if not isinstance(cell, dict) or not isinstance(cell.get("id"), str):
                 continue
             if not isinstance(cell.get("pid"), int) or not isinstance(cell.get("process_birth"), str):
                 continue
+            cell.setdefault("execution_backend", "trusted-host-preview")
+            cell.setdefault("sandboxed", False)
+            cell.setdefault("parent_cell_id", None)
+            cell.setdefault("lineage_action", "legacy")
+            cell.setdefault("created_at", cell.get("started"))
+            cell.setdefault("updated_at", cell.get("started"))
+            cell.setdefault("lifecycle", [])
             if cell.get("state") not in {"stopped", "exited"}:
                 current_birth = _process_birth(cell["pid"])
                 if current_birth == cell["process_birth"]:
@@ -311,13 +344,35 @@ class Launcher:
             cells[cell["id"]] = cell
         return cells
 
+    def _sync_cells(self) -> None:
+        """Refresh persistent cell state while preserving local process handles."""
+        with self._lock:
+            self._cells = self._load_cells()
+
     def _save_cells(self) -> None:
         with self._lock:
-            payload = {"cells": list(self._cells.values())}
+            self._registry_generation += 1
+            payload = {
+                "schema_version": CELL_REGISTRY_SCHEMA_VERSION,
+                "generation": self._registry_generation,
+                "updated_at": int(time.time() * 1000),
+                "cells": list(self._cells.values()),
+            }
             temporary = self.cells_file.with_suffix(".tmp")
             temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
             os.chmod(temporary, 0o600)
             temporary.replace(self.cells_file)
+
+    @staticmethod
+    def _record_lifecycle(cell: dict[str, Any], event: str, detail: str = "") -> None:
+        now = int(time.time() * 1000)
+        events = cell.setdefault("lifecycle", [])
+        if not isinstance(events, list):
+            events = []
+            cell["lifecycle"] = events
+        events.append({"event": event, "at": now, "detail": detail})
+        del events[:-CELL_REGISTRY_EVENT_LIMIT]
+        cell["updated_at"] = now
 
     @staticmethod
     def _dedupe_paths(paths: Iterable[Path]) -> list[Path]:
@@ -449,6 +504,7 @@ class Launcher:
         raise LauncherError("No free loopback port is available")
 
     def _refresh_cell(self, cell: dict[str, Any]) -> None:
+        previous_state = cell.get("state")
         process = self._processes.get(cell["id"])
         if not process:
             if cell.get("state") in {"stopped", "exited"}:
@@ -460,11 +516,16 @@ class Launcher:
             elif current_birth:
                 cell["state"] = "identity-mismatch"
                 cell["process"] = "unverified"
+                if previous_state != cell["state"]:
+                    self._record_lifecycle(cell, "identity-mismatch", "PID exists but process-start identity changed")
+                    self._save_cells()
                 return
             else:
                 cell["state"] = "exited"
                 cell["process"] = "exited"
                 cell["http"] = "n/a" if not cell.get("port") else "unreachable"
+                if previous_state != cell["state"]:
+                    self._record_lifecycle(cell, "exited", "process no longer exists")
                 self._save_cells()
                 return
         else:
@@ -475,11 +536,16 @@ class Launcher:
                 cell["returncode"] = code
                 cell["process"] = "exited"
                 cell["http"] = "n/a" if not cell.get("port") else "unreachable"
+                if previous_state != cell["state"]:
+                    self._record_lifecycle(cell, "exited", f"return code {code}")
                 self._save_cells()
                 return
             if _process_birth(process.pid) != cell.get("process_birth"):
                 cell["state"] = "identity-mismatch"
                 cell["process"] = "unverified"
+                if previous_state != cell["state"]:
+                    self._record_lifecycle(cell, "identity-mismatch", "owned process identity changed")
+                    self._save_cells()
                 return
             cell["process"] = "alive"
             cell["state"] = "running"
@@ -527,9 +593,11 @@ class Launcher:
         return public
 
     def status(self) -> dict[str, Any]:
-        with self._lock:
-            cells = [self._public_cell(cell) for cell in self._cells.values()]
-            trees = [self._public_tree(tree) for tree in self._trees.values()]
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
+            with self._lock:
+                cells = [self._public_cell(cell) for cell in self._cells.values()]
+                trees = [self._public_tree(tree) for tree in self._trees.values()]
         return {
             "api_version": "v1",
             "mode": "live-local-sidecar",
@@ -540,7 +608,54 @@ class Launcher:
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
             "sandbox": self.sandbox.status(),
+            "registry": {
+                "schema_version": CELL_REGISTRY_SCHEMA_VERSION,
+                "generation": self._registry_generation,
+                "path": _display_path(self.cells_file),
+                "cross_process_lock": True,
+            },
+            "capabilities": self.capabilities(),
         }
+
+    @staticmethod
+    def capabilities() -> dict[str, dict[str, Any]]:
+        """Describe implemented behavior without implying unsupported adapters."""
+        return {
+            "persistent_registry": {
+                "available": True,
+                "schema_version": CELL_REGISTRY_SCHEMA_VERSION,
+                "cross_process_lock": True,
+            },
+            "parallel_local_cells": {
+                "available": True,
+                "backend": "trusted-host-preview",
+                "security_boundary": False,
+            },
+            "runtime_logs": {"available": True, "source": "process stdout/stderr"},
+            "artifacts": {"available": True, "scope": "managed workspace files"},
+            "sandboxed_cells": {
+                "available": False,
+                "reason": "The Apptainer backend currently supports only a bounded capability probe, not complete sessions.",
+            },
+            "prompt_delivery": {
+                "available": False,
+                "reason": "No verified live Harness prompt transport is configured.",
+            },
+            "session_transcript": {
+                "available": False,
+                "reason": "Runtime stdout is available, but no version-independent Harness session adapter is configured.",
+            },
+        }
+
+    def cell(self, cell_id: str) -> dict[str, Any]:
+        """Return one current persistent cell record through the public contract."""
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
+            with self._lock:
+                cell = self._cells.get(cell_id)
+            if not cell:
+                raise LauncherError("Unknown cell")
+            return self._public_cell(cell)
 
     def sandbox_test(self, tree_id: str) -> dict[str, Any]:
         """Execute a bounded CLI help probe in a networkless pinned container."""
@@ -769,7 +884,8 @@ class Launcher:
         return target, "cloned workspace"
 
     def launch(self, raw: dict[str, Any]) -> dict[str, Any]:
-        with self._mutation_lock:
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
             return self._launch(raw)
 
     def _launch(self, raw: dict[str, Any]) -> dict[str, Any]:
@@ -843,6 +959,13 @@ class Launcher:
             "http": "pending" if spec["port"] else "n/a",
             "loader": "not observed",
             "process": "alive",
+            "execution_backend": "trusted-host-preview",
+            "sandboxed": False,
+            "parent_cell_id": str(raw.get("parent_cell_id") or "") or None,
+            "lineage_action": str(raw.get("lineage_action") or "start"),
+            "created_at": int(time.time() * 1000),
+            "updated_at": int(time.time() * 1000),
+            "lifecycle": [],
             "log_path": str(log_path),
             "launch_spec": {
                 "tree_id": spec["tree_id"], "surface": spec["surface"], "profile": spec["profile"],
@@ -851,6 +974,7 @@ class Launcher:
                 "workspace": spec["workspace"], "resources": spec["resources"],
             },
         }
+        self._record_lifecycle(cell, "started", "trusted host preview process created")
         with self._lock:
             self._processes[cell_id] = process
             self._cells[cell_id] = cell
@@ -871,13 +995,22 @@ class Launcher:
         return cell, process
 
     def stop(self, cell_id: str, timeout: float = 3.0) -> dict[str, Any]:
-        with self._mutation_lock:
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
             return self._stop(cell_id, timeout)
 
     def _stop(self, cell_id: str, timeout: float) -> dict[str, Any]:
+        with self._lock:
+            existing = self._cells.get(cell_id)
+        if not existing:
+            raise LauncherError("Unknown cell")
+        if existing.get("state") in {"stopped", "exited"}:
+            return self._public_cell(existing)
         cell, process = self._owned_live_process(cell_id)
         pid = process.pid if process else cell["pid"]
         cell["state"] = "stopping"
+        self._record_lifecycle(cell, "stopping", "SIGTERM requested")
+        self._save_cells()
         try:
             os.killpg(pid, signal.SIGTERM)
         except OSError as error:
@@ -901,11 +1034,13 @@ class Launcher:
         cell["state"] = "stopped"
         cell["process"] = "exited"
         cell["returncode"] = returncode
+        self._record_lifecycle(cell, "stopped", "verified process group stopped")
         self._save_cells()
         return self._public_cell(cell)
 
     def restart(self, cell_id: str) -> dict[str, Any]:
-        with self._mutation_lock:
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
             with self._lock:
                 cell = self._cells.get(cell_id)
             if not cell:
@@ -918,6 +1053,8 @@ class Launcher:
                 "home_mode": "clone",
                 "clone_source": cell["real_home"],
                 "include_sessions": True,
+                "parent_cell_id": cell_id,
+                "lineage_action": "restart",
             })
             if cell.get("real_workspace") and cell.get("workspace_isolation") != "shared existing":
                 raw.update({"workspace": "clone", "workspace_clone_source": cell["real_workspace"]})
@@ -925,7 +1062,8 @@ class Launcher:
 
     def clone(self, cell_id: str) -> dict[str, Any]:
         """Start a parallel cell from a sanitized snapshot of a managed session."""
-        with self._mutation_lock:
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
             with self._lock:
                 cell = self._cells.get(cell_id)
             if not cell:
@@ -936,6 +1074,8 @@ class Launcher:
                 "home_mode": "clone",
                 "clone_source": cell["real_home"],
                 "include_sessions": True,
+                "parent_cell_id": cell_id,
+                "lineage_action": "clone",
             })
             if cell.get("real_workspace") and cell.get("workspace_isolation") != "shared existing":
                 raw.update({"workspace": "clone", "workspace_clone_source": cell["real_workspace"]})
@@ -960,15 +1100,17 @@ class Launcher:
         return result
 
     def open_url(self, cell_id: str) -> str:
-        with self._lock:
-            cell = self._cells.get(cell_id)
-        if not cell:
-            raise LauncherError("Unknown cell")
-        self._refresh_cell(cell)
-        value = cell.get("open_url")
-        if not value:
-            raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
-        return str(value)
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
+            with self._lock:
+                cell = self._cells.get(cell_id)
+            if not cell:
+                raise LauncherError("Unknown cell")
+            self._refresh_cell(cell)
+            value = cell.get("open_url")
+            if not value:
+                raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
+            return str(value)
 
     def artifacts(self, cell_id: str, limit: int = 100) -> list[dict[str, Any]]:
         with self._lock:
