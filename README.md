@@ -53,6 +53,21 @@ tasks. It recognizes the current upstream `apps/cli/lib/bin.js` build artifact
 as well as older compatible CLI layouts. Because upstream is still a developer
 preview, the exact command is always shown for confirmation before launch.
 
+The same persistent lifecycle is now scriptable through a versioned CLI. Start
+with capability discovery and local version detection:
+
+```bash
+python3 -m dsh_forge --scan-root ~/src/deepseek-harness doctor
+python3 -m dsh_forge --scan-root ~/src/deepseek-harness versions list
+python3 -m dsh_forge cells list
+```
+
+See [Local-cell CLI and lifecycle contract](docs/local-cell-cli.md) for
+start/stop/restart/clone, live logs, artifacts, stable JSON output, and the
+explicit host-preview acknowledgement. Sandboxed complete sessions, prompt
+delivery, and normalized session transcripts remain fail-closed capabilities
+for their follow-up adapters.
+
 Open <http://127.0.0.1:3090/> for Launch, or
 <http://127.0.0.1:3090/#public-repos> for the separate browser. The server binds
 only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
@@ -83,8 +98,10 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 - A writable DSH home has one live writer. Fresh and sanitized-clone homes are
   launcher-managed alternatives.
 - One-click fleet launches allocate ports while holding the launcher mutation
-  lock. Clone Session preserves session state but removes secret-like files,
-  locks, sockets, PIDs, caches, symlinks, and heavyweight workspace dependencies.
+  lock and the persistent registry uses an atomic, versioned write guarded by a
+  cross-process file lock. Clone Session preserves session state but removes
+  secret-like files, locks, sockets, PIDs, caches, symlinks, and heavyweight
+  workspace dependencies.
 - Mutation APIs require a loopback Host, same-origin request, and an HttpOnly
   session cookie. Credential presence is shown by key only; values are not
   returned to the page or intentionally logged.
