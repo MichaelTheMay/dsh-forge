@@ -17,12 +17,18 @@ inspector. It controls only processes whose PID and process-start identity it
 recorded. Public Repos contains a dated metadata snapshot of ten real community
 forks.
 
-The trusted fleet path remains **local process isolation**, not a hostile-code
-security sandbox; its CPU/GPU/RAM labels are planning values rather than host
-quotas. A separate, fail-closed Apptainer backend can now run a networkless,
-resource-limited CLI capability probe for an already-present clean community
-checkout. It does not install, merge, promote, or host-launch that checkout.
-Public repository acquisition remains disabled.
+Every runnable official or personal cell now requires the **fail-closed
+Apptainer backend**. The captured Harness source is read-only; each cell gets a
+unique writable home and workspace; launcher secrets are excluded; and accepted
+CPU, RAM, PID, and wall-time controls are recorded with the cell. A sandbox
+failure never falls back to a direct Harness host process. Web cells explicitly
+share the host network so their loopback port is reachable; headless cells
+default to a network namespace with no network. Apptainer still shares the host
+kernel and is not described as a virtual machine.
+
+Already-present community checkouts remain limited to the separate bounded CLI
+capability probe. They are not promoted into complete cells. Public repository
+acquisition remains disabled.
 
 ## Open the UI
 
@@ -64,9 +70,8 @@ python3 -m dsh_forge cells list
 
 See [Local-cell CLI and lifecycle contract](docs/local-cell-cli.md) for
 start/stop/restart/clone, live logs, artifacts, stable JSON output, and the
-explicit host-preview acknowledgement. Sandboxed complete sessions, prompt
-delivery, and normalized session transcripts remain fail-closed capabilities
-for their follow-up adapters.
+required Apptainer configuration. Prompt delivery and normalized session
+transcripts remain fail-closed capabilities for their follow-up adapters.
 
 Open <http://127.0.0.1:3090/> for Launch, or
 <http://127.0.0.1:3090/#public-repos> for the separate browser. The server binds
@@ -74,8 +79,9 @@ only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
 port with `--port 3091`; the script does not stop existing processes.
 
 See [Delta setup](docs/delta-setup.md) for remote access through an SSH tunnel.
-See [Apptainer community-code test sandbox](docs/apptainer-sandbox.md) to pin a
-SIF and enable the compact **Test** action for detected community trees.
+See [Apptainer cell runner](docs/apptainer-sandbox.md) to pin a SIF, enable
+complete local cells, and retain the compact **Test** action for detected
+community trees.
 To produce a single HTML file that can be downloaded and opened locally as a
 disconnected, non-runnable preview:
 
@@ -90,13 +96,15 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   never runs repository code or package scripts.
 - Trees whose Git remote is not the canonical upstream can only run a bounded
   CLI help probe in the configured networkless Apptainer sandbox. They remain
-  ineligible for direct host launch even after passing. The later
+  ineligible for complete-cell execution even after passing. The later
   import/integration skill must validate and explicitly promote compatible
   forks through a separate policy.
+- Every complete local cell requires the pinned Apptainer runner. There is no
+  direct Harness host-process fallback.
 - Ports 3080 and 3090 are protected. An unmanaged occupant is reported and is
   never killed or replaced.
-- A writable DSH home has one live writer. Fresh and sanitized-clone homes are
-  launcher-managed alternatives.
+- Host DSH homes and writable host workspaces are never mounted into a cell.
+  Fresh and sanitized-clone state always lives under a unique cell directory.
 - One-click fleet launches allocate ports while holding the launcher mutation
   lock and the persistent registry uses an atomic, versioned write guarded by a
   cross-process file lock. Clone Session preserves session state but removes

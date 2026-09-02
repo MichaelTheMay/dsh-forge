@@ -164,7 +164,7 @@
           <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Versions</span>
           <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: oklch(0.56 0.01 255);">{{ pinnedCount }}</span>
         </div>
-        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Two immutable official release pins. Launch repeatedly; Forge assigns each cell a fresh port, home, and managed workspace.</p>
+        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Two immutable official release pins. Launch repeatedly; Forge assigns each Apptainer cell a fresh port, home, and managed workspace.</p>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <sc-for list="{{ versions }}" as="t" hint-placeholder-count="2">
             <div style="padding: 12px; border-radius: 9px; border: 1px solid oklch(0.32 0.014 255); background: oklch(0.22 0.012 255); display: flex; flex-direction: column; gap: 7px;">
@@ -185,8 +185,8 @@
       </div>
 
       <div style="margin-top: 14px; padding: 11px; border: 1px solid oklch(0.42 0.07 85); background: oklch(0.245 0.025 85); border-radius: 8px; font-size: 10.5px; line-height: 1.6; color: oklch(0.79 0.06 85);">
-        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Trusted host fleet</strong>
-        Official cells have separate ports, process groups, writable homes, and managed workspaces. Their CPU/GPU/RAM labels are requests, not host quotas; do not use this path for foreign code.
+        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Fail-closed cell fleet</strong>
+        Every local Harness cell requires the pinned Apptainer backend. Source is read-only, writable state is unique, launcher secrets are excluded, and sandbox failure never falls back to a host process.
       </div>
 
       <div style="margin-top: 8px; padding: 11px; border: 1px solid {{ sandboxBorder }}; background: {{ sandboxBg }}; border-radius: 8px; font-size: 10.5px; line-height: 1.55; color: oklch(0.76 0.02 255);">
@@ -277,20 +277,9 @@
             </label>
           </div>
         </sc-if>
-        <sc-if value="{{ leaseWarning }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top: 7px; padding: 8px 9px; border-radius: 6px; border: 1px solid oklch(0.42 0.09 85); background: oklch(0.26 0.04 85); font-size: 11px; color: oklch(0.87 0.1 85); line-height: 1.5;">{{ leaseWarningText }}</div>
-        </sc-if>
       </div>
 
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>
-
-      <div>
-        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.66 0.01 255); margin-bottom: 8px;">Workspace</div>
-        <div style="display: flex; gap: 6px;">
-          <input value="{{ workspace }}" onChange="{{ setWorkspace }}" style="flex: 1 1 auto; padding: 7px 9px; border-radius: 6px; border: 1px solid oklch(0.32 0.012 255); background: oklch(0.23 0.01 255); color: oklch(0.9 0.01 255); font-family: 'IBM Plex Mono', monospace; font-size: 11px;" />
-          <button onClick="{{ clearWorkspace }}" style="padding: 7px 10px; border-radius: 6px; border: 1px solid oklch(0.34 0.012 255); background: oklch(0.25 0.01 255); color: oklch(0.8 0.01 255); font-size: 11px; cursor: pointer;">none</button>
-        </div>
-      </div>
 
       <div style="border: 1px solid oklch(0.3 0.012 255); border-radius: 8px; background: oklch(0.215 0.009 255);">
         <button onClick="{{ toggleAdvanced }}" style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 11px; border: none; background: transparent; color: oklch(0.85 0.01 255); font-size: 12px; font-weight: 500; cursor: pointer; text-align: left;">
@@ -475,7 +464,7 @@
     <aside class="fleet-inspector" aria-label="Cell inspector">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
         <div><div style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.72 0.012 255);">Inspector</div><div style="margin-top:5px; font:10px 'IBM Plex Mono',monospace; color:oklch(0.58 0.012 255);">{{ activeCell.name }}</div></div>
-        <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">sandbox preview</span>
+        <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">capability probe</span>
       </div>
       <div class="inspector-tabs" style="margin-top:14px;">
         <sc-for list="{{ inspectorTabs }}" as="tab" hint-placeholder-count="3"><button onClick="{{ tab.select }}" style="background:{{ tab.bg }}; color:{{ tab.color }};">{{ tab.label }}</button></sc-for>

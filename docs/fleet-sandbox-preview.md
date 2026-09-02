@@ -52,9 +52,11 @@ home, and workspace from a sanitized snapshot; the source cell keeps running.
 That v1 snapshot is best-effort rather than filesystem-atomic, so do not clone a
 cell while it is writing irreplaceable state.
 
-CPU, GPU, and RAM are display requests for these trusted host cells. That path
-does not enforce cgroup quotas, GPU partitioning, a network policy, or a
-confined root filesystem. Only trusted official installations are runnable.
+CPU, GPU, RAM, PID, and wall-time values come from the required Apptainer
+configuration. The runner records the accepted controls and never falls back to
+a direct Harness host process. Web cells use the host network for their
+loopback port; headless cells default to networkless operation. Apptainer shares
+the host kernel, and the surrounding Slurm allocation remains authoritative.
 
 Community checkouts use a separate path: Forge can run a bounded, networkless
 CLI probe inside a pinned Apptainer SIF, but cannot start them as fleet cells or

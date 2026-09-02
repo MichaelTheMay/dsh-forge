@@ -504,7 +504,7 @@ class Component extends DCLogic {
       homeMode: 'fresh',
       cloneSource: '~/.dsh',
       excludeSessions: true,
-      workspace: 'none',
+      workspace: 'managed',
       advancedOpen: false,
       preview: null,
       logCell: null,
@@ -522,7 +522,7 @@ class Component extends DCLogic {
       credentials: [],
       sandbox: {
         mode: 'unavailable', ready: false, hostile_code_isolation: false,
-        reason: 'Start the sidecar with a pinned Apptainer image to test community trees.'
+        reason: 'Start the sidecar with a pinned Apptainer image to enable complete cells.'
       },
       sandboxTesting: null,
       previewData: null,
@@ -643,7 +643,8 @@ class Component extends DCLogic {
       home_mode: s.homeMode,
       clone_source: s.cloneSource,
       workspace: s.workspace,
-      resources: { cpu: 'host shared', gpu: 'inherit allocation', ram: 'host shared' }
+      network: s.surface === 'web' ? 'host' : 'none',
+      resources: { gpu: 'none' }
     };
   }
 
@@ -674,7 +675,7 @@ class Component extends DCLogic {
       this.setState({ preview: null, previewData: null });
       await this.refreshStatus(true);
       this.setState({ port: String(this.freePort()) });
-      this.flash('cell ' + cell.name + ' started in its own process group');
+      this.flash('cell ' + cell.name + ' started inside Apptainer');
       if (pendingWindow) this.openCell(cell, pendingWindow);
     } catch (error) {
       if (pendingWindow) pendingWindow.close();
@@ -688,8 +689,8 @@ class Component extends DCLogic {
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId, surface: 'web', port: 'auto', open_browser: false,
-        home_mode: 'fresh', workspace: 'managed',
-        resources: { cpu: 'host shared', gpu: 'inherit allocation', ram: 'host shared' }
+        home_mode: 'fresh', workspace: 'managed', network: 'host',
+        resources: { gpu: 'none' }
       }) });
       await this.refreshStatus(true);
       this.setState({ selectedCell: cell.id, inspectorTab: 'logs' });
@@ -770,24 +771,23 @@ class Component extends DCLogic {
     const s = this.state;
     const catalogEnabled = this.props.catalogEnabled ?? true;
     const t = this.tree(s.treeId);
-    const runnable = s.sidecarConnected && !!t.id && t.trust !== 'foreign' && t.launchability === 'ready';
+    const runnable = s.sidecarConnected && !!(s.sandbox && s.sandbox.ready) && !!t.id && t.trust !== 'foreign' && t.launchability === 'ready';
     const needsBuild = t.launchability === 'needs-build';
     const portNum = parseInt(s.port, 10);
     const occupyingCell = s.cells.find(c => c.port === portNum);
     const isSystem = portNum === 3080 || portNum === 3090;
-    const leaseHeld = s.homeMode === 'exclusive' && s.cells.some(c => c.isolation === 'exclusive persistent' && c.state !== 'stopped');
     const confirm = this.props.confirmBeforeLaunch ?? true;
     const sandbox = s.sandbox || {};
     const versions = PINNED_RELEASES.map(pin => {
       const detected = s.trees.find(tr => tr.version === pin.version || (tr.git && String(tr.git.sha || '').startsWith(pin.commit)));
-      const runnablePin = !!detected && s.sidecarConnected && detected.trust !== 'foreign' && detected.launchability === 'ready';
+      const runnablePin = !!detected && s.sidecarConnected && !!sandbox.ready && detected.trust !== 'foreign' && detected.launchability === 'ready';
       return {
         ...pin,
         treeId: detected && detected.id,
         installPath: detected ? detected.path : 'Exact installation not detected',
-        status: runnablePin ? 'ready' : (s.sidecarConnected ? 'not installed' : 'preview pin'),
+        status: runnablePin ? 'sandbox ready' : (s.sidecarConnected && detected && !sandbox.ready ? 'runner unavailable' : (s.sidecarConnected ? 'not installed' : 'preview pin')),
         statusColor: runnablePin ? OK : WARN,
-        buttonLabel: runnablePin ? 'Launch cell' : (s.sidecarConnected ? 'Add installation' : 'Preview only'),
+        buttonLabel: runnablePin ? 'Launch cell' : (s.sidecarConnected && detected && !sandbox.ready ? 'Configure runner' : (s.sidecarConnected ? 'Add installation' : 'Preview only')),
         disabled: !runnablePin,
         buttonCursor: runnablePin ? 'pointer' : 'not-allowed',
         buttonBg: runnablePin ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
@@ -823,7 +823,6 @@ class Component extends DCLogic {
     else { portNote = portNum + ' will be checked on loopback immediately before spawn'; portNoteFg = OK; }
 
     const homeModes = [
-      { id: 'exclusive', label: 'Exclusive persistent home', tag: 'writer lease', detail: '~/.dsh — second launch is rejected or cloned' },
       { id: 'fresh', label: 'Fresh empty home', tag: 'managed', detail: 'minimum directory structure in a launcher-managed cell dir' },
       { id: 'clone', label: 'Cloned home', tag: 'snapshot', detail: 'copy a home template; locks, PIDs, sockets and caches excluded' }
     ].map(h => ({
@@ -861,14 +860,14 @@ class Component extends DCLogic {
         stateAnim: c.agent_state === 'working' ? 'dshpulse 1.8s ease-in-out infinite' : 'none',
         rowBg: s.selectedCell === c.id ? 'oklch(0.235 0.018 255)' : 'oklch(0.205 0.009 255)',
         cardBorder: s.selectedCell === c.id ? SELB : BORDER,
-        isolationColor: c.isolation === 'exclusive persistent' ? WARN : MUTED,
+        isolationColor: MUTED,
         trust: ct.trust, trustColor: ct.trust === 'personal' ? OK : (ct.trust === 'readonly' ? BLUE : BAD),
         trustBorder: ct.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (ct.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
         health,
         resourcesList: [
-          { label: 'CPU', value: (c.resources && c.resources.cpu) || 'host shared' },
-          { label: 'GPU', value: (c.resources && c.resources.gpu) || 'inherit allocation' },
-          { label: 'RAM', value: (c.resources && c.resources.ram) || 'host shared' }
+          { label: 'CPU', value: (c.resources && c.resources.cpu) || 'unknown' },
+          { label: 'GPU', value: (c.resources && c.resources.gpu) || 'none' },
+          { label: 'RAM', value: (c.resources && c.resources.ram) || 'unknown' }
         ],
         recentLogLines: (c.recent_logs || []).map(msg => ({ msg })),
         open: () => this.openCell(c),
@@ -949,7 +948,7 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
       goCatalog: () => this.navigate('catalog'),
-      modeLabel: s.sidecarConnected ? 'fleet preview' : 'portable preview',
+      modeLabel: s.sidecarConnected ? 'sandbox fleet' : 'portable preview',
       sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
       sidecarDot: s.sidecarConnected ? OK : WARN,
       sidecarAddress: typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090',
@@ -966,14 +965,14 @@ class Component extends DCLogic {
       pinnedCount: PINNED_RELEASES.length + ' immutable official pins',
       communityTrees,
       hasCommunityTrees: communityTrees.length > 0,
-      sandboxTitle: sandbox.ready ? 'Community test sandbox ready' : 'Community test sandbox unavailable',
+      sandboxTitle: sandbox.ready ? 'Apptainer cell runner ready' : 'Apptainer cell runner unavailable',
       sandboxReason: sandbox.reason || 'No capability result is available.',
       sandboxColor: sandbox.ready ? OK : WARN,
       sandboxBorder: sandbox.ready ? 'oklch(0.42 0.08 155)' : 'oklch(0.42 0.07 85)',
       sandboxBg: sandbox.ready ? 'oklch(0.235 0.025 155)' : 'oklch(0.245 0.025 85)',
       sandboxPolicy: sandbox.ready
-        ? 'Network none · launcher secrets excluded · source read-only · ' + ((sandbox.resource_limits || {}).cpus || '—') + ' CPU · ' + ((sandbox.resource_limits || {}).memory || '—') + ' RAM'
-        : 'Foreign code remains blocked. Configure a pinned SIF and pass the runtime capability probe.',
+        ? 'Pinned SIF · source read-only · unique writable state · secrets excluded · ' + ((sandbox.resource_limits || {}).cpus || '—') + ' CPU · ' + ((sandbox.resource_limits || {}).memory || '—') + ' RAM'
+        : 'All cell launches fail closed. Configure a pinned SIF and pass the runtime capability probe.',
 
       trees: s.trees.map(tr => {
         const sel = tr.id === s.treeId;
@@ -988,7 +987,7 @@ class Component extends DCLogic {
           trustColor: tr.trust === 'personal' ? OK : (tr.trust === 'readonly' ? BLUE : BAD),
           trustBorder: tr.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (tr.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
           launchColor: tr.launchability === 'ready' ? OK : (tr.launchability === 'needs-build' ? WARN : BAD),
-          select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees can be capability-tested only; host launch stays blocked')
+          select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees can be capability-tested only; complete-cell promotion is not implemented')
         };
       }),
       treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
@@ -1024,19 +1023,14 @@ class Component extends DCLogic {
       setCloneSource: e => this.setState({ cloneSource: e.target.value }),
       excludeSessions: s.excludeSessions,
       toggleExcludeSessions: () => this.setState({ excludeSessions: !s.excludeSessions }),
-      leaseWarning: leaseHeld,
-      leaseWarningText: 'A running cell already holds the writer lease on ~/.dsh. Launching exclusive will be rejected — clone the home instead.',
-
-      workspace: s.workspace,
-      setWorkspace: e => this.setState({ workspace: e.target.value }),
-      clearWorkspace: () => this.setState({ workspace: 'none' }),
 
       advancedOpen: s.advancedOpen,
       advancedCaret: s.advancedOpen ? '▾' : '▸',
       toggleAdvanced: () => this.setState({ advancedOpen: !s.advancedOpen }),
       advancedRows: [
         { label: 'Discovery policy', value: 'configured roots · bounded · no code execution', color: OK },
-        { label: 'Process identity', value: 'PID + OS process-start identity', color: BLUE },
+        { label: 'Process identity', value: 'timeout supervisor PID + OS process-start identity', color: BLUE },
+        { label: 'Execution backend', value: 'Apptainer required · no host fallback', color: OK },
         { label: 'Trusted hosts', value: 'localhost, 127.0.0.1', color: MUTED },
         { label: 'Loader readiness', value: 'not observed · adapter deferred', color: MUTED },
         { label: 'Telemetry', value: 'none in launcher sidecar', color: OK },
@@ -1055,7 +1049,7 @@ class Component extends DCLogic {
       primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'Sandbox test only' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
       primaryAction: () => {
         if (!s.sidecarConnected) return this.flash('Run python3 scripts/serve.py to connect the launcher');
-        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees never launch on the host; use the community sandbox test' : 'select a launch-ready detected tree');
+        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees require the separate promotion policy' : (!sandbox.ready ? (sandbox.reason || 'configure the Apptainer cell runner') : 'select a launch-ready detected tree'));
         if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then restart Forge');
         if (confirm) return this.previewLaunch();
         this.startCell();
@@ -1065,7 +1059,7 @@ class Component extends DCLogic {
       primaryFg: runnable ? 'oklch(0.95 0.05 155)' : 'oklch(0.55 0.01 255)',
       primaryBorder: runnable ? 'oklch(0.52 0.13 155)' : BORDER,
       primaryCursor: runnable ? 'pointer' : 'not-allowed',
-      launchHint: s.sidecarConnected ? 'Live local launcher. Scans never execute candidate code; only an explicitly confirmed launch starts a process.' : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
+      launchHint: s.sidecarConnected ? 'Every launch requires the pinned Apptainer runner. There is no host-process fallback.' : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
 
       cellColumns: COLUMNS,
       cells,
