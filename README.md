@@ -19,16 +19,18 @@ forks.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
-unique writable home and workspace; launcher secrets are excluded; and accepted
-CPU, RAM, PID, and wall-time controls are recorded with the cell. A sandbox
+unique writable home and workspace; launcher secrets are excluded; and the
+accepted resource scope is recorded with the cell. Apptainer cgroups provide
+per-cell CPU/RAM/PID limits when supported; DeltaAI instead supplies a shared
+Slurm allocation with a per-cell wall-time supervisor. A sandbox
 failure never falls back to a direct Harness host process. Web cells explicitly
 share the host network so their loopback port is reachable; headless cells
 default to a network namespace with no network. Apptainer still shares the host
 kernel and is not described as a virtual machine.
 
 Already-present community checkouts remain limited to the separate bounded CLI
-capability probe. They are not promoted into complete cells. Public repository
-acquisition remains disabled.
+capability probe, and that probe requires per-cell cgroup controls. They are not
+promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
 

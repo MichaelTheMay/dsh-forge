@@ -92,7 +92,9 @@ may have its own runtime requirements.
 
 DeltaAI supplies Apptainer. Complete official/personal cells now require a
 pinned, read-only SIF, no inherited launcher secrets, a read-only source mount,
-unique writable state, and runtime-accepted CPU/RAM/PID/wall-time limits. A
+unique writable state, a shared Slurm resource boundary, and a per-cell
+wall-time supervisor. DeltaAI does not currently provide the user cgroup
+delegation needed for Apptainer per-cell CPU/RAM/PID flags. A
 failure never falls back to a direct Harness host process. Community checkouts
 remain probe-only. Follow the complete setup and threat boundary in
 [Apptainer cell runner and community-code probe](apptainer-sandbox.md).

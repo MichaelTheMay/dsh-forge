@@ -52,12 +52,14 @@ home, and workspace from a sanitized snapshot; the source cell keeps running.
 That v1 snapshot is best-effort rather than filesystem-atomic, so do not clone a
 cell while it is writing irreplaceable state.
 
-CPU, GPU, RAM, PID, and wall-time values come from the required Apptainer
-configuration. The runner records the accepted controls and never falls back to
-a direct Harness host process. Web cells use the host network for their
-loopback port; headless cells default to networkless operation. Apptainer shares
-the host kernel, and the surrounding Slurm allocation remains authoritative.
+The runner records the accepted resource scope and never falls back to a direct
+Harness host process. Where user cgroups work, CPU, RAM, and PID limits are per
+cell. On DeltaAI they are shared within the surrounding Slurm allocation; wall
+time remains per cell. Web cells use the host network for their loopback port;
+headless cells default to networkless operation. Apptainer shares the host
+kernel.
 
 Community checkouts use a separate path: Forge can run a bounded, networkless
-CLI probe inside a pinned Apptainer SIF, but cannot start them as fleet cells or
-promote them. See [Apptainer community-code test sandbox](apptainer-sandbox.md).
+CLI probe only when per-cell cgroup controls are available, but cannot start
+them as fleet cells or promote them. See [Apptainer community-code test
+sandbox](apptainer-sandbox.md).

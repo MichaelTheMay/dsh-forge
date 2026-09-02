@@ -61,7 +61,8 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertFalse(status["host_home_exposed"])
         self.assertFalse(status["secrets_forwarded"])
         self.assertFalse(status["hostile_code_isolation"])
-        command, options = self.runner.calls[0]
+        self.assertEqual(status["resource_limits"]["scope"], "per-cell-cgroup")
+        command, options = self.runner.calls[-1]
         rendered = " ".join(command)
         for flag in (
             "--containall", "--cleanenv", "--no-eval", "--no-privs",
@@ -112,9 +113,12 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertEqual(result["status"], "passed")
         command, options = self.runner.calls[-1]
         rendered = " ".join(command)
-        self.assertIn("dst=/opt/dsh,ro,nonested", rendered)
-        self.assertIn("dst=/home/dsh,rw,nonested", rendered)
-        self.assertIn("dst=/workspace,rw,nonested", rendered)
+        self.assertIn("dst=/opt/dsh,ro", rendered)
+        self.assertIn("--home", command)
+        self.assertIn(":/home/dsh", rendered)
+        self.assertIn("dst=/workspace", rendered)
+        self.assertNotIn(",rw", rendered)
+        self.assertNotIn("nonested", rendered)
         self.assertEqual(command[-3:], ["node", "/opt/dsh/dsh.js", "--help"])
         self.assertEqual(result["executable_sha256"], hashlib.sha256(cli.read_bytes()).hexdigest())
         self.assertNotIn(str(Path.home()), rendered)
@@ -170,7 +174,7 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertIn("--foreground", plan["argv"])
         self.assertIn(str(self.image), plan["argv"])
         self.assertIn("--network none", rendered)
-        self.assertIn("dst=/opt/dsh,ro,nonested", rendered)
+        self.assertIn("dst=/opt/dsh,ro", rendered)
         self.assertEqual(plan["argv"][-3:], ["/opt/dsh/dsh", "headless", "complete task"])
         self.assertTrue(plan["resources"]["enforced"])
         self.assertFalse(plan["secrets_forwarded"])
@@ -186,6 +190,25 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertNotIn("--net", apptainer_args)
         self.assertNotIn("--network", apptainer_args)
         self.assertEqual(web["argv"][-7:], ["/opt/dsh/dsh", "web", "--host", "127.0.0.1", "--port", "3210", "--no-open"])
+
+    def test_slurm_is_an_honest_shared_resource_boundary(self):
+        with mock.patch.dict("os.environ", {"SLURM_JOB_ID": "123"}, clear=False):
+            sandbox = self.sandbox()
+            status = sandbox.status()
+            self.assertTrue(status["ready"])
+            self.assertEqual(status["resource_limits"]["scope"], "shared-slurm")
+            rendered = " ".join(self.runner.calls[-1][0])
+            self.assertNotIn("--cpus", rendered)
+            self.assertNotIn("--memory", rendered)
+            self.assertNotIn("--pids-limit", rendered)
+
+            tree = self.root / "foreign-in-shared-job"
+            tree.mkdir()
+            cli = tree / "dsh"
+            cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            cli.chmod(0o755)
+            with self.assertRaisesRegex(SandboxError, "require per-cell cgroup controls"):
+                sandbox.test_tree({"real_path": str(tree), "real_exe": str(cli)})
 
     def test_gpu_is_fail_closed_without_a_scheduler_allocation(self):
         sandbox = self.sandbox()

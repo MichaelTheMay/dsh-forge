@@ -94,8 +94,9 @@ The runner preserves the CLI envelope and applies this boundary:
 - every complete cell runs in Apptainer, including trusted local versions;
 - failure to create or probe the sandbox aborts the launch with no host fallback;
 - source is read-only and each cell gets a unique writable home and workspace;
-- network, secrets, GPU exposure, CPU, RAM, PID, and wall-time policy are
-  explicit per cell and reported from enforcement evidence;
+- network, secrets, GPU exposure, wall time, and resource scope are explicit
+  and reported from enforcement evidence; CPU/RAM/PID limits are per cell only
+  where user cgroups work, otherwise they are shared within Slurm;
 - the registry records container identity in addition to the verified host-side
   Apptainer process identity;
 - stop/restart/clone remain idempotent across CLI and launcher restarts;
