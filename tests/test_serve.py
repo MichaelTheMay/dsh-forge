@@ -125,6 +125,42 @@ class ScannerAndRunner(LauncherFixture):
         finally:
             detected.shutdown()
 
+    def test_scanner_excludes_internal_monorepo_tools(self):
+        upstream = self.root / "upstream-monorepo"
+        cli = upstream / "apps" / "cli"
+        (cli / "lib").mkdir(parents=True)
+        (cli / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/dsh", "version": "0.1.2-alpha.3"}), encoding="utf-8"
+        )
+        (cli / "lib" / "bin.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        internal_packages = (
+            ("packages/experimental/webworker-packer", "@deepseek-ai/dsh-experimental-webworker-packer", "lib/bin.js"),
+            ("packages/test-support/llm-mock-server", "@deepseek-ai/dsh-llm-mock-server", "src/bin.ts"),
+        )
+        for relative, name, executable in internal_packages:
+            package_root = upstream / relative
+            (package_root / Path(executable).parent).mkdir(parents=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": name, "version": "0.1.2-alpha.3"}), encoding="utf-8"
+            )
+            (package_root / executable).write_text("#!/usr/bin/env node\n", encoding="utf-8")
+
+        real_which = launcher_module.shutil.which
+
+        def fixture_which(command):
+            return str(self.root / "node") if command == "node" else real_which(command)
+
+        with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
+            detected = serve.Launcher(
+                [upstream], state_root=self.root / "monorepo-state", sandbox=FakeCellSandbox()
+            )
+        try:
+            trees = detected.status()["trees"]
+            self.assertEqual([tree["name"] for tree in trees], ["@deepseek-ai/dsh"])
+            self.assertEqual(trees[0]["path"], launcher_module._display_path(upstream))
+        finally:
+            detected.shutdown()
+
     def test_preview_lists_keys_not_secret_values(self):
         old = os.environ.get("DEEPSEEK_API_KEY")
         os.environ["DEEPSEEK_API_KEY"] = "never-return-this-secret"

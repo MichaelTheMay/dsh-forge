@@ -124,6 +124,13 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertNotIn(str(Path.home()), rendered)
         self.assertEqual(set(options["env"]).intersection({"GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY"}), set())
 
+    def test_mount_spec_uses_apptainer_compatible_unquoted_source(self):
+        mount = ApptainerSandbox._mount(self.root / "plain path", "/workspace", read_only=False)
+        self.assertEqual(mount, f"type=bind,src={self.root / 'plain path'},dst=/workspace")
+        self.assertNotIn('src="', mount)
+        with self.assertRaisesRegex(SandboxError, "unsupported characters"):
+            ApptainerSandbox._mount(self.root / "comma,path", "/workspace", read_only=False)
+
     def test_replaced_source_symlink_is_rejected_before_process_creation(self):
         sandbox = self.sandbox()
         tree = self.root / "captured-tree"
@@ -264,7 +271,7 @@ class CompleteCellIntegrationTests(SandboxFixture):
             "while [ \"$#\" -gt 0 ]; do\n"
             "  if [ \"$1\" = \"--mount\" ]; then\n"
             "    shift; mount=$1\n"
-            "    case \"$mount\" in *dst=/opt/dsh,*) source_root=${mount#*src=\\\"}; source_root=${source_root%%\\\",dst=*};; esac\n"
+            "    case \"$mount\" in *dst=/opt/dsh,*) source_root=${mount#*src=}; source_root=${source_root%%,dst=*};; esac\n"
             "  elif [ \"$1\" = \"$image\" ]; then shift; break\n"
             "  fi\n"
             "  shift\n"

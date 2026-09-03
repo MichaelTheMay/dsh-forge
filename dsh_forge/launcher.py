@@ -187,6 +187,13 @@ def _candidate_dirs(root: Path, max_depth: int = 3, max_nodes: int = 500) -> Ite
                 queue.append((child, depth + 1))
 
 
+def _is_harness_package_name(value: Any) -> bool:
+    """Accept Harness CLIs without treating internal dsh-* tools as versions."""
+    package_name = str(value or "").strip().lower()
+    unscoped_name = package_name.rsplit("/", 1)[-1]
+    return unscoped_name in {"dsh", "deepseek-harness"}
+
+
 def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     package = _read_json(root / "package.json")
     cli_package = _read_json(root / "apps" / "cli" / "package.json")
@@ -206,7 +213,7 @@ def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     if selected_package:
         package = selected_package
         package_name = str(package.get("name", "")).lower()
-    named_package = any(token in package_name for token in ("deepseek-harness", "deepseek-ai/dsh"))
+    named_package = _is_harness_package_name(package_name)
     recognized_root = named_package or root.name.lower() in {"deepseek-harness", "dsh"}
     recognized_layout = bool(package and executable and executable.parts[-4:-1] in {
         ("packages", "cli", "bin"),
@@ -458,7 +465,7 @@ class Launcher:
             package = {}
             for parent in [executable.parent, *list(executable.parents)[:3]]:
                 candidate_package = _read_json(parent / "package.json")
-                if "deepseek-ai/dsh" in str(candidate_package.get("name", "")).lower():
+                if _is_harness_package_name(candidate_package.get("name")):
                     root, package = parent, candidate_package
                     break
             record = self._tree_record(root, executable, package, "npm" if package else "bin")

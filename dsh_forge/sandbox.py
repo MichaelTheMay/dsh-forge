@@ -281,11 +281,13 @@ class ApptainerSandbox:
     @staticmethod
     def _mount(source: Path, destination: str, read_only: bool) -> str:
         source = source.resolve()
-        if "\x00" in str(source) or "\n" in str(source):
+        # This is passed as one argv item, so whitespace needs no shell quoting.
+        # DeltaAI's Apptainer 1.4 parser rejects a quote embedded after ``src=``.
+        # Reject mount-spec delimiters instead of constructing partial CSV.
+        if any(character in str(source) for character in ("\x00", "\n", ",", '"')):
             raise SandboxError("Sandbox mount path contains unsupported characters")
-        escaped = str(source).replace('"', '""')
         suffix = ",ro" if read_only else ""
-        return f'type=bind,src="{escaped}",dst={destination}{suffix}'
+        return f"type=bind,src={source},dst={destination}{suffix}"
 
     def command(
         self,
