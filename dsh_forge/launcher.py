@@ -187,6 +187,13 @@ def _candidate_dirs(root: Path, max_depth: int = 3, max_nodes: int = 500) -> Ite
                 queue.append((child, depth + 1))
 
 
+def _is_harness_package_name(value: Any) -> bool:
+    """Accept Harness CLIs without treating internal dsh-* tools as versions."""
+    package_name = str(value or "").strip().lower()
+    unscoped_name = package_name.rsplit("/", 1)[-1]
+    return unscoped_name in {"dsh", "deepseek-harness"}
+
+
 def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     package = _read_json(root / "package.json")
     cli_package = _read_json(root / "apps" / "cli" / "package.json")
@@ -206,7 +213,7 @@ def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     if selected_package:
         package = selected_package
         package_name = str(package.get("name", "")).lower()
-    named_package = any(token in package_name for token in ("deepseek-harness", "deepseek-ai/dsh"))
+    named_package = _is_harness_package_name(package_name)
     recognized_root = named_package or root.name.lower() in {"deepseek-harness", "dsh"}
     recognized_layout = bool(package and executable and executable.parts[-4:-1] in {
         ("packages", "cli", "bin"),
@@ -260,7 +267,7 @@ class Launcher:
         self._cells: dict[str, dict[str, Any]] = self._load_cells()
         self._trees: dict[str, dict[str, Any]] = {}
         self._coverage_gaps: list[str] = []
-        self.sandbox = sandbox or ApptainerSandbox(SandboxConfig(), self.state_root / "sandbox")
+        self.sandbox = sandbox or ApptainerSandbox(SandboxConfig.from_environment(), self.state_root / "sandbox")
         self._sandbox_results = self._load_sandbox_results()
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
@@ -323,7 +330,7 @@ class Launcher:
                 continue
             if not isinstance(cell.get("pid"), int) or not isinstance(cell.get("process_birth"), str):
                 continue
-            cell.setdefault("execution_backend", "trusted-host-preview")
+            cell.setdefault("execution_backend", "legacy-host-preview")
             cell.setdefault("sandboxed", False)
             cell.setdefault("parent_cell_id", None)
             cell.setdefault("lineage_action", "legacy")
@@ -458,7 +465,7 @@ class Launcher:
             package = {}
             for parent in [executable.parent, *list(executable.parents)[:3]]:
                 candidate_package = _read_json(parent / "package.json")
-                if "deepseek-ai/dsh" in str(candidate_package.get("name", "")).lower():
+                if _is_harness_package_name(candidate_package.get("name")):
                     root, package = parent, candidate_package
                     break
             record = self._tree_record(root, executable, package, "npm" if package else "bin")
@@ -617,9 +624,10 @@ class Launcher:
             "capabilities": self.capabilities(),
         }
 
-    @staticmethod
-    def capabilities() -> dict[str, dict[str, Any]]:
+    def capabilities(self) -> dict[str, dict[str, Any]]:
         """Describe implemented behavior without implying unsupported adapters."""
+        sandbox_status = self.sandbox.status()
+        sandbox_ready = bool(sandbox_status.get("ready"))
         return {
             "persistent_registry": {
                 "available": True,
@@ -627,15 +635,17 @@ class Launcher:
                 "cross_process_lock": True,
             },
             "parallel_local_cells": {
-                "available": True,
-                "backend": "trusted-host-preview",
-                "security_boundary": False,
+                "available": sandbox_ready,
+                "backend": "apptainer-cell-v1",
+                "security_boundary": True,
+                "reason": sandbox_status.get("reason"),
             },
             "runtime_logs": {"available": True, "source": "process stdout/stderr"},
             "artifacts": {"available": True, "scope": "managed workspace files"},
             "sandboxed_cells": {
-                "available": False,
-                "reason": "The Apptainer backend currently supports only a bounded capability probe, not complete sessions.",
+                "available": sandbox_ready,
+                "backend": "apptainer-cell-v1",
+                "reason": sandbox_status.get("reason"),
             },
             "prompt_delivery": {
                 "available": False,
@@ -702,13 +712,15 @@ class Launcher:
         if not tree:
             raise LauncherError("Select a detected DSH tree")
         if tree["trust"] == "foreign":
-            raise LauncherError("Foreign trees may be tested in the networkless sandbox but cannot launch as host processes")
+            raise LauncherError("Foreign trees may be capability-tested but are not promoted for complete cell execution")
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
 
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
         tree = self._tree(str(raw.get("tree_id", "")))
+        if not self.sandbox.ready:
+            raise LauncherError(str(self.sandbox.status().get("reason") or "Apptainer cell runner is unavailable"))
         surface = str(raw.get("surface", "web"))
         if surface not in {"web", "headless"}:
             raise LauncherError("This launcher alpha supports the web and headless surfaces")
@@ -734,13 +746,18 @@ class Launcher:
             if not _port_available(port):
                 raise LauncherError(f"Port {port} is occupied by an unmanaged process; DSH Forge will not stop it")
         home_mode = str(raw.get("home_mode", "fresh"))
-        if home_mode not in {"exclusive", "fresh", "clone"}:
-            raise LauncherError("Home mode must be exclusive, fresh, or clone")
+        if home_mode not in {"fresh", "clone"}:
+            raise LauncherError("Apptainer cells require a managed fresh or cloned home; the host DSH home is never mounted")
         workspace_raw = str(raw.get("workspace") or "managed").strip()
         workspace_mode = workspace_raw if workspace_raw in {"none", "managed", "clone"} else "existing"
         workspace = Path(workspace_raw).expanduser().resolve() if workspace_mode == "existing" else None
         if workspace and not workspace.is_dir():
             raise LauncherError("Workspace must be an existing directory or 'none'")
+        if workspace_mode == "existing":
+            raise LauncherError("Apptainer cells require a unique managed or cloned workspace; host workspaces are not mounted writable")
+        if workspace_mode == "none":
+            workspace_mode = "managed"
+            workspace_raw = "managed"
         clone_source_raw = str(raw.get("clone_source") or "~/.dsh")
         clone_source = Path(clone_source_raw).expanduser().resolve()
         task = str(raw.get("task") or "").strip()
@@ -749,17 +766,28 @@ class Launcher:
         if len(task) > 20000:
             raise LauncherError("Headless task exceeds the 20,000-character launcher limit")
         resources_raw = raw.get("resources") if isinstance(raw.get("resources"), dict) else {}
+        gpu_label = str(resources_raw.get("gpu") or "none").strip().lower()
+        if gpu_label not in {"none", "allocated", "inherit allocation"}:
+            raise LauncherError("GPU mode must be 'none' or 'allocated'")
+        gpu = gpu_label in {"allocated", "inherit allocation"}
+        network = str(raw.get("network") or ("host" if surface == "web" else "none")).strip().lower()
+        if network not in {"none", "host"}:
+            raise LauncherError("Cell network must be 'none' or 'host'")
+        if surface == "web" and network != "host":
+            raise LauncherError("Web cells require host networking for their loopback port; use headless for a networkless cell")
+        limits = self.sandbox.status().get("resource_limits") or {}
         resources = {
-            "cpu": str(resources_raw.get("cpu") or "host shared")[:32],
-            "gpu": str(resources_raw.get("gpu") or "inherit allocation")[:32],
-            "ram": str(resources_raw.get("ram") or "host shared")[:32],
-            "enforced": False,
-            "note": "display request only; quotas are not enforced in the local preview",
+            "cpu": str(limits.get("cpus") or "unknown")[:32],
+            "gpu": "allocated" if gpu else "none",
+            "ram": str(limits.get("memory") or "unknown")[:32],
+            "pids": limits.get("pids"),
+            "wall_seconds": limits.get("wall_seconds"),
+            "enforced": True,
+            "note": "Apptainer limits accepted by the runtime; the surrounding Slurm allocation remains authoritative.",
         }
         for value in (resources["cpu"], resources["gpu"], resources["ram"]):
             if not re.fullmatch(r"[A-Za-z0-9 ._+:/-]{1,32}", value):
                 raise LauncherError("Resource labels contain unsupported characters")
-        cwd = workspace or (self.launch_cwd if tree["kind"] in {"npm", "bin"} else Path(tree["real_path"]))
         return {
             "tree": tree,
             "tree_id": tree["id"],
@@ -772,50 +800,50 @@ class Launcher:
             "workspace": str(workspace) if workspace else workspace_mode,
             "workspace_mode": workspace_mode,
             "workspace_clone_source": str(raw.get("workspace_clone_source") or ""),
-            "cwd": str(cwd),
             "task": task,
             "include_sessions": bool(raw.get("include_sessions", False)),
             "resources": resources,
+            "network": network,
+            "gpu": gpu,
         }
 
     def _home_preview(self, spec: dict[str, Any], cell_id: str = "<generated>") -> str:
-        if spec["home_mode"] == "exclusive":
-            return _display_path(Path.home() / ".dsh") + " (exclusive writer lease)"
         target = self.cells_root / cell_id / "home"
         if spec["home_mode"] == "clone":
             return f"{_display_path(target)} (safe clone of {_display_path(Path(spec['clone_source']))})"
         return _display_path(target) + " (fresh empty)"
 
-    def _argv(self, spec: dict[str, Any]) -> list[str]:
-        tree = spec["tree"]
-        argv = [tree["real_exe"]]
-        if tree["real_node"]:
-            argv.insert(0, tree["real_node"])
-        if spec["surface"] == "headless":
-            argv.extend(["headless", spec["task"]])
-        else:
-            argv.extend(["web", "--host", "127.0.0.1", "--port", str(spec["port"]), "--no-open"])
-        return argv
-
     def preview(self, raw: dict[str, Any]) -> dict[str, Any]:
         spec = self._normalize_spec(raw)
-        env_keys = [name for name in SAFE_ENV_NAMES if os.environ.get(name)]
-        env_keys.extend(name for name in SECRET_NAMES if os.environ.get(name))
+        preview_id = "cell_<generated>"
+        home = self.cells_root / preview_id / "home"
+        workspace = self.cells_root / preview_id / "workspace"
+        try:
+            plan = self.sandbox.cell_plan(
+                tree=spec["tree"], home=home, workspace=workspace,
+                surface=spec["surface"], task=spec["task"], port=spec["port"],
+                profile=spec["profile"], network=spec["network"], gpu=spec["gpu"],
+                validate_paths=False,
+            )
+        except SandboxError as error:
+            raise LauncherError(str(error)) from error
         return {
             "tree": self._public_tree(spec["tree"]),
-            "argv": self._argv(spec),
-            "cwd": spec["cwd"],
+            "argv": plan["argv"],
+            "cwd": "/workspace (inside Apptainer)",
             "home": self._home_preview(spec),
             "home_mode": spec["home_mode"],
             "workspace": self._workspace_preview(spec),
-            "resources": spec["resources"],
-            "environment_keys": env_keys,
-            "credential_keys": [name for name in SECRET_NAMES if os.environ.get(name)],
+            "resources": plan["resources"],
+            "network": plan["network"],
+            "environment_keys": sorted(plan["environment"]),
+            "credential_keys": [],
             "notes": [
                 "No repository code was executed during discovery.",
-                "The process will start in a new session and process group.",
-                "State isolation is not a hostile-code security boundary.",
-                "CPU, GPU, and RAM labels are preview requests and are not quota-enforced.",
+                "The captured source is mounted read-only in a pinned Apptainer SIF.",
+                "Home and workspace are unique writable mounts; host home and working directory stay hidden.",
+                "No launcher API keys or credentials are forwarded.",
+                "Host network mode permits outbound traffic; networkless headless cells use a separate network namespace.",
                 "Loader health is reported as not observed until an adapter exists.",
             ],
         }
@@ -828,14 +856,6 @@ class Launcher:
         return _display_path(Path(spec["workspace"])) if spec["workspace_mode"] == "existing" else "none"
 
     def _prepare_home(self, spec: dict[str, Any], cell_id: str) -> tuple[Path, str]:
-        if spec["home_mode"] == "exclusive":
-            target = (Path.home() / ".dsh").resolve()
-            with self._lock:
-                conflict = next((c for c in self._cells.values() if c.get("real_home") == str(target) and c.get("state") not in {"stopped", "exited"}), None)
-            if conflict:
-                raise LauncherError(f"Cell {conflict['name']} already holds the writable-home lease")
-            target.mkdir(parents=True, exist_ok=True, mode=0o700)
-            return target, "exclusive persistent"
         target = self.cells_root / cell_id / "home"
         target.parent.mkdir(parents=True, exist_ok=False, mode=0o700)
         if spec["home_mode"] == "fresh":
@@ -866,8 +886,6 @@ class Launcher:
         mode = spec["workspace_mode"]
         if mode == "none":
             return None, "none"
-        if mode == "existing":
-            return Path(spec["workspace"]), "shared existing"
         target = self.cells_root / cell_id / "workspace"
         if mode == "managed":
             target.mkdir(mode=0o700)
@@ -893,21 +911,24 @@ class Launcher:
         cell_id = "cell_" + uuid.uuid4().hex[:10]
         home, isolation = self._prepare_home(spec, cell_id)
         workspace, workspace_isolation = self._prepare_workspace(spec, cell_id)
-        if workspace:
-            spec["cwd"] = str(workspace)
-        argv = self._argv(spec)
-        env = {name: value for name in SAFE_ENV_NAMES if (value := os.environ.get(name))}
-        env.update({name: value for name in SECRET_NAMES if (value := os.environ.get(name))})
-        env["DSH_HOME"] = str(home)
-        env["DSH_PROFILE"] = "web" if spec["surface"] == "web" else spec["profile"]
-        if spec["port"]:
-            env["DSH_PORT"] = str(spec["port"])
+        if not workspace:
+            raise LauncherError("Apptainer cell workspace creation failed closed")
+        try:
+            plan = self.sandbox.cell_plan(
+                tree=spec["tree"], home=home, workspace=workspace,
+                surface=spec["surface"], task=spec["task"], port=spec["port"],
+                profile=spec["profile"], network=spec["network"], gpu=spec["gpu"],
+            )
+        except SandboxError as error:
+            raise LauncherError(str(error)) from error
+        argv = plan["argv"]
+        env = plan["environment"]
         log_path = self.logs_root / f"{cell_id}.log"
         log_handle = log_path.open("ab", buffering=0)
         try:
             process = subprocess.Popen(
                 argv,
-                cwd=spec["cwd"],
+                cwd=str(self.state_root),
                 env=env,
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
@@ -955,12 +976,21 @@ class Launcher:
             "workspace": _display_path(workspace) if workspace else "none",
             "real_workspace": str(workspace) if workspace else "",
             "workspace_isolation": workspace_isolation,
-            "resources": spec["resources"],
+            "resources": plan["resources"],
             "http": "pending" if spec["port"] else "n/a",
             "loader": "not observed",
             "process": "alive",
-            "execution_backend": "trusted-host-preview",
-            "sandboxed": False,
+            "execution_backend": "apptainer-cell-v1",
+            "sandboxed": True,
+            "network": plan["network"],
+            "secrets_forwarded": plan["secrets_forwarded"],
+            "container_identity": {
+                "runtime": "apptainer",
+                "image_sha256": plan["image_sha256"],
+                "executable_sha256": plan["executable_sha256"],
+                "command_sha256": plan["command_sha256"],
+                "supervisor": "coreutils-timeout",
+            },
             "parent_cell_id": str(raw.get("parent_cell_id") or "") or None,
             "lineage_action": str(raw.get("lineage_action") or "start"),
             "created_at": int(time.time() * 1000),
@@ -972,9 +1002,10 @@ class Launcher:
                 "task": spec["task"], "port": spec["port"], "open_browser": spec["open_browser"],
                 "home_mode": spec["home_mode"], "clone_source": spec["clone_source"],
                 "workspace": spec["workspace"], "resources": spec["resources"],
+                "network": spec["network"],
             },
         }
-        self._record_lifecycle(cell, "started", "trusted host preview process created")
+        self._record_lifecycle(cell, "started", "fail-closed Apptainer cell process created")
         with self._lock:
             self._processes[cell_id] = process
             self._cells[cell_id] = cell

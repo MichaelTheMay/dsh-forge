@@ -57,19 +57,19 @@ test('live status replaces preview inventory instead of merging it', () => {
   });
   assert.equal(c.state.trees.length, 1);
   assert.equal(c.state.trees[0].id, 'real');
-  assert.equal(c.renderVals().modeLabel, 'fleet preview');
+  assert.equal(c.renderVals().modeLabel, 'sandbox fleet');
   assert.equal(c.renderVals().suggested, 3210);
 });
-test('fleet preview has two immutable official pins and no fabricated cells', () => {
+test('portable preview has two immutable official pins and no fabricated cells', () => {
   const c = instance(); const values = c.renderVals();
   assert.equal(values.versions.length, 2);
   assert.deepEqual(values.versions.map(v => v.version), ['0.1.2-alpha.3', '0.1.2-alpha.2']);
   assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
   assert(values.versions.every(v => v.disabled));
   assert.equal(values.cells.length, 0);
-  assert.match(html, /Trusted host fleet/);
-  assert.match(html, /CPU\/GPU\/RAM labels are requests, not host quotas/);
-  assert.match(script, /Community test sandbox/);
+  assert.match(html, /Fail-closed cell fleet/);
+  assert.match(html, /sandbox failure never falls back to a host process/);
+  assert.match(script, /sandbox test .*network none .*no launcher secrets/);
 });
 test('launcher keeps discovery controls out of the primary UI', () => {
   assert(!/>\s*Rescan\s*</i.test(html));
@@ -84,7 +84,11 @@ test('one-click version launch requests automatic isolation', async () => {
     trees: [
       { id: 'a3', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.3', path: '~/a3', exe: '~/a3/dsh', node: 'node', git: { sha: 'dd6322dabc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' },
       { id: 'a2', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.2', path: '~/a2', exe: '~/a2/dsh', node: 'node', git: { sha: '0a53fb5abc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' }
-    ], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: []
+    ], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: {
+      mode: 'apptainer-cell-v1', ready: true, reason: 'capability probe passed',
+      resource_limits: { cpus: '4', memory: '8G' }
+    }
   });
   c.api = async (url, options) => {
     if (url === '/api/v1/cells') { request = JSON.parse(options.body); return { id: 'cell-one', name: 'cell', port: 3100 }; }
@@ -97,9 +101,11 @@ test('one-click version launch requests automatic isolation', async () => {
   assert.equal(request.port, 'auto');
   assert.equal(request.home_mode, 'fresh');
   assert.equal(request.workspace, 'managed');
+  assert.equal(request.network, 'host');
+  assert.equal(request.resources.gpu, 'none');
   assert.equal(request.tree_id, 'a3');
 });
-test('detected community trees use the sandbox endpoint and never become host launches', async () => {
+test('detected community trees use the probe endpoint and never become complete cells', async () => {
   const c = instance(); let request;
   const foreign = {
     id: 'fork-1', name: 'community fork', short: 'fork', kind: 'source', version: '1.0.0',
@@ -109,7 +115,7 @@ test('detected community trees use the sandbox endpoint and never become host la
   c.applyStatus({
     trees: [foreign], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
     sandbox: {
-      mode: 'apptainer-networkless-test', ready: true, reason: 'capability probe passed',
+      mode: 'apptainer-cell-v1', ready: true, reason: 'capability probe passed',
       hostile_code_isolation: false, resource_limits: { cpus: '4', memory: '8G' }
     }
   });

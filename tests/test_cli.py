@@ -8,6 +8,7 @@ from unittest import mock
 
 from dsh_forge import cli
 from dsh_forge.launcher import CELL_REGISTRY_SCHEMA_VERSION, Launcher
+from tests.helpers import FakeCellSandbox
 
 
 FAKE_DSH = """#!/bin/sh
@@ -33,7 +34,7 @@ class LocalCellCliTests(unittest.TestCase):
         executable.write_text(FAKE_DSH, encoding="utf-8")
         executable.chmod(0o755)
         self.state = self.root / "state"
-        self.launcher = Launcher([self.tree], state_root=self.state)
+        self.launcher = Launcher([self.tree], state_root=self.state, sandbox=FakeCellSandbox())
 
     def tearDown(self):
         self.launcher.shutdown()
@@ -60,7 +61,8 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(doctor["api_version"], "dsh-forge.cli/v1")
         self.assertTrue(doctor["ok"])
         self.assertTrue(doctor["data"]["capabilities"]["persistent_registry"]["available"])
-        self.assertFalse(doctor["data"]["capabilities"]["sandboxed_cells"]["available"])
+        self.assertTrue(doctor["data"]["capabilities"]["sandboxed_cells"]["available"])
+        self.assertEqual(doctor["data"]["capabilities"]["sandboxed_cells"]["backend"], "apptainer-cell-v1")
 
         code, versions = self.invoke("versions", "list")
         self.assertEqual(code, 0)
@@ -71,32 +73,40 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(cells["data"]["cells"], [])
         self.assertEqual(cells["data"]["registry"]["schema_version"], CELL_REGISTRY_SCHEMA_VERSION)
 
-    def test_start_requires_explicit_host_preview_acknowledgement(self):
+    def test_start_fails_when_apptainer_runner_is_unavailable(self):
+        class UnavailableSandbox(FakeCellSandbox):
+            ready = False
+
+            def status(self):
+                return {"ready": False, "reason": "required Apptainer probe failed", "resource_limits": {}}
+
+        self.launcher.sandbox = UnavailableSandbox()
         code, result = self.invoke(
             "cells", "start", "--tree", self.tree_id(), "--surface", "headless", "--task", "test task"
         )
-        self.assertEqual(code, 3)
+        self.assertEqual(code, 2)
         self.assertFalse(result["ok"])
-        self.assertEqual(result["error"]["code"], "host_preview_consent_required")
+        self.assertEqual(result["error"]["code"], "launcher_error")
+        self.assertIn("Apptainer probe failed", result["error"]["message"])
         self.assertEqual(self.launcher.status()["cells"], [])
 
     def test_persistent_lifecycle_survives_a_new_launcher_instance(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="cli-test-birth"):
             code, started = self.invoke(
                 "cells", "start", "--tree", self.tree_id(), "--surface", "headless",
-                "--task", "test task", "--workspace", "managed", "--allow-host-preview",
+                "--task", "test task",
             )
             self.assertEqual(code, 0)
             cell = started["data"]
-            self.assertEqual(cell["execution_backend"], "trusted-host-preview")
-            self.assertFalse(cell["sandboxed"])
+            self.assertEqual(cell["execution_backend"], "apptainer-cell-v1")
+            self.assertTrue(cell["sandboxed"])
             self.assertEqual(cell["lifecycle"][0]["event"], "started")
 
             registry = json.loads((self.state / "cells.json").read_text(encoding="utf-8"))
             self.assertEqual(registry["schema_version"], CELL_REGISTRY_SCHEMA_VERSION)
             self.assertGreater(registry["generation"], 0)
 
-            recovered = Launcher([self.tree], state_root=self.state)
+            recovered = Launcher([self.tree], state_root=self.state, sandbox=FakeCellSandbox())
             try:
                 restored = recovered.cell(cell["id"])
                 self.assertEqual(restored["process"], "alive")
@@ -113,18 +123,14 @@ class LocalCellCliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(stopped_again["data"]["state"], "stopped")
 
-    def test_clone_records_lineage_and_needs_the_same_acknowledgement(self):
+    def test_clone_records_lineage(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="cli-test-birth"):
             _, started = self.invoke(
                 "cells", "start", "--tree", self.tree_id(), "--surface", "headless",
-                "--task", "test task", "--allow-host-preview",
+                "--task", "test task",
             )
             source = started["data"]
-            code, denied = self.invoke("cells", "clone", source["id"])
-            self.assertEqual(code, 3)
-            self.assertEqual(denied["error"]["code"], "host_preview_consent_required")
-
-            code, cloned = self.invoke("cells", "clone", source["id"], "--allow-host-preview")
+            code, cloned = self.invoke("cells", "clone", source["id"])
             self.assertEqual(code, 0)
             self.assertEqual(cloned["data"]["parent_cell_id"], source["id"])
             self.assertEqual(cloned["data"]["lineage_action"], "clone")

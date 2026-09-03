@@ -46,22 +46,15 @@ def _parser() -> argparse.ArgumentParser:
     inspect_command = cell_commands.add_parser("inspect", help="inspect one cell and its lineage")
     inspect_command.add_argument("cell_id")
 
-    start = cell_commands.add_parser("start", help="start a trusted local host-preview cell")
+    start = cell_commands.add_parser("start", help="start a fail-closed Apptainer cell")
     start.add_argument("--tree", required=True, dest="tree_id", help="detected tree ID from versions list")
     start.add_argument("--surface", choices=("web", "headless"), default="web")
     start.add_argument("--task", default="", help="required task text for the headless surface")
     start.add_argument("--port", default="auto", help="web port or 'auto'")
     start.add_argument("--profile", default="tui-min")
-    start.add_argument("--home", choices=("fresh", "exclusive"), default="fresh", dest="home_mode")
-    start.add_argument("--workspace", default="managed", help="managed, none, or an existing path")
-    start.add_argument("--cpu", default="host shared", help="display request; not enforced by the preview backend")
-    start.add_argument("--gpu", default="inherit allocation", help="display request; not enforced by the preview backend")
-    start.add_argument("--ram", default="host shared", help="display request; not enforced by the preview backend")
-    start.add_argument(
-        "--allow-host-preview",
-        action="store_true",
-        help="acknowledge that this release starts a trusted local process without a sandbox",
-    )
+    start.add_argument("--home", choices=("fresh",), default="fresh", dest="home_mode")
+    start.add_argument("--network", choices=("auto", "none", "host"), default="auto")
+    start.add_argument("--gpu", choices=("none", "allocated"), default="none")
 
     stop = cell_commands.add_parser("stop", help="stop one identity-verified cell process group")
     stop.add_argument("cell_id")
@@ -69,11 +62,9 @@ def _parser() -> argparse.ArgumentParser:
 
     restart = cell_commands.add_parser("restart", help="restart a cell from a sanitized state clone")
     restart.add_argument("cell_id")
-    restart.add_argument("--allow-host-preview", action="store_true")
 
     clone = cell_commands.add_parser("clone", help="start a parallel cell from a sanitized state clone")
     clone.add_argument("cell_id")
-    clone.add_argument("--allow-host-preview", action="store_true")
 
     logs = cell_commands.add_parser("logs", help="read captured process stdout and stderr")
     logs.add_argument("cell_id")
@@ -124,15 +115,6 @@ def _write(payload: dict[str, Any], compact: bool, *, stream: Any = None) -> Non
     stream.flush()
 
 
-def _require_host_preview(args: argparse.Namespace) -> None:
-    if not args.allow_host_preview:
-        raise CliError(
-            "This release can only start trusted local host-preview cells. Re-run with --allow-host-preview after reviewing the boundary.",
-            "host_preview_consent_required",
-            3,
-        )
-
-
 def _start_spec(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "tree_id": args.tree_id,
@@ -141,9 +123,10 @@ def _start_spec(args: argparse.Namespace) -> dict[str, Any]:
         "port": args.port if args.surface == "web" else None,
         "profile": args.profile,
         "home_mode": args.home_mode,
-        "workspace": args.workspace,
+        "workspace": "managed",
         "open_browser": False,
-        "resources": {"cpu": args.cpu, "gpu": args.gpu, "ram": args.ram},
+        "network": ("host" if args.surface == "web" else "none") if args.network == "auto" else args.network,
+        "resources": {"gpu": args.gpu},
     }
 
 
@@ -200,17 +183,14 @@ def run(
         elif command == "cells.inspect":
             data = launcher.cell(args.cell_id)
         elif command == "cells.start":
-            _require_host_preview(args)
             data = launcher.launch(_start_spec(args))
         elif command == "cells.stop":
             if args.timeout <= 0 or args.timeout > 30:
                 raise CliError("Stop timeout must be greater than 0 and at most 30 seconds.", "invalid_argument")
             data = launcher.stop(args.cell_id, timeout=args.timeout)
         elif command == "cells.restart":
-            _require_host_preview(args)
             data = launcher.restart(args.cell_id)
         elif command == "cells.clone":
-            _require_host_preview(args)
             data = launcher.clone(args.cell_id)
         elif command == "cells.logs":
             if args.follow:

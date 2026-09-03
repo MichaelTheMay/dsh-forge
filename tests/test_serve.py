@@ -16,6 +16,7 @@ spec = importlib.util.spec_from_file_location("serve", ROOT / "scripts/serve.py"
 serve = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(serve)
 import dsh_forge.launcher as launcher_module
+from tests.helpers import FakeCellSandbox
 
 
 FAKE_DSH = """#!/bin/sh
@@ -52,7 +53,9 @@ class LauncherFixture(unittest.TestCase):
         executable = self.tree_root / "dsh"
         executable.write_text(FAKE_DSH, encoding="utf-8")
         executable.chmod(0o755)
-        self.launcher = serve.Launcher([self.tree_root], state_root=self.root / "state")
+        self.launcher = serve.Launcher(
+            [self.tree_root], state_root=self.root / "state", sandbox=FakeCellSandbox()
+        )
 
     def tearDown(self):
         self.launcher.shutdown()
@@ -104,7 +107,9 @@ class ScannerAndRunner(LauncherFixture):
             return str(fake_node) if command == "node" else real_which(command)
 
         with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
-            detected = serve.Launcher([upstream], state_root=self.root / "upstream-state")
+            detected = serve.Launcher(
+                [upstream], state_root=self.root / "upstream-state", sandbox=FakeCellSandbox()
+            )
         try:
             tree = detected.status()["trees"][0]
             preview = detected.preview({
@@ -117,6 +122,42 @@ class ScannerAndRunner(LauncherFixture):
             self.assertIn("--host", preview["argv"])
             self.assertIn("--no-open", preview["argv"])
             self.assertNotIn("--workspace", preview["argv"])
+        finally:
+            detected.shutdown()
+
+    def test_scanner_excludes_internal_monorepo_tools(self):
+        upstream = self.root / "upstream-monorepo"
+        cli = upstream / "apps" / "cli"
+        (cli / "lib").mkdir(parents=True)
+        (cli / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/dsh", "version": "0.1.2-alpha.3"}), encoding="utf-8"
+        )
+        (cli / "lib" / "bin.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        internal_packages = (
+            ("packages/experimental/webworker-packer", "@deepseek-ai/dsh-experimental-webworker-packer", "lib/bin.js"),
+            ("packages/test-support/llm-mock-server", "@deepseek-ai/dsh-llm-mock-server", "src/bin.ts"),
+        )
+        for relative, name, executable in internal_packages:
+            package_root = upstream / relative
+            (package_root / Path(executable).parent).mkdir(parents=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": name, "version": "0.1.2-alpha.3"}), encoding="utf-8"
+            )
+            (package_root / executable).write_text("#!/usr/bin/env node\n", encoding="utf-8")
+
+        real_which = launcher_module.shutil.which
+
+        def fixture_which(command):
+            return str(self.root / "node") if command == "node" else real_which(command)
+
+        with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
+            detected = serve.Launcher(
+                [upstream], state_root=self.root / "monorepo-state", sandbox=FakeCellSandbox()
+            )
+        try:
+            trees = detected.status()["trees"]
+            self.assertEqual([tree["name"] for tree in trees], ["@deepseek-ai/dsh"])
+            self.assertEqual(trees[0]["path"], launcher_module._display_path(upstream))
         finally:
             detected.shutdown()
 
@@ -133,7 +174,7 @@ class ScannerAndRunner(LauncherFixture):
             else:
                 os.environ["DEEPSEEK_API_KEY"] = old
         rendered = json.dumps(preview)
-        self.assertIn("DEEPSEEK_API_KEY", rendered)
+        self.assertNotIn("DEEPSEEK_API_KEY", rendered)
         self.assertNotIn("never-return-this-secret", rendered)
         self.assertIn("not observed", rendered)
 
@@ -169,7 +210,9 @@ class ScannerAndRunner(LauncherFixture):
             self.assertNotEqual(first["home"], second["home"])
             self.assertNotEqual(first["workspace"], second["workspace"])
             self.assertEqual(first["workspace_isolation"], "managed empty")
-            self.assertFalse(first["resources"]["enforced"])
+            self.assertTrue(first["resources"]["enforced"])
+            self.assertTrue(first["sandboxed"])
+            self.assertEqual(first["execution_backend"], "apptainer-cell-v1")
             self.assertIn(first["agent_state"], {"working", "idle"})
             self.assertIsInstance(first["recent_logs"], list)
             self.launcher.stop(first["id"])
@@ -204,7 +247,9 @@ class ScannerAndRunner(LauncherFixture):
             cell = self.launcher.launch({
                 "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"
             })
-            recovered = serve.Launcher([self.tree_root], state_root=self.root / "state")
+            recovered = serve.Launcher(
+                [self.tree_root], state_root=self.root / "state", sandbox=FakeCellSandbox()
+            )
             try:
                 restored = next(item for item in recovered.status()["cells"] if item["id"] == cell["id"])
                 self.assertEqual(restored["process"], "alive")
@@ -254,16 +299,17 @@ class ScannerAndRunner(LauncherFixture):
             self.assertIn("authenticated URL redacted", rendered_logs)
             self.launcher.stop(cell["id"])
 
-    def test_exclusive_home_has_one_writer(self):
-        with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
-            first = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
+    def test_host_home_and_existing_workspace_are_rejected(self):
+        with self.assertRaisesRegex(serve.LauncherError, "host DSH home is never mounted"):
+            self.launcher.preview({
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task",
+                "home_mode": "exclusive", "workspace": "managed",
             })
-            with self.assertRaisesRegex(serve.LauncherError, "writable-home lease"):
-                self.launcher.launch({
-                    "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
-                })
-            self.launcher.stop(first["id"])
+        with self.assertRaisesRegex(serve.LauncherError, "host workspaces are not mounted writable"):
+            self.launcher.preview({
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task",
+                "home_mode": "fresh", "workspace": str(self.root),
+            })
 
     def test_safe_clone_excludes_secrets_sessions_and_symlinks(self):
         source = self.root / "home-template"
@@ -367,8 +413,8 @@ class LauncherServer(LauncherFixture):
             cookie = response.headers["Set-Cookie"]
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
-        self.assertEqual(payload["sandbox"]["mode"], "unavailable")
-        self.assertFalse(payload["sandbox"]["ready"])
+        self.assertEqual(payload["sandbox"]["mode"], "fake-apptainer-cell-v1")
+        self.assertTrue(payload["sandbox"]["ready"])
         self.assertFalse(payload["sandbox"]["hostile_code_isolation"])
 
     def test_sandbox_mutation_requires_session_and_uses_tree_endpoint(self):

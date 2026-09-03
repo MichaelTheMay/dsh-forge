@@ -1,4 +1,4 @@
-"""Fail-closed Apptainer planning and capability checks for foreign DSH code."""
+"""Fail-closed Apptainer planning for probes and complete local DSH cells."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class SandboxError(Exception):
 
 @dataclass(frozen=True)
 class SandboxConfig:
-    """Pinned runtime inputs and requested per-test resource limits."""
+    """Pinned runtime inputs and required per-cell resource limits."""
 
     image: Path | None = None
     image_sha256: str | None = None
@@ -33,6 +33,7 @@ class SandboxConfig:
     memory: str = "8G"
     pids_limit: int = 256
     timeout_seconds: int = 30
+    cell_timeout_seconds: int = 14400
 
     @classmethod
     def from_values(
@@ -44,6 +45,7 @@ class SandboxConfig:
         memory: str = "8G",
         pids_limit: int = 256,
         timeout_seconds: int = 30,
+        cell_timeout_seconds: int = 14400,
     ) -> "SandboxConfig":
         # Keep the configured final path component intact so a symlink can be
         # rejected during inspection instead of silently followed by resolve().
@@ -59,6 +61,8 @@ class SandboxConfig:
             raise SandboxError("Sandbox PID limit must be between 16 and 65536")
         if not 1 <= int(timeout_seconds) <= 600:
             raise SandboxError("Sandbox timeout must be between 1 and 600 seconds")
+        if not 60 <= int(cell_timeout_seconds) <= 604800:
+            raise SandboxError("Sandbox cell timeout must be between 60 seconds and 7 days")
         return cls(
             image=resolved_image,
             image_sha256=digest,
@@ -67,11 +71,26 @@ class SandboxConfig:
             memory=str(memory),
             pids_limit=int(pids_limit),
             timeout_seconds=int(timeout_seconds),
+            cell_timeout_seconds=int(cell_timeout_seconds),
+        )
+
+    @classmethod
+    def from_environment(cls) -> "SandboxConfig":
+        """Build the same configuration for the UI sidecar and standalone CLI."""
+        return cls.from_values(
+            image=os.environ.get("DSH_FORGE_SANDBOX_IMAGE"),
+            image_sha256=os.environ.get("DSH_FORGE_SANDBOX_IMAGE_SHA256"),
+            binary=os.environ.get("DSH_FORGE_SANDBOX_BINARY", "apptainer"),
+            cpus=os.environ.get("DSH_FORGE_SANDBOX_CPUS", "4"),
+            memory=os.environ.get("DSH_FORGE_SANDBOX_MEMORY", "8G"),
+            pids_limit=int(os.environ.get("DSH_FORGE_SANDBOX_PIDS_LIMIT", "256")),
+            timeout_seconds=int(os.environ.get("DSH_FORGE_SANDBOX_TIMEOUT", "30")),
+            cell_timeout_seconds=int(os.environ.get("DSH_FORGE_CELL_TIMEOUT", "14400")),
         )
 
 
 class ApptainerSandbox:
-    """Build and run networkless, pinned-image tests without inherited secrets."""
+    """Build pinned-image cell commands without inherited launcher secrets."""
 
     def __init__(
         self,
@@ -85,9 +104,13 @@ class ApptainerSandbox:
         self.state_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.cache_root = self.state_root / "cache"
         self.cache_root.mkdir(exist_ok=True, mode=0o700)
+        self.runtime_home = self.state_root / "runtime-home"
+        self.runtime_home.mkdir(exist_ok=True, mode=0o700)
         self._runner = runner or subprocess.run
         self.binary = self._resolve_binary(config.binary, which)
+        self.timeout_binary = self._resolve_binary("timeout", which)
         self.image_digest: str | None = None
+        self.resource_scope = "unavailable"
         self._status = self._inspect_and_probe()
 
     @staticmethod
@@ -107,12 +130,13 @@ class ApptainerSandbox:
 
     def _base_status(self) -> dict[str, Any]:
         return {
-            "mode": "apptainer-networkless-test" if self.config.image else "unavailable",
+            "mode": "apptainer-cell-v1" if self.config.image else "unavailable",
             "configured": bool(self.config.image),
             "ready": False,
             "runtime": "apptainer",
             "hostile_code_isolation": False,
             "network": "none",
+            "network_modes": ["none", "host"],
             "host_home_exposed": False,
             "secrets_forwarded": False,
             "image": str(self.config.image) if self.config.image else None,
@@ -121,11 +145,13 @@ class ApptainerSandbox:
                 "cpus": self.config.cpus,
                 "memory": self.config.memory,
                 "pids": self.config.pids_limit,
+                "wall_seconds": self.config.cell_timeout_seconds,
+                "scope": "pending",
                 "probe_required": True,
             },
             "enforced": [],
-            "not_enforced": ["kernel exploit immunity", "GPU access", "model/API access", "web port bridging"],
-            "reason": "Configure --sandbox-image and --sandbox-image-sha256 to enable foreign-code tests.",
+            "not_enforced": ["kernel exploit immunity", "per-cell disk quota", "outbound filtering in host-network mode"],
+            "reason": "Configure a pinned Apptainer image and SHA-256 before launching any cell.",
         }
 
     def _inspect_and_probe(self) -> dict[str, Any]:
@@ -135,6 +161,9 @@ class ApptainerSandbox:
             return status_value
         if not self.binary:
             status_value["reason"] = "Apptainer executable was not found or is not executable."
+            return status_value
+        if not self.timeout_binary:
+            status_value["reason"] = "The coreutils timeout executable is required for persistent wall-time enforcement."
             return status_value
         if not self.config.image_sha256:
             status_value["reason"] = "A pinned sandbox image SHA-256 is required."
@@ -162,34 +191,76 @@ class ApptainerSandbox:
                 workspace = root / "workspace"
                 home.mkdir(mode=0o700)
                 workspace.mkdir(mode=0o700)
-                command = self.command(home=home, workspace=workspace, payload=["node", "--version"])
-                completed = self._execute(command, timeout=min(15, self.config.timeout_seconds))
+                core_command = self.command(
+                    home=home,
+                    workspace=workspace,
+                    payload=["node", "--version"],
+                    include_resource_limits=False,
+                )
+                completed = self._execute(core_command, timeout=min(15, self.config.timeout_seconds))
+                if completed.returncode != 0:
+                    status_value["reason"] = "Apptainer capability probe rejected the required isolation flags."
+                    status_value["probe_exit_code"] = completed.returncode
+                    status_value["probe_output"] = self._probe_output(completed.stdout)
+                    return status_value
+                if not re.search(r"\bv\d+\.\d+\.\d+\b", completed.stdout or ""):
+                    status_value["reason"] = "Pinned sandbox image did not provide the expected Node runtime."
+                    status_value["probe_output"] = self._probe_output(completed.stdout)
+                    return status_value
+
+                # DeltaAI enforces the job allocation with Slurm, but its compute
+                # nodes do not delegate the user cgroups that Apptainer's
+                # per-container resource flags require. Outside Slurm, those
+                # flags must pass or the runner remains unavailable.
+                if os.environ.get("SLURM_JOB_ID"):
+                    self.resource_scope = "shared-slurm"
+                else:
+                    limited_command = self.command(
+                        home=home,
+                        workspace=workspace,
+                        payload=["node", "--version"],
+                        include_resource_limits=True,
+                    )
+                    limited = self._execute(limited_command, timeout=min(15, self.config.timeout_seconds))
+                    if limited.returncode != 0:
+                        status_value["reason"] = (
+                            "Apptainer per-cell resource controls were rejected, and no Slurm allocation is active."
+                        )
+                        status_value["probe_exit_code"] = limited.returncode
+                        status_value["probe_output"] = self._probe_output(limited.stdout)
+                        return status_value
+                    self.resource_scope = "per-cell-cgroup"
         except (OSError, SandboxError, subprocess.TimeoutExpired) as error:
             status_value["reason"] = f"Apptainer capability probe failed: {type(error).__name__}."
             return status_value
-        if completed.returncode != 0:
-            status_value["reason"] = "Apptainer capability probe rejected the required isolation or resource flags."
-            status_value["probe_exit_code"] = completed.returncode
-            return status_value
-        if not re.search(r"\bv\d+\.\d+\.\d+\b", completed.stdout or ""):
-            status_value["reason"] = "Pinned sandbox image did not provide the expected Node runtime."
-            return status_value
+
+        enforced = [
+            "non-root payload without sudo or fakeroot",
+            "immutable pinned SIF image",
+            "host home hidden",
+            "source checkout read-only",
+            "separate writable home and workspace",
+            "clean environment without launcher secrets",
+            "new PID and IPC namespaces",
+            "networkless mode available through a loopback-only namespace",
+            "cell wall time enforced by an external process supervisor",
+        ]
+        if self.resource_scope == "per-cell-cgroup":
+            enforced.append("per-cell CPU, RAM, and PID limits accepted by the runtime")
+            reason = "Pinned Apptainer image passed isolation and per-cell resource capability checks."
+        else:
+            enforced.append("aggregate CPU, RAM, and GPU allocation enforced by Slurm")
+            status_value["not_enforced"].append(
+                "per-cell CPU, RAM, or PID quotas inside the shared Slurm allocation"
+            )
+            reason = "Pinned Apptainer image passed isolation checks inside the active Slurm allocation."
+        status_value["resource_limits"]["scope"] = self.resource_scope
         status_value.update({
             "ready": True,
-            "reason": "Pinned Apptainer image passed network, mount, environment, and resource capability checks.",
+            "reason": reason,
             "image_sha256": digest,
             "capability_probe": "passed",
-            "enforced": [
-                "non-root payload without sudo or fakeroot",
-                "immutable pinned SIF image",
-                "host home hidden",
-                "source checkout read-only",
-                "separate writable home and workspace",
-                "clean environment without launcher secrets",
-                "new PID and IPC namespaces",
-                "network namespace with loopback only",
-                "CPU, RAM, and PID limits accepted by runtime",
-            ],
+            "enforced": enforced,
         })
         return status_value
 
@@ -202,13 +273,21 @@ class ApptainerSandbox:
         return digest.hexdigest()
 
     @staticmethod
+    def _probe_output(output: str | None) -> str:
+        excerpt = (output or "")[-4096:]
+        host_home = str(Path.home())
+        return excerpt.replace(host_home, "~") if host_home else excerpt
+
+    @staticmethod
     def _mount(source: Path, destination: str, read_only: bool) -> str:
         source = source.resolve()
-        if "\x00" in str(source) or "\n" in str(source):
+        # This is passed as one argv item, so whitespace needs no shell quoting.
+        # DeltaAI's Apptainer 1.4 parser rejects a quote embedded after ``src=``.
+        # Reject mount-spec delimiters instead of constructing partial CSV.
+        if any(character in str(source) for character in ("\x00", "\n", ",", '"')):
             raise SandboxError("Sandbox mount path contains unsupported characters")
-        escaped = str(source).replace('"', '""')
-        mode = "ro" if read_only else "rw"
-        return f'type=bind,src="{escaped}",dst={destination},{mode},nonested'
+        suffix = ",ro" if read_only else ""
+        return f"type=bind,src={source},dst={destination}{suffix}"
 
     def command(
         self,
@@ -216,13 +295,23 @@ class ApptainerSandbox:
         workspace: Path,
         payload: Sequence[str],
         tree_root: Path | None = None,
+        network: str = "none",
+        gpu: bool = False,
+        container_environment: Mapping[str, str] | None = None,
+        validate_paths: bool = True,
+        include_resource_limits: bool | None = None,
     ) -> list[str]:
         if not self.binary or not self.config.image:
             raise SandboxError("Apptainer sandbox is not configured")
-        if not home.is_dir() or home.is_symlink() or not workspace.is_dir() or workspace.is_symlink():
+        if validate_paths and (not home.is_dir() or home.is_symlink() or not workspace.is_dir() or workspace.is_symlink()):
             raise SandboxError("Sandbox home and workspace must be existing non-symlink directories")
+        if network not in {"none", "host"}:
+            raise SandboxError("Sandbox network must be 'none' or 'host'")
         if not payload or any("\x00" in str(item) for item in payload):
             raise SandboxError("Sandbox payload is empty or invalid")
+        resolved_home = home.resolve()
+        if any(character in str(resolved_home) for character in ("\x00", "\n", ":")):
+            raise SandboxError("Sandbox home path contains unsupported characters")
         command = [
             self.binary,
             "exec",
@@ -231,30 +320,46 @@ class ApptainerSandbox:
             "--no-eval",
             "--no-privs",
             "--no-mount",
-            "home,cwd,hostfs,bind-paths",
-            "--net",
-            "--network",
-            "none",
-            "--cpus",
-            self.config.cpus,
-            "--memory",
-            self.config.memory,
-            "--pids-limit",
-            str(self.config.pids_limit),
-            "--mount",
-            self._mount(home, "/home/dsh", read_only=False),
+            "cwd,hostfs,bind-paths",
+            "--home",
+            f"{resolved_home}:/home/dsh",
             "--mount",
             self._mount(workspace, "/workspace", read_only=False),
         ]
+        if include_resource_limits is None:
+            include_resource_limits = self.resource_scope == "per-cell-cgroup"
+        if include_resource_limits:
+            command.extend([
+                "--cpus",
+                self.config.cpus,
+                "--memory",
+                self.config.memory,
+                "--pids-limit",
+                str(self.config.pids_limit),
+            ])
+        if network == "none":
+            command.extend(["--net", "--network", "none"])
+        if gpu:
+            command.append("--nv")
         if tree_root:
-            if not tree_root.is_dir() or tree_root.is_symlink():
+            if validate_paths and (not tree_root.is_dir() or tree_root.is_symlink()):
                 raise SandboxError("Sandbox source tree must be an existing non-symlink directory")
             command.extend(["--mount", self._mount(tree_root, "/opt/dsh", read_only=True)])
+        environment = {
+            "DSH_HOME": "/home/dsh",
+            # Stop the APPTAINER_BIND propagation described by Apptainer for
+            # nested invocations. The host runner environment is allowlisted too.
+            "APPTAINER_BIND": "",
+            "APPTAINER_BINDPATH": "",
+            "APPTAINER_MOUNT": "",
+        }
+        for name, value in (container_environment or {}).items():
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", str(name)) or "\x00" in str(value) or "\n" in str(value):
+                raise SandboxError("Sandbox environment contains an invalid name or value")
+            environment[str(name)] = str(value)
+        for name, value in environment.items():
+            command.extend(["--env", f"{name}={value}"])
         command.extend([
-            "--env",
-            "HOME=/home/dsh",
-            "--env",
-            "DSH_HOME=/home/dsh",
             "--pwd",
             "/workspace",
             str(self.config.image),
@@ -262,9 +367,121 @@ class ApptainerSandbox:
         ])
         return command
 
+    def _verify_pinned_inputs(self, tree: Mapping[str, Any]) -> tuple[Path, Path, Path]:
+        if not self.ready:
+            raise SandboxError(str(self._status.get("reason") or "Apptainer sandbox is not ready"))
+        image = self.config.image
+        if not image or image.is_symlink() or not image.is_file() or image.stat().st_mode & 0o222:
+            raise SandboxError("Pinned sandbox image is missing, replaced, or no longer read-only")
+        if self._sha256(image) != self.image_digest:
+            raise SandboxError("Pinned sandbox image changed after the capability probe")
+        root_candidate = Path(str(tree.get("real_path") or ""))
+        executable_candidate = Path(str(tree.get("real_exe") or ""))
+        if root_candidate.is_symlink() or not root_candidate.is_dir():
+            raise SandboxError("Detected source tree is missing or was replaced by a symlink")
+        if executable_candidate.is_symlink() or not executable_candidate.is_file():
+            raise SandboxError("Detected executable is missing or was replaced by a symlink")
+        root = root_candidate.resolve()
+        executable = executable_candidate.resolve()
+        try:
+            relative = executable.relative_to(root)
+        except ValueError as error:
+            raise SandboxError("Detected executable escapes the source tree") from error
+        executable_digest = self._sha256(executable)
+        if tree.get("executable_sha256") and tree.get("executable_sha256") != executable_digest:
+            raise SandboxError("Detected executable changed after the scanner captured it")
+        return root, executable, relative
+
+    def cell_plan(
+        self,
+        *,
+        tree: Mapping[str, Any],
+        home: Path,
+        workspace: Path,
+        surface: str,
+        task: str,
+        port: int | None,
+        profile: str,
+        network: str,
+        gpu: bool,
+        validate_paths: bool = True,
+    ) -> dict[str, Any]:
+        """Return a complete immutable launch plan or fail before process creation."""
+        root, executable, relative = self._verify_pinned_inputs(tree)
+        if surface not in {"web", "headless"}:
+            raise SandboxError("Unsupported Harness surface")
+        if surface == "web" and network != "host":
+            raise SandboxError("Web cells require explicit host networking so their loopback port is reachable")
+        if surface == "web" and not port:
+            raise SandboxError("Web cells require a reserved loopback port")
+        if surface == "headless" and not task:
+            raise SandboxError("Headless cells require a task")
+        if gpu and not (
+            os.environ.get("SLURM_JOB_ID")
+            and any(os.environ.get(name) for name in ("CUDA_VISIBLE_DEVICES", "SLURM_JOB_GPUS"))
+        ):
+            raise SandboxError("GPU exposure requires an existing scheduler GPU allocation")
+        payload = [str(Path("/opt/dsh") / relative)]
+        if executable.suffix == ".js":
+            payload.insert(0, "node")
+        if surface == "headless":
+            payload.extend(["headless", task])
+        else:
+            payload.extend(["web", "--host", "127.0.0.1", "--port", str(port), "--no-open"])
+        environment = {"DSH_PROFILE": "web" if surface == "web" else profile}
+        if port:
+            environment["DSH_PORT"] = str(port)
+        command = self.command(
+            home=home,
+            workspace=workspace,
+            tree_root=root,
+            payload=payload,
+            network=network,
+            gpu=gpu,
+            container_environment=environment,
+            validate_paths=validate_paths,
+        )
+        if not self.timeout_binary:
+            raise SandboxError("Cell wall-time supervisor is unavailable")
+        supervised = [
+            self.timeout_binary,
+            "--foreground",
+            "--signal=TERM",
+            "--kill-after=5",
+            str(self.config.cell_timeout_seconds),
+            *command,
+        ]
+        material = "\0".join(supervised).encode()
+        return {
+            "argv": supervised,
+            "environment": dict(self._host_environment()),
+            "network": network,
+            "gpu": "allocated" if gpu else "none",
+            "image_sha256": self.image_digest,
+            "executable_sha256": self._sha256(executable),
+            "command_sha256": hashlib.sha256(material).hexdigest(),
+            "resources": {
+                "cpu": self.config.cpus,
+                "gpu": "allocated" if gpu else "none",
+                "ram": self.config.memory,
+                "pids": self.config.pids_limit,
+                "wall_seconds": self.config.cell_timeout_seconds,
+                "enforced": True,
+                "scope": self.resource_scope,
+                "per_cell_enforced": self.resource_scope == "per-cell-cgroup",
+                "note": (
+                    "Per-cell cgroup limits accepted by Apptainer."
+                    if self.resource_scope == "per-cell-cgroup"
+                    else "CPU, RAM, and GPU are shared within the Slurm allocation; wall time is per cell."
+                ),
+            },
+            "secrets_forwarded": False,
+        }
+
     def _host_environment(self) -> Mapping[str, str]:
-        allowed = ("PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR")
+        allowed = ("PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR")
         environment = {name: value for name in allowed if (value := os.environ.get(name))}
+        environment["HOME"] = str(self.runtime_home)
         environment["APPTAINER_CACHEDIR"] = str(self.cache_root)
         return environment
 
@@ -281,24 +498,12 @@ class ApptainerSandbox:
         )
 
     def test_tree(self, tree: Mapping[str, Any]) -> dict[str, Any]:
-        if not self.ready:
-            raise SandboxError(str(self._status.get("reason") or "Apptainer sandbox is not ready"))
-        image = self.config.image
-        if not image or image.is_symlink() or not image.is_file() or image.stat().st_mode & 0o222:
-            raise SandboxError("Pinned sandbox image is missing, replaced, or no longer read-only")
-        if self._sha256(image) != self.image_digest:
-            raise SandboxError("Pinned sandbox image changed after the capability probe")
-        root = Path(str(tree.get("real_path") or "")).resolve()
-        executable = Path(str(tree.get("real_exe") or "")).resolve()
-        try:
-            relative = executable.relative_to(root)
-        except ValueError as error:
-            raise SandboxError("Detected executable escapes the source tree") from error
-        if not executable.is_file() or executable.is_symlink():
-            raise SandboxError("Detected executable is not a regular in-tree file")
+        if self.resource_scope != "per-cell-cgroup":
+            raise SandboxError(
+                "Community-code probes require per-cell cgroup controls; shared Slurm allocation limits are insufficient."
+            )
+        root, executable, relative = self._verify_pinned_inputs(tree)
         executable_digest = self._sha256(executable)
-        if tree.get("executable_sha256") and tree.get("executable_sha256") != executable_digest:
-            raise SandboxError("Detected executable changed after the scanner captured it")
         payload = [str(Path("/opt/dsh") / relative), "--help"]
         if executable.suffix == ".js":
             payload.insert(0, "node")
