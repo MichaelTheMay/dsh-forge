@@ -1,8 +1,10 @@
-# Signed package schema and offline composer
+# Signed package schema, composer, and quarantine acquisition
 
-DSH Forge packages describe an ordered set of immutable plugin artifacts. This
-release defines the public metadata contract and a local composer; it does not
-publish, download, install, or execute any artifact.
+DSH Forge packages describe an ordered set of immutable plugin artifacts. The
+metadata contract and composer remain offline. A separate acquisition command
+can authenticate a signed package, fetch its exact bytes, and store them in a
+non-executable quarantine; it does not publish, extract, install, or execute an
+artifact.
 
 ## Files and versions
 
@@ -102,15 +104,46 @@ Composition itself needs only Python 3.9+. Signing, trust-root creation, and
 verification require an OpenSSL build with Ed25519 `pkey`/`pkeyutl` support; CI
 runs a real sign-and-tamper test rather than mocking that boundary.
 
+## Authenticated quarantine acquisition
+
+After reviewing the manifest and configuring its trust root, acquire the exact
+signed artifacts:
+
+```bash
+python3 -m dsh_forge packages acquire \
+  --bundle /tmp/review-stack.dsse.json \
+  --trust-root /tmp/dsh-forge-dev-root.json \
+  --quarantine ~/.local/state/dsh-forge/quarantine
+```
+
+Signature threshold, trust-root expiry, manifest normalization, compatibility
+metadata, dependency relations, conflicts, exact versions, repository commits,
+and integrity pins are verified before the first network request. Each response
+is streamed under byte and time limits. npm SHA-512 SRI or the signed SHA-256 is
+recomputed before the bytes are atomically placed at a local SHA-256 content
+address. Repeated acquisition reuses only an object whose size and digest still
+match. A signed receipt records provenance and the redirect chain without URL
+query strings.
+
+The v1 source-host policy accepts the credential-free HTTPS endpoints required
+for the public npm registry and immutable GitHub archives/releases. Ambient HTTP
+proxy variables are ignored, redirects are capped and host-checked, transfer
+compression is rejected, and no authentication header, cookie, npm token, or
+GitHub token is forwarded. Private registries require a later, independently
+reviewed credential-scoping contract.
+
+See [Quarantine acquisition](quarantine-acquisition.md) for the filesystem
+layout, failure behavior, limits, and threat-model boundaries.
+
 ## Deliberately deferred
 
 The package catalog remains empty. This release does not provide publisher
 accounts, upload authorization, moderation, registry storage, trusted-root
-distribution, artifact acquisition, dependency installation, configuration
-merging, or sandbox execution. Those require separate reviewable boundaries.
+distribution, private-registry credentials, dependency installation,
+configuration merging, or sandbox execution. Browser download also remains
+disabled. Those require separate reviewable boundaries.
 
-The next execution-oriented change must verify a signed envelope first, acquire
-each artifact by the exact signed URL into a content-addressed quarantine,
-recompute every integrity value, reject redirects outside an allowlist, and only
-then pass immutable bytes to a disposable networkless Apptainer test cell. It
-must never install into a user's existing Harness tree directly.
+The next execution-oriented change may pass immutable quarantined bytes to a
+disposable networkless Apptainer inspection/test cell. It must re-check the
+content address at handoff and must never install directly into a user's existing
+Harness tree.

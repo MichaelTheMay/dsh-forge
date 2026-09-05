@@ -134,7 +134,7 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   references, compatibility notes, reported licenses, risk, and provenance.
 - Browse six evidence-ranked plugin records and ten captured forks without
   GitHub or registry access. Packages has an honest empty state while publishing
-  and acquisition remain disconnected.
+  and browser acquisition remain disconnected.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
@@ -160,9 +160,22 @@ python3 -m dsh_forge packages compose \
 ```
 
 The composer is metadata-only and makes no network requests. Successful
-verification explicitly returns `execution_authorized: false`. See
-[Signed package schema and offline composer](docs/signed-packages.md) for the
-schemas, signing workflow, trust model, and deferred acquisition boundary.
+verification explicitly returns `execution_authorized: false`. A separate CLI
+boundary can verify that signed envelope, download its exact artifacts over
+credential-free HTTPS, recompute their signed integrity, and place immutable
+bytes in a content-addressed quarantine:
+
+```bash
+python3 -m dsh_forge packages acquire \
+  --bundle /tmp/review-stack.dsse.json \
+  --trust-root /tmp/dsh-forge-dev-root.json
+```
+
+Acquisition does not extract archives, install dependencies, alter a Harness
+profile, or execute code. Both `installation_authorized` and
+`execution_authorized` remain false. See [Signed packages](docs/signed-packages.md)
+and [Quarantine acquisition](docs/quarantine-acquisition.md) for the trust model
+and enforced limits.
 
 ## Development
 

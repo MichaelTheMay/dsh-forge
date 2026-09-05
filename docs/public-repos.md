@@ -3,8 +3,8 @@
 The Community page contains three deliberately separate browsers: Plugins,
 Forks, and Packages. Plugins starts with a bounded, manually reviewed seed;
 Forks retains the ten-row upstream snapshot; Packages is a real route and empty
-collection. The signed metadata schema and offline composer now exist, but no
-publication endpoint or acquisition path is connected. It does not add
+collection. The signed metadata schema, offline composer, and separate CLI
+quarantine acquirer now exist, but no browser publication/download path is connected. It does not add
 Forge-native stars, accounts, publishing, installation, or social voting.
 
 ## Current implementation
@@ -73,9 +73,11 @@ not treat a production signature as verified without a real verifier.
 ## Deferred actions
 
 Browser-based composition, upload, download, and integration into an existing
-version remain disabled. Offline metadata composition and signature verification
-are available through the CLI. No code from a Community catalog entry is cloned,
-installed, built, or executed by either path. If a community checkout is already present in an
+version remain disabled. Offline metadata composition, signature verification,
+and explicit signed-bundle acquisition into a non-executable quarantine are
+available through the CLI. Acquisition cannot start from an unsigned browser
+entry. No downloaded archive is extracted, installed, built, or executed. If a
+community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
 enable host launch. An isolated port or writable home alone is not a security
