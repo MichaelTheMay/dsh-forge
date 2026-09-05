@@ -1,0 +1,70 @@
+{
+  "compatibility": {
+    "dsh": ">=0.1.2-alpha.3 <0.2.0",
+    "node": ">=22.19.0 <23",
+    "platforms": [
+      "linux-arm64",
+      "linux-x64"
+    ]
+  },
+  "load_order": [
+    "dsh-vet",
+    "dsh-code-index"
+  ],
+  "package": {
+    "created_at": "2026-09-05T20:00:00Z",
+    "description": "Unsigned example combining two immutable plugin metadata records; no code is downloaded or executed.",
+    "id": "example.review-stack",
+    "license": "MIT",
+    "name": "Review stack example",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "conflicts_with": [],
+      "id": "dsh-vet",
+      "permissions": [
+        "environment:read",
+        "filesystem:read",
+        "process:spawn"
+      ],
+      "repository": {
+        "commit": "3005968cc708d12b7e1f98f1a312239b5312ce7f",
+        "url": "https://github.com/rogerdigital/dsh-vet"
+      },
+      "requires": [],
+      "source": {
+        "integrity": "sha512-HdQoj+ZxoYJRp3/PUK7fIIc/bj6FhyF86SDxyKapRQB1X23GY9hPM7PNoarzAvSa7k4isv6nrnXR8S7IqfQ0Ig==",
+        "kind": "npm",
+        "name": "dsh-vet",
+        "url": "https://registry.npmjs.org/dsh-vet/-/dsh-vet-0.3.0.tgz",
+        "version": "0.3.0"
+      }
+    },
+    {
+      "conflicts_with": [],
+      "id": "dsh-code-index",
+      "permissions": [
+        "filesystem:read"
+      ],
+      "repository": {
+        "commit": "de81accbc5104fa2a872d692de7205b59d1e6130",
+        "url": "https://github.com/lemonxiny55/dsh-code-index"
+      },
+      "requires": [],
+      "source": {
+        "integrity": "sha512-rTCRRKrw/qJa7BQSE/CRV+I95KQnlgv35CDg1QHHu9cFEO6xH5ugLL4NDdcKoZH4x8fPxrITVIsXbe8rgUpWxg==",
+        "kind": "npm",
+        "name": "dsh-code-index",
+        "url": "https://registry.npmjs.org/dsh-code-index/-/dsh-code-index-0.3.1.tgz",
+        "version": "0.3.1"
+      }
+    }
+  ],
+  "provenance": {
+    "created_by": "DSH Forge documentation example",
+    "evidence": "metadata_only_unexecuted",
+    "source": "user_composed"
+  },
+  "schema": "dsh-forge.package-spec/v1"
+}

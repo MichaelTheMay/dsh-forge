@@ -581,9 +581,9 @@
 
           <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
           <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
-          <div class="repo-detail-section"><h3>Acquire & compose <span class="repo-label">Later phase</span></h3>
-            <div class="repo-planned-actions"><button disabled title="Requires a signed acquisition record and pinned package artifact.">Download pinned artifact</button><button disabled title="Requires the package composer, conflict model, and disposable profile.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
-            <p class="repo-muted">Browsing cannot install, compose, upload, or execute code. Those actions remain separate from the metadata client until their signed-package and sandbox contracts land.</p>
+          <div class="repo-detail-section"><h3>Acquire & browser-compose <span class="repo-label">Later phase</span></h3>
+            <div class="repo-planned-actions"><button disabled title="Requires a signed acquisition record and pinned package artifact.">Download pinned artifact</button><button disabled title="The offline CLI composer exists; browser composition and publishing are not connected.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
+            <p class="repo-muted">The offline CLI can compose signed metadata. Browsing still cannot install, upload, download, or execute code; those actions remain separate until their registry and sandbox contracts land.</p>
           </div>
         </sc-if>
         <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>

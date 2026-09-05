@@ -901,11 +901,14 @@ const CATALOG_SNAPSHOT = {
   ],
   "package_entries": [],
   "package_browser": {
-    "status": "schema_pending",
+    "status": "offline_composer_available",
+    "schema": "dsh-forge.package/v1",
+    "signature_envelope": "dsse/v1-ed25519",
+    "composition_enabled": true,
     "upload_enabled": false,
     "download_enabled": false,
     "execution_enabled": false,
-    "note": "This collection is reserved for user-published multi-plugin bundles. No sample packages are fabricated."
+    "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated."
   }
 };
 // CATALOG_SNAPSHOT_END
@@ -1422,7 +1425,7 @@ class Component extends DCLogic {
     const emptyCopy = s.catalogType === 'package'
       ? {
           title: 'No community packages published yet',
-          description: 'This browser is ready for signed, versioned multi-plugin bundles, but the package schema and upload endpoint are not connected. No samples are fabricated.',
+          description: 'The versioned package schema and offline composer are available through the CLI. Publication, acquisition, installation, and execution are not connected, so no sample listings are fabricated.',
           action: 'Browse plugins',
           run: () => this.navigate('catalog', 'plugin')
         }

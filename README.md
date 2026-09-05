@@ -133,8 +133,8 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 - Inspect source links, exact package versions and integrity, captured commit
   references, compatibility notes, reported licenses, risk, and provenance.
 - Browse six evidence-ranked plugin records and ten captured forks without
-  GitHub or registry access. Packages has an honest empty state until its signed
-  upload and bundle schema exists.
+  GitHub or registry access. Packages has an honest empty state while publishing
+  and acquisition remain disconnected.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
@@ -143,6 +143,26 @@ popularity, not compatibility or security. Plugin recommendation order uses
 static evidence, compatibility, maintenance, license, and risk—not stars. No
 community source code is included or executed. The browser never contacts
 GitHub, npm, or the community catalog itself.
+
+## Signed plugin packages
+
+Forge now defines a versioned, offline multi-plugin package contract. The CLI
+can compose deterministic manifests from exact plugin versions, artifact
+integrity, repository commits, permissions, relations, compatibility, and load
+order; sign their canonical bytes with Ed25519 in a DSSE envelope; create an
+explicit local trust root; and verify signature threshold, expiry, key identity,
+schema, pins, conflicts, and composition digest.
+
+```bash
+python3 -m dsh_forge packages compose \
+  --spec examples/package-spec.v1.json \
+  --output /tmp/review-stack.manifest.json
+```
+
+The composer is metadata-only and makes no network requests. Successful
+verification explicitly returns `execution_authorized: false`. See
+[Signed package schema and offline composer](docs/signed-packages.md) for the
+schemas, signing workflow, trust model, and deferred acquisition boundary.
 
 ## Development
 
