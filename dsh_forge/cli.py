@@ -10,6 +10,14 @@ import sys
 import time
 from typing import Any, Callable, Sequence
 
+from .acquisition import (
+    DEFAULT_MAX_ARTIFACT_BYTES,
+    DEFAULT_MAX_TOTAL_BYTES,
+    DEFAULT_QUARANTINE_ROOT,
+    DEFAULT_TIMEOUT_SECONDS,
+    DEFAULT_TOTAL_TIMEOUT_SECONDS,
+    acquire as acquire_package,
+)
 from .launcher import Launcher, LauncherError
 from .packages import (
     PackageError,
@@ -38,7 +46,7 @@ class CliError(Exception):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m dsh_forge",
-        description="Discover Harness versions, control local cells, and compose signed package metadata.",
+        description="Discover Harness versions, control local cells, and manage signed package artifacts.",
     )
     parser.add_argument("--scan-root", action="append", default=[], metavar="PATH", help="add a bounded Harness scan root")
     parser.add_argument("--state-dir", metavar="PATH", help="override the persistent DSH Forge state directory")
@@ -122,6 +130,43 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--bundle", required=True, metavar="JSON")
     verify.add_argument("--trust-root", required=True, metavar="JSON")
 
+    acquire = package_commands.add_parser(
+        "acquire",
+        help="verify a signed package and download exact artifacts into non-executable quarantine",
+    )
+    acquire.add_argument("--bundle", required=True, metavar="JSON")
+    acquire.add_argument("--trust-root", required=True, metavar="JSON")
+    acquire.add_argument(
+        "--quarantine",
+        default=str(DEFAULT_QUARANTINE_ROOT),
+        metavar="DIR",
+        help="content-addressed quarantine root (default: ~/.local/state/dsh-forge/quarantine)",
+    )
+    acquire.add_argument(
+        "--max-artifact-bytes",
+        type=int,
+        default=DEFAULT_MAX_ARTIFACT_BYTES,
+        metavar="N",
+    )
+    acquire.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+    )
+    acquire.add_argument(
+        "--max-total-bytes",
+        type=int,
+        default=DEFAULT_MAX_TOTAL_BYTES,
+        metavar="N",
+    )
+    acquire.add_argument(
+        "--total-timeout",
+        type=float,
+        default=DEFAULT_TOTAL_TIMEOUT_SECONDS,
+        metavar="SECONDS",
+    )
+
     return parser
 
 
@@ -197,6 +242,7 @@ def run(
     argv: Sequence[str] | None = None,
     *,
     launcher_factory: Callable[..., Launcher] = Launcher,
+    acquirer: Callable[..., dict[str, Any]] = acquire_package,
 ) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -240,6 +286,16 @@ def run(
                 "composition_digest": manifest["composition_digest"],
                 "execution_authorized": False,
             }
+        elif command == "packages.acquire":
+            data = acquirer(
+                read_json(args.bundle),
+                read_json(args.trust_root),
+                args.quarantine,
+                max_artifact_bytes=args.max_artifact_bytes,
+                max_total_bytes=args.max_total_bytes,
+                timeout_seconds=args.timeout,
+                total_timeout_seconds=args.total_timeout,
+            )
         else:
             launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
             if command == "doctor":

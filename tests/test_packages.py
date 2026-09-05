@@ -230,6 +230,7 @@ class PackageJsonSafetyTests(unittest.TestCase):
         expected = {
             "dsh-forge-package-spec-v1.schema.json",
             "dsh-forge-package-v1.schema.json",
+            "dsh-forge-quarantine-receipt-v1.schema.json",
             "dsh-forge-signed-envelope-v1.schema.json",
             "dsh-forge-trust-root-v1.schema.json",
         }
