@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>DSH Forge — Launcher & Public Repositories</title>
-<meta name="description" content="DSH Forge local launcher design with a cached browser for community DeepSeek Harness forks.">
+<title>DSH Forge — Launcher & Community Browser</title>
+<meta name="description" content="DSH Forge local launcher with cached browsers for DeepSeek Harness plugins, forks, and community packages.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
@@ -142,7 +142,7 @@
     <nav style="display: flex; gap: 4px; margin-left: 8px;">
       <button onClick="{{ goLaunch }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ launchTabBorder }}; background: {{ launchTabBg }}; color: {{ launchTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Launch</button>
       <sc-if value="{{ catalogEnabled }}" hint-placeholder-val="{{ true }}">
-        <button onClick="{{ goCatalog }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ catalogTabBorder }}; background: {{ catalogTabBg }}; color: {{ catalogTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Public Repos</button>
+        <button onClick="{{ goCatalog }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ catalogTabBorder }}; background: {{ catalogTabBg }}; color: {{ catalogTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Community</button>
       </sc-if>
     </nav>
     <div style="flex: 1 1 auto;"></div>
@@ -494,36 +494,36 @@
   </sc-if>
 
   <sc-if value="{{ showCatalog }}" hint-placeholder-val="{{ false }}">
-  <main class="public-browser" id="public-repos" aria-label="Public repositories">
+  <main class="public-browser" id="community" aria-label="Community plugin, fork, and package browser">
     <div class="repo-masthead">
       <div>
         <div class="repo-eyebrow">COMMUNITY / DEEPSEEK HARNESS</div>
-        <h1>Public repositories <span class="repo-label">Preview</span></h1>
-        <p>Discover community forks. Inspect the source before bringing anything into your workspace.</p>
+        <h1>Community browser <span class="repo-label">Static preview</span></h1>
+        <p>Browse evidence-ranked plugins, upstream forks, and future multi-plugin packages. Inspect provenance before trusting code.</p>
         <a class="repo-upstream mono" href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><path d="M6 7.5v9M18 7.5v1a4 4 0 0 1-4 4H6"/></svg>
           deepseek-ai/deepseek-harness <span>↗</span>
         </a>
       </div>
       <div class="repo-snapshot-summary">
-        <span class="repo-seed-badge"><span></span>ONE-TIME SEED</span>
-        <strong>{{ seedCount }} forks</strong>
-        <span>Selected by GitHub stars</span>
-        <span class="mono">{{ snapshotAt }} UTC</span>
+        <span class="repo-seed-badge"><span></span>BOUNDED STATIC SEEDS</span>
+        <strong>{{ catalogCountLabel }}</strong>
+        <span>Plugins ranked by evidence, not stars</span>
+        <span class="mono">fork snapshot {{ snapshotAt }} UTC</span>
       </div>
     </div>
 
     <div class="repo-workspace">
-      <section class="repo-browse" aria-label="Repository list">
+      <section class="repo-browse" aria-label="Community artifact list">
         <div class="repo-controls">
           <div class="repo-search-row">
             <label class="repo-search">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
-              <input aria-label="Search public repositories" value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search repositories, authors, or topics…" />
+              <input aria-label="Search community artifacts" value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search names, authors, capabilities, or taxonomy…" />
             </label>
-            <label class="repo-sort"><span class="sr-only">Sort public repositories</span>
-              <select aria-label="Sort public repositories" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
-                <option value="stars">Most stars</option><option value="recent">Recently pushed</option><option value="name">Name A–Z</option>
+            <label class="repo-sort"><span class="sr-only">Sort community artifacts</span>
+              <select aria-label="Sort community artifacts" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
+                <option value="recommended">Recommended</option><option value="stars">Most stars</option><option value="recent">Recently pushed</option><option value="name">Name A–Z</option>
               </select>
             </label>
           </div>
@@ -546,7 +546,7 @@
                 <span class="repo-card-heading"><span class="repo-owner mono">{{ r.owner }} /</span><span class="repo-stars mono"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ r.starsLabel }}</span></span>
                 <strong class="repo-name">{{ r.name }}</strong>
                 <span class="repo-description">{{ r.description }}</span>
-                <span class="repo-card-meta"><span class="repo-kind">{{ r.type }}</span><span class="repo-language"><i></i>{{ r.language }}</span><span>{{ r.licenseLabel }}</span><span>{{ r.activity }}</span><span>{{ r.archivedLabel }}</span></span>
+                <span class="repo-card-meta"><span class="repo-kind">{{ r.type }}</span><span>{{ r.versionLabel }}</span><span class="repo-language"><i></i>{{ r.language }}</span><span>{{ r.licenseLabel }}</span><span>{{ r.riskLabel }}</span><span>{{ r.activity }}</span><span>{{ r.archivedLabel }}</span></span>
               </span>
               <span class="repo-chevron" aria-hidden="true">›</span>
             </button>
@@ -555,21 +555,23 @@
             <div class="repo-empty">
               <div class="repo-empty-icon" aria-hidden="true">⌕</div>
               <h2>{{ emptyTitle }}</h2><p>{{ emptyDescription }}</p>
-              <button class="repo-button" onClick="{{ resetCatalogFilters }}">Show all repositories</button>
+              <button class="repo-button" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button>
             </div>
           </sc-if>
-          <div class="repo-list-footnote">GitHub stars indicate popularity, not compatibility or security. Repository descriptions are supplied by their authors.</div>
+          <div class="repo-list-footnote">Plugin recommendations use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. GitHub stars are display metadata only.</div>
         </div>
       </section>
 
-      <aside class="repo-inspector" aria-label="Repository details">
+      <aside class="repo-inspector" aria-label="Community artifact details">
         <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ true }}">
-          <div class="repo-inspector-eyebrow"><span class="repo-eyebrow">REPOSITORY DETAILS</span><span class="repo-label">Metadata only</span></div>
+          <div class="repo-inspector-eyebrow"><span class="repo-eyebrow">ARTIFACT DETAILS</span><span class="repo-label">Metadata only</span></div>
           <div class="repo-detail-title"><span class="mono">{{ detail.owner }} /</span><h2>{{ detail.name }}</h2></div>
           <div class="repo-detail-stats"><span class="repo-stars">☆ {{ detail.starsLabel }} GitHub stars</span><span>{{ detail.type }}</span></div>
           <p class="repo-detail-description">{{ detail.description }}</p>
           <div class="repo-topic-list"><sc-for list="{{ detailTopics }}" as="topic" hint-placeholder-count="3"><span>{{ topic }}</span></sc-for></div>
-          <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open on GitHub ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div>
+          <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div>
+          <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
+          <sc-if value="{{ hasDiscussionLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailDiscussionUrl }}" target="_blank" rel="noopener noreferrer">Official community discussion ↗</a></sc-if>
 
           <div class="repo-notice"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 3 7v5c0 4 4 7 9 9 5-2 9-5 9-9V7Z"/><path d="M12 8v5m0 3v.1"/></svg><span><strong>Not executed or security verified.</strong><br />Browsing this snapshot does not download or run repository code.</span></div>
 
@@ -577,16 +579,17 @@
             <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="7"><div><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
           </dl><a class="repo-commit-link mono" href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a></div>
 
-          <div class="repo-detail-section"><h3>Compatibility & changes <span class="repo-label">Not analyzed</span></h3><p class="repo-muted">No fork differences, plugin inventory, or compatibility tests have been computed. The indexer will supply this evidence later.</p></div>
-          <div class="repo-detail-section"><h3>Bring into your workspace <span class="repo-label">Planned</span></h3>
-            <div class="repo-planned-actions"><button disabled title="Requires the local acquisition and sandbox backend.">Download & open locally</button><button disabled title="Requires the integration skill, disposable clone, and compatibility checks.">Integrate into existing version</button><button disabled title="Requires a verified container execution boundary.">Test in sandbox</button></div>
-            <p class="repo-muted">These actions are not connected. Future integration must preserve your current installation and pass sandbox checks before promotion.</p>
+          <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
+          <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
+          <div class="repo-detail-section"><h3>Acquire & compose <span class="repo-label">Later phase</span></h3>
+            <div class="repo-planned-actions"><button disabled title="Requires a signed acquisition record and pinned package artifact.">Download pinned artifact</button><button disabled title="Requires the package composer, conflict model, and disposable profile.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
+            <p class="repo-muted">Browsing cannot install, compose, upload, or execute code. Those actions remain separate from the metadata client until their signed-package and sandbox contracts land.</p>
           </div>
         </sc-if>
-        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No repository selected</h2><p>Adjust the filters to inspect a repository from this snapshot.</p></div></sc-if>
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>
       </aside>
     </div>
-    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Cached metadata · works without GitHub access</span><span>Unsigned development seed · ingester not connected</span></footer>
+    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Cached metadata · works without registry access</span><span>Unsigned development seeds · upload, download, and execution disabled</span></footer>
   </main>
   </sc-if>
 

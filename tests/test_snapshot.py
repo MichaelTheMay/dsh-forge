@@ -38,6 +38,21 @@ class SnapshotValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             embed.validate(self.snapshot)
 
+    def test_plugin_records_require_exact_package_integrity(self):
+        self.snapshot["supplemental_entries"][0]["package"]["integrity"] = "latest"
+        with self.assertRaises(ValueError):
+            embed.validate(self.snapshot)
+
+    def test_plugin_records_cannot_claim_execution_verification(self):
+        self.snapshot["supplemental_entries"][0]["verification"]["executed"] = True
+        with self.assertRaises(ValueError):
+            embed.validate(self.snapshot)
+
+    def test_package_browser_stays_empty_until_upload_contract_exists(self):
+        self.snapshot["package_entries"].append({"artifact_id": "package:sample"})
+        with self.assertRaises(ValueError):
+            embed.validate(self.snapshot)
+
     def test_signed_snapshot_is_not_accepted_without_a_verifier(self):
         self.snapshot["provenance"]["signature_status"] = "verified"
         with self.assertRaises(ValueError):

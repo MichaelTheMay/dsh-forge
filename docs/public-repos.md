@@ -1,18 +1,20 @@
-# Public Repos implementation boundary
+# Community browsers implementation boundary
 
-The latest design request preserves the current launcher appearance and adds
-Public Repos as a separate page. It explicitly selects ten upstream forks by
-their own GitHub star counts. This changes the earlier no-star-ranking scope
-for the seed; it does not add Forge-native stars, accounts, or social voting.
+The Community page contains three deliberately separate browsers: Plugins,
+Forks, and Packages. Plugins starts with a bounded, manually reviewed seed;
+Forks retains the ten-row upstream snapshot; Packages is a real route and empty
+collection awaiting a signed upload contract. It does not add Forge-native
+stars, accounts, publishing, installation, or social voting.
 
 ## Current implementation
 
 `web/index.html` retains the supplied DC template and launcher layout. Its
-catalog is replaced by the Public Repos page. The application logic is a
+catalog is presented as the Community page. The application logic is a
 precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
 that class without evaluating the inline design export as JavaScript.
-The new page supports search, sort, filters, details, source links, and copying a
-captured commit URL. The Plugins filter has an honest empty state.
+The page supports search, sort, type routing, details, source/package links, and
+copying a captured commit URL. Stable routes are `#plugins`, `#forks`, and
+`#packages`; the old `#public-repos` link continues to resolve to Forks.
 
 The metadata snapshot is embedded from `data/public-repos.seed.json`, with the
 ranked REST response retained in `data/github-forks.response.json`. Its source
@@ -30,16 +32,30 @@ The `github_id`, `node_id`, canonical URL, and captured SHA are all retained.
 the production adapter should follow the registry's opaque `node_id` identity
 contract and preserve both identifiers. Never key solely by a mutable name.
 
+Six plugin records are stored in `supplemental_entries`. Each record has an
+exact npm or MCPB version, registry integrity, an immutable repository commit,
+taxonomy labels, compatibility notes, a static-review rank, and explicit
+unexecuted verification state. The ranking considers capability evidence,
+compatibility, maintenance, reported license, and security risk. Stars are
+shown but do not affect the recommendation order. Presence of manifests,
+tests, or workflows is evidence that files exist—not evidence that tests pass.
+
+`package_entries` must remain empty in this release. The Packages browser is
+for future user-published, multi-plugin bundles rather than individual npm or
+MCPB artifacts. `scripts/embed_catalog.py` rejects non-empty package data until
+the schema, signatures, uploader authorization, moderation, and immutable blob
+storage contract exist.
+
 ## Connecting the ingester later
 
 The collaborator owns the registry/ingester. Do not add an automatic scraper to
 this launcher. `scripts/seed_catalog.py` is a manually invoked maintenance tool,
 not a service and not an app-startup action.
 
-`supplemental_entries` is empty. After the colleague supplies a real public
-repository URL, it can be added separately with `seed_rank: null`; do not insert
-it into the top ten unless it actually ranks there. Classify plugins based on
-evidence, not just a repository name or the presence of some plugin code.
+Future plugin records remain separate from the top-ten fork ranking with
+`seed_rank: null`. Classify plugins using manifest and provenance evidence, not
+only a repository name, topic, store listing, or the presence of plugin-like
+code. A fork must not enter the ranked ten unless it actually ranks there.
 
 The future registry adapter should import a validated, signed, versioned
 snapshot from the registry transactionally and use its local index. This
@@ -53,8 +69,8 @@ not treat a production signature as verified without a real verifier.
 
 ## Deferred actions
 
-Download/open locally and integration into an existing version remain disabled.
-No code from a Public Repos catalog entry is cloned, installed, built, or
+Upload, download, composition, and integration into an existing version remain
+disabled. No code from a Community catalog entry is cloned, installed, built, or
 executed by the browser. If a community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
@@ -76,6 +92,8 @@ with no fake live cells.
 
 Tests cover catalog behavior, metadata safety, session-protected API access,
 scanner false positives, protected ports, process ownership, logs, and stop.
+They also enforce the three browser routes, exact plugin package pins, empty
+package collection, and separation between manifest review and execution.
 Browser layout testing and production runtime adapters remain release tasks.
 This is not a complete production launcher. The bounded Apptainer probe is an
 initial foreign-code test boundary, not a claim of complete hostile-code safety.

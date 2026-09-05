@@ -258,7 +258,7 @@ def main():
         parser.exit(1, f"Could not bind loopback port {args.port}: {error}. Try --port {args.port + 1}.\n")
     print(f"DSH Forge launcher: http://127.0.0.1:{args.port}/#launch", flush=True)
     status = launcher.status()
-    print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Public Repos remains metadata-only.", flush=True)
+    print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Community browsers remain metadata-only.", flush=True)
     if not status["trees"]:
         print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness.", flush=True)
     sandbox_status = status["sandbox"]
