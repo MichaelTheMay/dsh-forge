@@ -16,15 +16,30 @@ def validate(snapshot):
         raise ValueError("Unsupported snapshot version or upstream")
     entries = snapshot.get("entries")
     extras = snapshot.get("supplemental_entries", [])
+    packages = snapshot.get("package_entries", [])
     if not isinstance(entries, list) or len(entries) != 10:
         raise ValueError("The seed must contain exactly ten ranked forks")
     if not isinstance(extras, list) or len(extras) > 100:
         raise ValueError("Invalid supplemental entries")
+    if packages != []:
+        raise ValueError("Package uploads are not connected; the package seed must remain empty")
+    if snapshot.get("package_browser") != {
+        "status": "schema_pending",
+        "upload_enabled": False,
+        "download_enabled": False,
+        "execution_enabled": False,
+        "note": "This collection is reserved for user-published multi-plugin bundles. No sample packages are fabricated.",
+    }:
+        raise ValueError("Invalid package-browser boundary")
+    supplemental = snapshot.get("supplemental_snapshot", {})
+    if supplemental.get("verification_status") != "metadata_only_unexecuted":
+        raise ValueError("Supplemental plugins must remain explicitly unexecuted")
     if not isinstance(snapshot.get("fetched_at"), str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", snapshot["fetched_at"]):
         raise ValueError("Expected an explicit UTC snapshot time")
     if snapshot.get("provenance", {}).get("signature_status") != "unsigned_development_seed":
         raise ValueError("This prototype does not verify signed production snapshots")
     ids = set()
+    curation_ranks = set()
     for index, entry in enumerate(entries + extras):
         github_id = entry.get("github_id")
         if type(github_id) is not int or github_id <= 0 or github_id in ids:
@@ -53,15 +68,50 @@ def validate(snapshot):
             raise ValueError("Invalid topics")
         if entry.get("verification") != {"metadata_only": True, "executed": False, "security_verified": False}:
             raise ValueError("Only unexecuted, unverified metadata is accepted")
-        if entry.get("analysis_status") != "not_analyzed":
-            raise ValueError("Analysis is not implemented in this prototype")
         if index < 10:
+            if entry.get("analysis_status") != "not_analyzed":
+                raise ValueError("Fork analysis is not implemented in this prototype")
             if entry.get("seed_rank") != index + 1 or entry["artifact_type"] != "fork":
                 raise ValueError("Seed ranks must be the ten forks in GitHub order")
             if entry.get("source_repository") != UPSTREAM and entry.get("parent_repository") != UPSTREAM:
                 raise ValueError("Seed entry is outside the upstream fork network")
-        elif entry.get("seed_rank") is not None:
-            raise ValueError("Supplemental repositories must not enter the top-ten ranking")
+        else:
+            if entry.get("seed_rank") is not None or entry.get("artifact_type") != "plugin":
+                raise ValueError("Supplemental plugins must not enter the top-ten fork ranking")
+            if entry.get("analysis_status") != "manifest_reviewed":
+                raise ValueError("Plugin records must distinguish manifest review from execution")
+            package = entry.get("package")
+            if not isinstance(package, dict) or package.get("registry") not in {"npm", "mcpb"}:
+                raise ValueError("Plugin package provenance is required")
+            if not isinstance(package.get("name"), str) or not re.fullmatch(r"[A-Za-z0-9@/_.-]+", package["name"]):
+                raise ValueError("Invalid package name")
+            if not isinstance(package.get("version"), str) or not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z.+-]*", package["version"]):
+                raise ValueError("An exact package version is required")
+            if not isinstance(package.get("url"), str) or not package["url"].startswith("https://"):
+                raise ValueError("Canonical package URL is required")
+            integrity = package.get("integrity", "")
+            if not (integrity.startswith("sha512-") or re.fullmatch(r"sha256-[0-9a-f]{64}", integrity)):
+                raise ValueError("Package integrity is required")
+            release_commit = package.get("release_commit")
+            if release_commit is not None and not re.fullmatch(r"[0-9a-f]{40}", release_commit):
+                raise ValueError("Invalid package release commit")
+            curation = entry.get("curation")
+            rank = curation.get("rank") if isinstance(curation, dict) else None
+            if type(rank) is not int or rank <= 0 or rank in curation_ranks:
+                raise ValueError("Invalid or duplicate plugin curation rank")
+            curation_ranks.add(rank)
+            taxonomy = curation.get("taxonomy")
+            if not isinstance(taxonomy, list) or not taxonomy or any(not isinstance(t, str) or not t for t in taxonomy):
+                raise ValueError("Plugin taxonomy is required")
+            scores = curation.get("scores")
+            if not isinstance(scores, dict) or set(scores) != {"capability_evidence", "compatibility", "maintenance", "license"}:
+                raise ValueError("Plugin evidence scores are required")
+            if any(type(score) is not int or score < 1 or score > 5 for score in scores.values()):
+                raise ValueError("Plugin evidence scores must be integers from 1 to 5")
+            if curation.get("security_risk") not in {"low", "medium", "medium-high", "high", "critical"}:
+                raise ValueError("Invalid security-risk label")
+    if curation_ranks != set(range(1, len(extras) + 1)):
+        raise ValueError("Plugin curation ranks must be contiguous")
     stars = [entry["github_stars"] for entry in entries]
     if stars != sorted(stars, reverse=True):
         raise ValueError("Seed is not ordered by GitHub stars")

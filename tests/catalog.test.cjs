@@ -18,7 +18,12 @@ new Function('window', 'navigator', script)(windowStub, navigatorStub);
 const Component = windowStub.__dcPrecompiledLogicFactories.$root(Logic);
 const CATALOG = Component.catalog;
 const CATALOG_SNAPSHOT = Component.catalogSnapshot;
-function instance(props = {}) { const c = new Component(props); c.flash = value => { c.lastMessage = value; }; return c; }
+function instance(props = {}, hash = '') {
+  windowStub.location.hash = hash;
+  const c = new Component(props);
+  c.flash = value => { c.lastMessage = value; };
+  return c;
+}
 
 test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   const inline = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
@@ -28,21 +33,33 @@ test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   assert.equal(typeof Component, 'function');
 });
 
-test('embedded snapshot exactly matches the JSON and GitHub top-ten response', () => {
+test('embedded snapshot preserves ten forks, evidence-ranked plugins, and an empty package collection', () => {
   assert.deepEqual(CATALOG_SNAPSHOT, snapshot);
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
-  assert.equal(CATALOG.length, 10);
-  assert.deepEqual(CATALOG.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
-  assert.equal(new Set(CATALOG.map(r => r.github_id)).size, 10);
+  const forks = CATALOG.filter(r => r.type === 'fork');
+  const plugins = CATALOG.filter(r => r.type === 'plugin');
+  const packages = CATALOG.filter(r => r.type === 'package');
+  assert.equal(CATALOG.length, 16);
+  assert.equal(forks.length, 10);
+  assert.equal(plugins.length, 6);
+  assert.equal(packages.length, 0);
+  assert.deepEqual(forks.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
+  assert.deepEqual(plugins.map(r => r.curation.rank), [1, 2, 3, 4, 5, 6]);
+  assert(plugins.every(r => r.package.version && /^(?:sha512|sha256)-/.test(r.package.integrity)));
+  assert.equal(new Set(CATALOG.map(r => r.github_id)).size, 16);
   assert(CATALOG.every(r => /^[a-f0-9]{40}$/.test(r.head_sha)));
 });
-test('launcher remains the default and Public Repos is a separate view', () => {
+test('launcher remains default and Community has stable plugin, fork, and package routes', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
   assert.equal(c.renderVals().modeLabel, 'portable preview');
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
-  assert.equal(windowStub.location.hash, 'public-repos');
+  assert.equal(windowStub.location.hash, 'plugins');
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  assert.equal(windowStub.location.hash, 'forks');
+  c.renderVals().repoTypes.find(f => f.id === 'package').select();
+  assert.equal(windowStub.location.hash, 'packages');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
 });
 test('preview contains no personal-name or private-home leakage', () => {
@@ -135,33 +152,46 @@ test('detected community trees use the probe endpoint and never become complete 
   });
   assert.match(c.lastMessage, /sandbox test passed/);
 });
-test('most-starred order retains GitHub order for ties', () => {
-  const rows = instance().renderVals().results;
+test('fork star sorting retains captured GitHub order for ties', () => {
+  const c = instance();
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().setCatalogSort({ target: { value: 'stars' } });
+  const rows = c.renderVals().results;
+  const forks = CATALOG.filter(r => r.type === 'fork');
   const stars = rows.map(r => r.github_stars);
   assert.deepEqual(stars, [...stars].sort((a,b) => b-a));
   for (const count of new Set(stars)) {
     assert.deepEqual(rows.filter(r => r.github_stars === count).map(r => r.id),
-      CATALOG.filter(r => r.github_stars === count).map(r => r.id));
+      forks.filter(r => r.github_stars === count).map(r => r.id));
   }
 });
 test('search handles case, whitespace, and multiple terms', () => {
-  const c = instance(); const target = CATALOG[1];
+  const c = instance(); const target = CATALOG.filter(r => r.type === 'plugin')[1];
   c.renderVals().setQuery({ target: { value: '  ' + target.owner.toUpperCase() + '   ' + target.name + '  ' } });
   assert.deepEqual(c.renderVals().results.map(r => r.id), [target.id]);
 });
 test('filtered-out selection never leaves stale detail content', () => {
-  const c = instance(); c.renderVals().results[3].select();
-  c.renderVals().setQuery({ target: { value: CATALOG[4].slug } });
-  assert.equal(c.renderVals().detail.id, CATALOG[4].id);
+  const c = instance(); const plugins = CATALOG.filter(r => r.type === 'plugin');
+  c.renderVals().results[3].select();
+  c.renderVals().setQuery({ target: { value: plugins[4].slug } });
+  assert.equal(c.renderVals().detail.id, plugins[4].id);
   c.renderVals().setQuery({ target: { value: 'no-such-repository-000' } });
   assert(c.renderVals().noResults); assert(!c.renderVals().hasDetail);
   assert.deepEqual(c.renderVals().detailRows, []);
 });
-test('Plugins has an honest empty state and reset recovers all ten forks', () => {
-  const c = instance(); c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+test('three browsers expose curated plugins, captured forks, and an honest package empty state', () => {
+  const c = instance();
+  assert.equal(c.renderVals().results.length, 6);
+  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['plugin', 6], ['fork', 10], ['package', 0]]);
+  c.renderVals().repoTypes.find(f => f.id === 'package').select();
   assert.equal(c.renderVals().results.length, 0);
-  assert.equal(c.renderVals().emptyTitle, 'No plugins imported yet');
-  c.renderVals().resetCatalogFilters(); assert.equal(c.renderVals().results.length, 10);
+  assert.equal(c.renderVals().emptyTitle, 'No community packages published yet');
+  assert.match(c.renderVals().emptyDescription, /No samples are fabricated/);
+  c.renderVals().resetCatalogFilters();
+  assert.equal(c.renderVals().results.length, 6);
+  assert.equal(windowStub.location.hash, 'plugins');
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  assert.equal(c.renderVals().results.length, 10);
 });
 test('recent and name sort change order without changing catalog membership', () => {
   const c = instance(); c.renderVals().setCatalogSort({ target: { value: 'recent' } });
@@ -177,8 +207,9 @@ test('license filter is based on reported metadata, not a verification claim', (
   assert(CATALOG.every(r => r.verification.security_verified === false));
 });
 test('copy pinned ref actually writes the captured commit URL', async () => {
-  const c = instance(); await c.renderVals().copyRef();
-  assert.equal(clipboard.at(-1), snapshot.entries[0].repository_url + '/tree/' + snapshot.entries[0].head_sha);
+  const c = instance(); const plugin = snapshot.supplemental_entries[0];
+  await c.renderVals().copyRef();
+  assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
   assert.equal(c.lastMessage, 'Copied repository reference');
 });
 test('catalog interactions cannot add, stop, or modify local cells', () => {
@@ -192,5 +223,7 @@ test('public code actions are disabled and the snapshot has no fabricated analys
   assert.equal((section.match(/<button disabled title=/g) || []).length, 3);
   assert(!/onClick="{{.*(?:install|clone|run|sandbox)/i.test(section));
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
-  assert(CATALOG.every(r => r.analysis_status === 'not_analyzed'));
+  assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
+  assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
+  assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
 });

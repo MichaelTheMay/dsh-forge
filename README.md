@@ -8,14 +8,14 @@ The public ecosystem crawler and catalog publisher live in the separate
 
 ## Status
 
-The first local fleet launcher and **Public Repos** interface are available.
+The first local fleet launcher and **Community** interface are available.
 The loopback sidecar discovers configured DSH trees without executing candidate
 code, pins the two current official release installations, and repeatedly starts
 trusted local cells with automatic ports, separate writable homes, managed
 workspaces, process groups, recent logs, clone/restart controls, and a live
 inspector. It controls only processes whose PID and process-start identity it
-recorded. Public Repos contains a dated metadata snapshot of ten real community
-forks.
+recorded. Community contains a dated metadata snapshot of ten real community
+forks plus six evidence-ranked plugin candidates.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
@@ -76,7 +76,9 @@ required Apptainer configuration. Prompt delivery and normalized session
 transcripts remain fail-closed capabilities for their follow-up adapters.
 
 Open <http://127.0.0.1:3090/> for Launch, or
-<http://127.0.0.1:3090/#public-repos> for the separate browser. The server binds
+<http://127.0.0.1:3090/#plugins>, <http://127.0.0.1:3090/#forks>, or
+<http://127.0.0.1:3090/#packages> for the separate browsers. The old
+`#public-repos` route remains a Forks alias. The server binds
 only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
 port with `--port 3091`; the script does not stop existing processes.
 
@@ -123,20 +125,24 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   explicit SHA-256 pin. The source is mounted read-only; home and workspace are
   disposable; launcher secrets and network access are excluded.
 
-## Public Repos
+## Community browsers
 
-- Search repository names, authors, descriptions, and topics.
-- Sort by GitHub stars, most recent push, or name.
-- Inspect source links, captured commit references, licenses reported by GitHub,
-  and collection provenance.
-- Browse the seed without GitHub access. Plugins correctly shows an empty state
-  until actual plugin records arrive.
+- Browse Plugins, Forks, and Packages through stable, shareable routes.
+- Search names, authors, descriptions, capabilities, and taxonomy labels.
+- Sort by static-review recommendation, GitHub stars, most recent push, or name.
+- Inspect source links, exact package versions and integrity, captured commit
+  references, compatibility notes, reported licenses, risk, and provenance.
+- Browse six evidence-ranked plugin records and ten captured forks without
+  GitHub or registry access. Packages has an honest empty state until its signed
+  upload and bundle schema exists.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
 fork-network crawl or a production-verified catalog. GitHub stars indicate
-popularity, not compatibility or security. No fork source code is included or
-executed. The browser never contacts GitHub itself.
+popularity, not compatibility or security. Plugin recommendation order uses
+static evidence, compatibility, maintenance, license, and risk—not stars. No
+community source code is included or executed. The browser never contacts
+GitHub, npm, or the community catalog itself.
 
 ## Development
 
@@ -167,5 +173,5 @@ runs on app startup and is not the registry crawler. An optional `GITHUB_TOKEN`
 may be supplied in the environment; never embed credentials in the frontend.
 
 Current UI scope, the registry connection contract, and deferred execution
-features are documented in [Public Repos implementation](docs/public-repos.md).
+features are documented in [Community browsers implementation](docs/public-repos.md).
 The existing research notes remain in `docs/research/`.

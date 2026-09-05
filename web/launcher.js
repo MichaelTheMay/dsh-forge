@@ -463,7 +463,450 @@ const CATALOG_SNAPSHOT = {
       }
     }
   ],
-  "supplemental_entries": []
+  "supplemental_snapshot": {
+    "snapshot_id": "manual-plugin-review-2026-09-05",
+    "reviewed_at": "2026-09-05T20:00:00Z",
+    "selection": "Evidence-ranked candidates surfaced through the official Show Your Plugins category, repository manifests, and package-registry metadata.",
+    "ranking": "Capability evidence, compatibility, maintenance, license, then security risk. GitHub stars are display metadata only.",
+    "bounded_sources": [
+      "https://github.com/deepseek-ai/deepseek-harness/discussions/categories/show-your-plugins",
+      "https://github.com/topics/dsh-plugin",
+      "https://api.deepseek1024.com/v1/plugins/search",
+      "https://registry.npmjs.org"
+    ],
+    "verification_status": "metadata_only_unexecuted"
+  },
+  "supplemental_entries": [
+    {
+      "artifact_id": "github:1350484605",
+      "github_id": 1350484605,
+      "node_id": "R_kgDOUH7CfQ",
+      "full_name": "rogerdigital/dsh-vet",
+      "owner": "rogerdigital",
+      "name": "dsh-vet",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/rogerdigital/dsh-vet",
+      "description": "Static permission and supply-chain review for DeepSeek Harness plugins, emitting a versioned dsh-vet/v1 report.",
+      "description_origin": "repository_and_discussion_summary",
+      "topics": [
+        "deepseek-harness",
+        "plugin-security",
+        "static-analysis",
+        "supply-chain"
+      ],
+      "language": "TypeScript",
+      "github_stars": 1,
+      "seed_rank": null,
+      "forks_count": 0,
+      "pushed_at": "2026-09-04T02:51:31Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "01857c72998c7ac7ad5a7241d13a8847c024558e",
+      "parent_repository": null,
+      "source_repository": "rogerdigital/dsh-vet",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_package_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null,
+        "summary": "Node >=20; manifest declares fs, shell, and web audit seams, but no exact Harness range."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "dsh-vet",
+        "version": "0.3.0",
+        "published_at": "2026-09-02T08:15:36.999Z",
+        "release_commit": "3005968cc708d12b7e1f98f1a312239b5312ce7f",
+        "integrity": "sha512-HdQoj+ZxoYJRp3/PUK7fIIc/bj6FhyF86SDxyKapRQB1X23GY9hPM7PNoarzAvSa7k4isv6nrnXR8S7IqfQ0Ig==",
+        "url": "https://www.npmjs.com/package/dsh-vet/v/0.3.0"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5423",
+      "curation": {
+        "rank": 1,
+        "taxonomy": [
+          "ecosystem governance",
+          "static package audit",
+          "supply-chain review"
+        ],
+        "scores": {
+          "capability_evidence": 4,
+          "compatibility": 3,
+          "maintenance": 5,
+          "license": 5
+        },
+        "security_risk": "medium",
+        "evidence": "Manifest, test tree, workflow, and package metadata observed; published test results were not reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1341363840",
+      "github_id": 1341363840,
+      "node_id": "R_kgDOT_OWgA",
+      "full_name": "lemonxiny55/dsh-code-index",
+      "owner": "lemonxiny55",
+      "name": "dsh-code-index",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/lemonxiny55/dsh-code-index",
+      "description": "Tree-sitter-backed symbol index, code search, and bounded repository maps for Harness agent context.",
+      "description_origin": "package_manifest",
+      "topics": [
+        "code-index",
+        "deepseek-harness",
+        "tree-sitter",
+        "code-search"
+      ],
+      "language": "TypeScript",
+      "github_stars": 3,
+      "seed_rank": null,
+      "forks_count": 0,
+      "pushed_at": "2026-09-05T04:39:34Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "de81accbc5104fa2a872d692de7205b59d1e6130",
+      "parent_repository": null,
+      "source_repository": "lemonxiny55/dsh-code-index",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_package_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": ">=0.1.0-rc.1 \u003c0.2.0-0 for @deepseek-ai/dsh-tools",
+        "observed_base": null,
+        "summary": "Node >=22; Cordis ^4.0.1; release 0.3.1 updates web-tree-sitter to >=0.25 compatibility."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "dsh-code-index",
+        "version": "0.3.1",
+        "published_at": "2026-09-05T04:18:31.854Z",
+        "release_commit": null,
+        "integrity": "sha512-rTCRRKrw/qJa7BQSE/CRV+I95KQnlgv35CDg1QHHu9cFEO6xH5ugLL4NDdcKoZH4x8fPxrITVIsXbe8rgUpWxg==",
+        "url": "https://www.npmjs.com/package/dsh-code-index/v/0.3.1"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5623",
+      "curation": {
+        "rank": 2,
+        "taxonomy": [
+          "agent intelligence",
+          "code navigation",
+          "context retrieval"
+        ],
+        "scores": {
+          "capability_evidence": 4,
+          "compatibility": 4,
+          "maintenance": 5,
+          "license": 5
+        },
+        "security_risk": "medium-high",
+        "evidence": "DSH bundle manifest, test tree, CI, and package metadata observed; published test totals were not reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1295914860",
+      "github_id": 1295914860,
+      "node_id": "R_kgDOTT4XbA",
+      "full_name": "Liyuan1992/rawmem",
+      "owner": "Liyuan1992",
+      "name": "rawmem",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/Liyuan1992/rawmem",
+      "description": "Local-first, append-only evidence ledger with bounded read-only MCP access to agent session history.",
+      "description_origin": "mcp_manifest_and_discussion_summary",
+      "topics": [
+        "agent-memory",
+        "evidence-ledger",
+        "local-first",
+        "mcp",
+        "python"
+      ],
+      "language": "Python",
+      "github_stars": 1,
+      "seed_rank": null,
+      "forks_count": 0,
+      "pushed_at": "2026-09-02T23:16:10Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "dd0cf91726b903835a1517652e92ec95b4134e68",
+      "parent_repository": null,
+      "source_repository": "Liyuan1992/rawmem",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_manifest_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null,
+        "summary": "Python >=3.10 MCP sidecar with a DSH example configuration; not a native npm/Cordis bundle."
+      },
+      "package": {
+        "registry": "mcpb",
+        "name": "rawmem",
+        "version": "0.7.1",
+        "published_at": "2026-09-02T23:12:49Z",
+        "release_commit": "dd0cf91726b903835a1517652e92ec95b4134e68",
+        "integrity": "sha256-184b88f682bf27b7f06b4061f25972e572fbd3b22b147171a6c41dc9e6379266",
+        "url": "https://github.com/Liyuan1992/rawmem/releases/tag/v0.7.1"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
+      "curation": {
+        "rank": 3,
+        "taxonomy": [
+          "memory",
+          "session evidence",
+          "history retrieval"
+        ],
+        "scores": {
+          "capability_evidence": 4,
+          "compatibility": 3,
+          "maintenance": 4,
+          "license": 5
+        },
+        "security_risk": "medium",
+        "evidence": "MCP manifest, checksummed artifact, DSH adapter tests, and privacy tests observed; tests were not reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1289127532",
+      "github_id": 1289127532,
+      "node_id": "R_kgDOTNaGbA",
+      "full_name": "Liyuan1992/memdsl",
+      "owner": "Liyuan1992",
+      "name": "memdsl",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/Liyuan1992/memdsl",
+      "description": "Declarative long-term agent memory with linting, queries, and a propose-review-approve workflow.",
+      "description_origin": "mcp_manifest_and_discussion_summary",
+      "topics": [
+        "agent-memory",
+        "declarative-language",
+        "local-first",
+        "mcp"
+      ],
+      "language": "Python",
+      "github_stars": 1,
+      "seed_rank": null,
+      "forks_count": 0,
+      "pushed_at": "2026-09-02T23:17:34Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "a061bc4efb9a0dacab04c2fa847bcf4b236146b4",
+      "parent_repository": null,
+      "source_repository": "Liyuan1992/memdsl",
+      "license": {
+        "spdx": "MIT",
+        "status": "license_file_and_manifest_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": null,
+        "summary": "Python >=3.9; MCP extra requires Python >=3.10; DSH example configuration is present."
+      },
+      "package": {
+        "registry": "mcpb",
+        "name": "memdsl",
+        "version": "0.9.2",
+        "published_at": "2026-09-02T23:12:49Z",
+        "release_commit": "a061bc4efb9a0dacab04c2fa847bcf4b236146b4",
+        "integrity": "sha256-244f04d530917ff3fee35e419bf49f9b88d8395ddacfd24b1fdcda365298dd67",
+        "url": "https://github.com/Liyuan1992/memdsl/releases/tag/v0.9.2"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
+      "curation": {
+        "rank": 4,
+        "taxonomy": [
+          "memory",
+          "long-term policy",
+          "human approval"
+        ],
+        "scores": {
+          "capability_evidence": 4,
+          "compatibility": 3,
+          "maintenance": 4,
+          "license": 5
+        },
+        "security_risk": "medium-high",
+        "evidence": "MCP manifest, checksummed artifact, policy/review tests, and DSH compatibility tests observed; tests were not reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1357180789",
+      "github_id": 1357180789,
+      "node_id": "R_kgDOUOTvdQ",
+      "full_name": "argszero/cordis-plugin-schedule-cron",
+      "owner": "argszero",
+      "name": "cordis-plugin-schedule-cron",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/argszero/cordis-plugin-schedule-cron",
+      "description": "Cron-driven autonomous task creation for Harness agents with monotonic scheduling cursors.",
+      "description_origin": "repository_and_discussion_summary",
+      "topics": [
+        "deepseek-harness",
+        "scheduling",
+        "cron",
+        "autonomous-agents"
+      ],
+      "language": "TypeScript",
+      "github_stars": 0,
+      "seed_rank": null,
+      "forks_count": 0,
+      "pushed_at": "2026-09-04T13:37:36Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "43a5dd072bef069d7a17e9a41d9f933571176573",
+      "parent_repository": null,
+      "source_repository": "argszero/cordis-plugin-schedule-cron",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_package_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": ">=0.1.0 for six DSH peers",
+        "observed_base": null,
+        "summary": "Node ^22.19 or >=24; Cordis >=4 \u003c5; broad DSH peers have no upper bounds and no DSH bundle manifest."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "@argszero/cordis-plugin-schedule-cron",
+        "version": "0.1.0",
+        "published_at": "2026-09-04T13:37:17.972Z",
+        "release_commit": "444974a39f2dabf2dd18e0920c8524307502b40c",
+        "integrity": "sha512-aYtCRyKFFmLSVuS3XIeD8hvUa8uPMGAneIevm3k0ZpTv899j2Qq0xTiTSzXX0ZPq3GlxEkGP/ZOs7aAaAeYw3w==",
+        "url": "https://www.npmjs.com/package/@argszero/cordis-plugin-schedule-cron/v/0.1.0"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5641",
+      "curation": {
+        "rank": 5,
+        "taxonomy": [
+          "orchestration",
+          "scheduling",
+          "autonomous task creation"
+        ],
+        "scores": {
+          "capability_evidence": 3,
+          "compatibility": 3,
+          "maintenance": 5,
+          "license": 5
+        },
+        "security_risk": "high",
+        "evidence": "Package manifest, logic-test script, and repository source observed; published test results were not reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
+      "artifact_id": "github:1333974533",
+      "github_id": 1333974533,
+      "node_id": "R_kgDOT4LWBQ",
+      "full_name": "Noob-stupid/dsh-plugin-hub",
+      "owner": "Noob-stupid",
+      "name": "dsh-plugin-hub",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/Noob-stupid/dsh-plugin-hub",
+      "description": "Plugin marketplace and profile manager with compatibility gates, enable/disable controls, and framework upgrade rollback.",
+      "description_origin": "package_manifest_and_discussion_summary",
+      "topics": [
+        "deepseek-harness",
+        "plugin-manager",
+        "marketplace",
+        "compatibility-gate"
+      ],
+      "language": "JavaScript",
+      "github_stars": 78,
+      "seed_rank": null,
+      "forks_count": 8,
+      "pushed_at": "2026-09-05T19:37:55Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "54dcbc18af52043f005a9760655a277154cfc810",
+      "parent_repository": null,
+      "source_repository": "Noob-stupid/dsh-plugin-hub",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_package_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": null,
+        "observed_base": "author reports a compatibility gate for current DSH release-candidate layouts",
+        "summary": "Native web bundle injects DSH client runtime, locale, and UI-settings packages; no Node engine is declared."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "@noob-stupid/dsh-plugin-console",
+        "version": "0.3.27",
+        "published_at": "2026-09-04T10:17:16.288Z",
+        "release_commit": "15bb4112f32edb496fef95daf3a7750c05607869",
+        "integrity": "sha512-ZOv/rdQdGOiLrqCjyjIHhb/F74f+aM7TTZgY9MZPE9EN7Sv36Notvp2gzfCqx+YFurQGGc7A4G4u8TfDEb1G0Q==",
+        "url": "https://www.npmjs.com/package/@noob-stupid/dsh-plugin-console/v/0.3.27"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5564",
+      "curation": {
+        "rank": 6,
+        "taxonomy": [
+          "discovery",
+          "plugin lifecycle",
+          "compatibility gating"
+        ],
+        "scores": {
+          "capability_evidence": 4,
+          "compatibility": 3,
+          "maintenance": 5,
+          "license": 5
+        },
+        "security_risk": "critical",
+        "evidence": "DSH bundle/client manifest and standalone test files observed; package has no test script and no tests were reproduced."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    }
+  ],
+  "package_entries": [],
+  "package_browser": {
+    "status": "schema_pending",
+    "upload_enabled": false,
+    "download_enabled": false,
+    "execution_enabled": false,
+    "note": "This collection is reserved for user-published multi-plugin bundles. No sample packages are fabricated."
+  }
 };
 // CATALOG_SNAPSHOT_END
 
@@ -472,18 +915,39 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-const CATALOG = [...CATALOG_SNAPSHOT.entries, ...(CATALOG_SNAPSHOT.supplemental_entries || [])].map(a => ({
+const CATALOG = [
+  ...CATALOG_SNAPSHOT.entries,
+  ...(CATALOG_SNAPSHOT.supplemental_entries || []),
+  ...(CATALOG_SNAPSHOT.package_entries || [])
+].map(a => ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
   url: a.repository_url, base: a.head_sha || 'Not captured',
-  terms: (a.topics || []).join(' '), language: a.language || 'Not reported',
+  terms: [
+    ...(a.topics || []),
+    ...((a.curation && a.curation.taxonomy) || []),
+    a.package && a.package.name,
+    a.package && a.package.version
+  ].filter(Boolean).join(' '),
+  language: a.language || 'Not reported',
   licenseOk: !!a.license.spdx, licenseLabel: a.license.spdx || 'License unknown',
   starsLabel: Number.isInteger(a.github_stars) ? a.github_stars.toLocaleString('en-US') : '—',
   activity: 'Pushed ' + catalogDate(a.pushed_at),
-  rankLabel: a.seed_rank ? '#' + String(a.seed_rank).padStart(2, '0') : '+',
+  rankLabel: a.seed_rank
+    ? 'F' + String(a.seed_rank).padStart(2, '0')
+    : (a.curation && a.curation.rank ? 'P' + String(a.curation.rank).padStart(2, '0') : 'B'),
+  versionLabel: a.package ? a.package.registry + ' · ' + a.package.version : '',
+  riskLabel: a.curation ? a.curation.security_risk + ' risk' : '',
   archivedLabel: a.archived ? 'Archived' : '',
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
 }));
+
+function catalogRoute(hash) {
+  if (hash === '#forks' || hash === '#public-repos') return { view: 'catalog', type: 'fork' };
+  if (hash === '#packages') return { view: 'catalog', type: 'package' };
+  if (hash === '#plugins' || hash === '#community') return { view: 'catalog', type: 'plugin' };
+  return { view: 'launch', type: 'plugin' };
+}
 
 const COLUMNS = ['Cell / state', 'Tree', 'Surface', 'URL', 'Process identity', 'Uptime', 'Home / isolation', 'Workspace', 'Trust', 'Health', 'Actions'];
 
@@ -492,8 +956,9 @@ function pad(n) { return n < 10 ? '0' + n : '' + n; }
 class Component extends DCLogic {
   constructor(props) {
     super(props);
+    const initialRoute = catalogRoute(typeof window !== 'undefined' ? window.location.hash : '');
     this.state = {
-      view: typeof window !== 'undefined' && window.location.hash === '#public-repos' ? 'catalog' : 'launch',
+      view: initialRoute.view,
       treeId: PREVIEW_TREES[0].id,
       trees: PREVIEW_TREES,
       surface: 'web',
@@ -509,8 +974,8 @@ class Component extends DCLogic {
       preview: null,
       logCell: null,
       query: '',
-      catalogType: 'all',
-      catalogSort: 'stars',
+      catalogType: initialRoute.type,
+      catalogSort: 'recommended',
       knownLicenseOnly: false,
       artifactId: CATALOG[0] ? CATALOG[0].id : null,
       toast: '',
@@ -540,7 +1005,10 @@ class Component extends DCLogic {
       const cell = this.state.view === 'launch' && this.state.cells.find(item => item.id === this.state.selectedCell);
       if (cell) this.inspectCell(cell, this.state.inspectorTab);
     }, 3000);
-    this.hashListener = () => this.setState({ view: window.location.hash === '#public-repos' ? 'catalog' : 'launch' });
+    this.hashListener = () => {
+      const route = catalogRoute(window.location.hash);
+      this.setState({ view: route.view, catalogType: route.type });
+    };
     window.addEventListener('hashchange', this.hashListener);
     this.refreshStatus(true);
   }
@@ -552,9 +1020,13 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
-  navigate(view) {
-    this.setState({ view });
-    if (typeof window !== 'undefined') window.location.hash = view === 'catalog' ? 'public-repos' : 'launch';
+  navigate(view, type = 'plugin') {
+    this.setState({ view, catalogType: type });
+    if (typeof window !== 'undefined') {
+      window.location.hash = view === 'catalog'
+        ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
+        : 'launch';
+    }
   }
 
   async copyRepositoryRef(detail) {
@@ -901,34 +1373,65 @@ class Component extends DCLogic {
     const filtered = CATALOG.filter(a => {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
-        (s.catalogType === 'all' || a.type === s.catalogType) &&
+        a.type === s.catalogType &&
         (!s.knownLicenseOnly || a.licenseOk);
     }).sort((a, b) => {
       if (s.catalogSort === 'name') return a.slug.localeCompare(b.slug);
       if (s.catalogSort === 'recent') return (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0) || (a.seed_rank || 999) - (b.seed_rank || 999);
+      if (s.catalogSort === 'recommended') {
+        const aRank = (a.curation && a.curation.rank) || a.seed_rank || 999;
+        const bRank = (b.curation && b.curation.rank) || b.seed_rank || 999;
+        return aRank - bRank;
+      }
       return (b.github_stars ?? -1) - (a.github_stars ?? -1) || (a.seed_rank || 999) - (b.seed_rank || 999);
     });
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
     const results = filtered.map(a => ({
       ...a, selected: a.id === detail.id,
-      accessibleLabel: 'Inspect ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
+      accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
       border: a.id === detail.id ? SELB : BORDER,
       bg: a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
       select: () => this.setState({ artifactId: a.id })
     }));
     const detailRows = !detail.id ? [] : [
+      { k: 'Artifact type', v: detail.type, color: TXT },
       { k: 'GitHub identity', v: detail.id, color: TXT },
       { k: 'Default branch', v: detail.default_branch || 'Not reported', color: TXT },
       { k: 'Captured commit', v: detail.base, color: TXT },
-      { k: 'Fork source', v: detail.source_repository || 'Not reported', color: MUTED },
+      { k: detail.type === 'fork' ? 'Fork source' : 'Source repository', v: detail.source_repository || 'Not reported', color: MUTED },
+      ...(detail.package ? [
+        { k: 'Package', v: detail.package.name + '@' + detail.package.version, color: BLUE },
+        { k: 'Registry', v: detail.package.registry + ' · exact version', color: MUTED },
+        { k: 'Integrity', v: detail.package.integrity, color: MUTED }
+      ] : []),
       { k: 'Last push', v: detail.pushed_at || 'Not reported', color: MUTED },
-      { k: 'License', v: detail.licenseLabel + ' · GitHub-reported', color: detail.licenseOk ? MUTED : WARN },
-      { k: 'Compatibility', v: 'Not analyzed', color: MUTED },
-      { k: 'Source record', v: 'GitHub REST · author description', color: MUTED },
-      { k: 'Snapshot', v: CATALOG_SNAPSHOT.fetched_at, color: MUTED },
-      { k: 'Trust', v: 'Unsigned development seed', color: WARN }
+      { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
+      { k: 'Trust', v: 'Metadata only · not executed', color: WARN }
     ];
+    const detailCompatibilityText = detail.id
+      ? ((detail.compatibility && detail.compatibility.summary) || 'No fork differences or runtime compatibility tests have been computed.')
+      : '';
+    const detailEvidenceText = detail.curation
+      ? detail.curation.evidence
+      : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.';
+    const detailTaxonomy = detail.curation ? detail.curation.taxonomy.join(' / ') : 'Unclassified';
+    const packageCount = CATALOG.filter(a => a.type === 'package').length;
+    const pluginCount = CATALOG.filter(a => a.type === 'plugin').length;
+    const forkCount = CATALOG.filter(a => a.type === 'fork').length;
+    const emptyCopy = s.catalogType === 'package'
+      ? {
+          title: 'No community packages published yet',
+          description: 'This browser is ready for signed, versioned multi-plugin bundles, but the package schema and upload endpoint are not connected. No samples are fabricated.',
+          action: 'Browse plugins',
+          run: () => this.navigate('catalog', 'plugin')
+        }
+      : {
+          title: 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
+          description: 'Try a name, author, capability, taxonomy term, or clear the current filters.',
+          action: 'Clear filters',
+          run: () => this.setState({ query: '', knownLicenseOnly: false })
+        };
 
     const livePreview = s.previewData;
     const previewLines = livePreview ? [
@@ -947,7 +1450,7 @@ class Component extends DCLogic {
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
-      goCatalog: () => this.navigate('catalog'),
+      goCatalog: () => this.navigate('catalog', 'plugin'),
       modeLabel: s.sidecarConnected ? 'sandbox fleet' : 'portable preview',
       sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
       sidecarDot: s.sidecarConnected ? OK : WARN,
@@ -1085,26 +1588,42 @@ class Component extends DCLogic {
       setCatalogSort: e => this.setState({ catalogSort: e.target.value }),
       knownLicenseOnly: s.knownLicenseOnly,
       toggleKnownLicense: e => this.setState({ knownLicenseOnly: !!e.target.checked }),
-      repoTypes: [{ id: 'all', label: 'All repos' }, { id: 'fork', label: 'Forks' }, { id: 'plugin', label: 'Plugins' }].map(f => ({
-        ...f, count: CATALOG.filter(a => f.id === 'all' || a.type === f.id).length,
+      repoTypes: [{ id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }, { id: 'package', label: 'Packages' }].map(f => ({
+        ...f, count: CATALOG.filter(a => a.type === f.id).length,
         selected: s.catalogType === f.id,
         border: s.catalogType === f.id ? 'oklch(0.43 0.05 235)' : 'transparent',
         bg: s.catalogType === f.id ? 'oklch(0.29 0.035 235)' : 'transparent',
         color: s.catalogType === f.id ? 'oklch(0.88 0.035 235)' : MUTED,
-        select: () => this.setState({ catalogType: f.id })
+        select: () => this.navigate('catalog', f.id)
       })),
       seedCount: CATALOG_SNAPSHOT.entries.length,
-      resultCount: results.length + ' of ' + CATALOG.length + ' repositories',
-      sortExplanation: s.catalogSort === 'stars' ? 'GitHub stars · snapshot order for ties' : s.catalogSort === 'recent' ? 'Most recent push in this snapshot' : 'Alphabetical by owner / repository',
+      pluginCount,
+      forkCount,
+      packageCount,
+      catalogCountLabel: pluginCount + ' plugins · ' + forkCount + ' forks · ' + packageCount + ' packages',
+      resultCount: results.length + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
+      sortExplanation: s.catalogSort === 'recommended'
+        ? (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order')
+        : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
       results,
       noResults: results.length === 0,
       hasDetail: !!detail.id,
       detail,
       detailRows,
       detailTopics: (detail.topics || []).slice(0, 8),
-      emptyTitle: s.catalogType === 'plugin' ? 'No plugins imported yet' : 'No matching repositories',
-      emptyDescription: s.catalogType === 'plugin' ? 'This first snapshot contains ten forks only. Plugin records will arrive through the ingester; no sample listings are shown.' : 'Try a repository name, owner, or topic, or clear the current filters.',
-      resetCatalogFilters: () => this.setState({ query: '', catalogType: 'all', knownLicenseOnly: false }),
+      detailCompatibilityText,
+      detailEvidenceText,
+      detailTaxonomy,
+      detailRisk: detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed',
+      hasPackageLink: !!(detail.package && detail.package.url),
+      detailPackageUrl: detail.package ? detail.package.url : '',
+      detailPackageLabel: detail.package ? 'View ' + detail.package.registry + ' package ↗' : '',
+      hasDiscussionLink: !!detail.discussion_url,
+      detailDiscussionUrl: detail.discussion_url || '',
+      emptyTitle: emptyCopy.title,
+      emptyDescription: emptyCopy.description,
+      emptyActionLabel: emptyCopy.action,
+      resetCatalogFilters: emptyCopy.run,
       copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
       previewOpen: !!s.preview,
