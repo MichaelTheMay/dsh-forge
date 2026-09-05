@@ -3,8 +3,9 @@
 The Community page contains three deliberately separate browsers: Plugins,
 Forks, and Packages. Plugins starts with a bounded, manually reviewed seed;
 Forks retains the ten-row upstream snapshot; Packages is a real route and empty
-collection awaiting a signed upload contract. It does not add Forge-native
-stars, accounts, publishing, installation, or social voting.
+collection. The signed metadata schema and offline composer now exist, but no
+publication endpoint or acquisition path is connected. It does not add
+Forge-native stars, accounts, publishing, installation, or social voting.
 
 ## Current implementation
 
@@ -43,8 +44,10 @@ tests, or workflows is evidence that files exist—not evidence that tests pass.
 `package_entries` must remain empty in this release. The Packages browser is
 for future user-published, multi-plugin bundles rather than individual npm or
 MCPB artifacts. `scripts/embed_catalog.py` rejects non-empty package data until
-the schema, signatures, uploader authorization, moderation, and immutable blob
-storage contract exist.
+uploader authorization, moderation, signed registry metadata, trust-root
+distribution, and immutable blob storage exist. The local
+`dsh-forge.package/v1` schema, DSSE/Ed25519 signing path, trust root, and offline
+composer are documented in [Signed packages](signed-packages.md).
 
 ## Connecting the ingester later
 
@@ -69,9 +72,10 @@ not treat a production signature as verified without a real verifier.
 
 ## Deferred actions
 
-Upload, download, composition, and integration into an existing version remain
-disabled. No code from a Community catalog entry is cloned, installed, built, or
-executed by the browser. If a community checkout is already present in an
+Browser-based composition, upload, download, and integration into an existing
+version remain disabled. Offline metadata composition and signature verification
+are available through the CLI. No code from a Community catalog entry is cloned,
+installed, built, or executed by either path. If a community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
 enable host launch. An isolated port or writable home alone is not a security

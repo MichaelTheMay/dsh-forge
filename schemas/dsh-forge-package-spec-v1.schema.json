@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge offline package composition specification v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "package", "compatibility", "plugins", "load_order", "provenance"],
+  "properties": {
+    "schema": {"const": "dsh-forge.package-spec/v1"},
+    "package": {"$ref": "#/$defs/package"},
+    "compatibility": {"$ref": "#/$defs/compatibility"},
+    "plugins": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/plugin"}
+    },
+    "load_order": {"$ref": "#/$defs/identifiers"},
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,127}$"},
+    "exactVersion": {"type": "string", "pattern": "^[0-9][0-9A-Za-z.+-]{0,63}$"},
+    "httpsUrl": {"type": "string", "pattern": "^https://[^#]+$", "maxLength": 2048},
+    "identifiers": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "description", "license", "created_at"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "version": {"$ref": "#/$defs/exactVersion"},
+        "description": {"type": "string", "maxLength": 512},
+        "license": {"type": "string", "minLength": 1, "maxLength": 128},
+        "created_at": {"type": "string", "format": "date-time", "pattern": "Z$"}
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dsh", "node", "platforms"],
+      "properties": {
+        "dsh": {"type": "string", "minLength": 1, "maxLength": 128},
+        "node": {"type": "string", "minLength": 1, "maxLength": 128},
+        "platforms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}}
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "repository", "permissions", "requires", "conflicts_with"],
+      "properties": {
+        "id": {"$ref": "#/$defs/identifier"},
+        "source": {"$ref": "#/$defs/source"},
+        "repository": {"$ref": "#/$defs/repository"},
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["browser:control", "environment:read", "filesystem:read", "filesystem:write", "gpu:access", "model:invoke", "network:outbound", "process:spawn", "session:read", "session:write"]
+          }
+        },
+        "requires": {"$ref": "#/$defs/identifiers"},
+        "conflicts_with": {"$ref": "#/$defs/identifiers"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "version", "url", "integrity"],
+      "properties": {
+        "kind": {"enum": ["npm", "mcpb", "github_archive"]},
+        "name": {"type": "string", "minLength": 1, "maxLength": 214},
+        "version": {"$ref": "#/$defs/exactVersion"},
+        "url": {"$ref": "#/$defs/httpsUrl"},
+        "integrity": {"type": "string", "pattern": "^(sha512-[A-Za-z0-9+/]+={0,2}|sha256-[0-9a-f]{64})$"}
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "commit"],
+      "properties": {
+        "url": {"$ref": "#/$defs/httpsUrl"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_by", "source", "evidence"],
+      "properties": {
+        "created_by": {"type": "string", "minLength": 1, "maxLength": 256},
+        "source": {"enum": ["user_composed", "organization_release", "registry_import"]},
+        "evidence": {"const": "metadata_only_unexecuted"}
+      }
+    }
+  }
+}

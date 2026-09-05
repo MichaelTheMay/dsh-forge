@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+from pathlib import Path
 import sys
 import time
 from typing import Any, Callable, Sequence
 
 from .launcher import Launcher, LauncherError
+from .packages import (
+    PackageError,
+    canonical_bytes,
+    compose as compose_package,
+    create_trust_root,
+    read_json,
+    sign as sign_package,
+    verify as verify_package,
+    write_json,
+)
 
 
 CLI_API_VERSION = "dsh-forge.cli/v1"
@@ -26,7 +38,7 @@ class CliError(Exception):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m dsh_forge",
-        description="Discover Harness versions and control persistent local cells.",
+        description="Discover Harness versions, control local cells, and compose signed package metadata.",
     )
     parser.add_argument("--scan-root", action="append", default=[], metavar="PATH", help="add a bounded Harness scan root")
     parser.add_argument("--state-dir", metavar="PATH", help="override the persistent DSH Forge state directory")
@@ -85,6 +97,31 @@ def _parser() -> argparse.ArgumentParser:
     session_log = cell_commands.add_parser("session-log", help="read a normalized Harness session when an adapter is available")
     session_log.add_argument("cell_id")
 
+    packages = commands.add_parser("packages", help="compose and verify signed package metadata offline")
+    package_commands = packages.add_subparsers(dest="packages_command", required=True)
+
+    compose = package_commands.add_parser("compose", help="compose a deterministic package manifest without fetching code")
+    compose.add_argument("--spec", required=True, metavar="JSON")
+    compose.add_argument("--output", required=True, metavar="JSON")
+    compose.add_argument("--force", action="store_true")
+
+    sign = package_commands.add_parser("sign", help="wrap a manifest in a DSSE envelope and sign it with Ed25519")
+    sign.add_argument("--manifest", required=True, metavar="JSON")
+    sign.add_argument("--private-key", required=True, metavar="PEM")
+    sign.add_argument("--output", required=True, metavar="JSON")
+    sign.add_argument("--force", action="store_true")
+
+    trust = package_commands.add_parser("trust-root", help="create an explicit local trust root from an Ed25519 public key")
+    trust.add_argument("--public-key", required=True, metavar="PEM")
+    trust.add_argument("--root-id", required=True)
+    trust.add_argument("--expires-at", required=True, metavar="UTC")
+    trust.add_argument("--output", required=True, metavar="JSON")
+    trust.add_argument("--force", action="store_true")
+
+    verify = package_commands.add_parser("verify", help="verify DSSE signatures, canonical bytes, pins, and composition rules")
+    verify.add_argument("--bundle", required=True, metavar="JSON")
+    verify.add_argument("--trust-root", required=True, metavar="JSON")
+
     return parser
 
 
@@ -93,6 +130,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"cells.{args.cells_command}"
     if args.command == "versions":
         return f"versions.{args.versions_command}"
+    if args.command == "packages":
+        return f"packages.{args.packages_command}"
     return str(args.command)
 
 
@@ -163,58 +202,97 @@ def run(
     args = parser.parse_args(argv)
     command = _command_name(args)
     try:
-        launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
-        if command == "doctor":
-            status = launcher.status()
+        if command == "packages.compose":
+            manifest = compose_package(read_json(args.spec))
+            write_json(args.output, manifest, force=args.force)
             data = {
-                "mode": status["mode"],
-                "registry": status["registry"],
-                "sandbox": status["sandbox"],
-                "capabilities": status["capabilities"],
-                "tree_count": len(status["trees"]),
-                "cell_count": len(status["cells"]),
+                "output": str(Path(args.output).expanduser()),
+                "package": manifest["package"],
+                "plugin_count": len(manifest["plugins"]),
+                "composition_digest": manifest["composition_digest"],
             }
-        elif command == "versions.list":
-            status = launcher.status()
-            data = {"versions": status["trees"], "coverage_gaps": status["coverage_gaps"]}
-        elif command == "cells.list":
-            status = launcher.status()
-            data = {"cells": status["cells"], "registry": status["registry"]}
-        elif command == "cells.inspect":
-            data = launcher.cell(args.cell_id)
-        elif command == "cells.start":
-            data = launcher.launch(_start_spec(args))
-        elif command == "cells.stop":
-            if args.timeout <= 0 or args.timeout > 30:
-                raise CliError("Stop timeout must be greater than 0 and at most 30 seconds.", "invalid_argument")
-            data = launcher.stop(args.cell_id, timeout=args.timeout)
-        elif command == "cells.restart":
-            data = launcher.restart(args.cell_id)
-        elif command == "cells.clone":
-            data = launcher.clone(args.cell_id)
-        elif command == "cells.logs":
-            if args.follow:
-                _follow_logs(launcher, args, command)
-                return 0
-            data = {"cell_id": args.cell_id, "lines": launcher.logs(args.cell_id, limit=args.limit)}
-        elif command == "cells.open-url":
-            data = {"cell_id": args.cell_id, "url": launcher.open_url(args.cell_id)}
-        elif command == "cells.artifacts":
-            data = {"cell_id": args.cell_id, "artifacts": launcher.artifacts(args.cell_id, limit=args.limit)}
-        elif command == "cells.prompt":
-            raise CliError(
-                "Prompt delivery is unavailable until a versioned Harness transport adapter is verified.",
-                "capability_unavailable",
-                4,
-            )
-        elif command == "cells.session-log":
-            raise CliError(
-                "A normalized Harness session transcript is unavailable; use cells logs for process output.",
-                "capability_unavailable",
-                4,
-            )
+        elif command == "packages.sign":
+            manifest = read_json(args.manifest)
+            envelope = sign_package(manifest, args.private_key)
+            write_json(args.output, envelope, force=args.force)
+            payload = canonical_bytes(manifest)
+            data = {
+                "output": str(Path(args.output).expanduser()),
+                "keyid": envelope["signatures"][0]["keyid"],
+                "payload_digest": "sha256:" + hashlib.sha256(payload).hexdigest(),
+            }
+        elif command == "packages.trust-root":
+            root = create_trust_root(args.public_key, args.root_id, args.expires_at)
+            write_json(args.output, root, force=args.force)
+            data = {
+                "output": str(Path(args.output).expanduser()),
+                "root_id": root["root_id"],
+                "keyids": [key["keyid"] for key in root["keys"]],
+                "expires_at": root["expires_at"],
+            }
+        elif command == "packages.verify":
+            verification = verify_package(read_json(args.bundle), read_json(args.trust_root))
+            manifest = verification.pop("manifest")
+            data = {
+                **verification,
+                "package": manifest["package"],
+                "plugin_count": len(manifest["plugins"]),
+                "composition_digest": manifest["composition_digest"],
+                "execution_authorized": False,
+            }
         else:
-            raise CliError("Unknown command", "unknown_command")
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            if command == "doctor":
+                status = launcher.status()
+                data = {
+                    "mode": status["mode"],
+                    "registry": status["registry"],
+                    "sandbox": status["sandbox"],
+                    "capabilities": status["capabilities"],
+                    "tree_count": len(status["trees"]),
+                    "cell_count": len(status["cells"]),
+                }
+            elif command == "versions.list":
+                status = launcher.status()
+                data = {"versions": status["trees"], "coverage_gaps": status["coverage_gaps"]}
+            elif command == "cells.list":
+                status = launcher.status()
+                data = {"cells": status["cells"], "registry": status["registry"]}
+            elif command == "cells.inspect":
+                data = launcher.cell(args.cell_id)
+            elif command == "cells.start":
+                data = launcher.launch(_start_spec(args))
+            elif command == "cells.stop":
+                if args.timeout <= 0 or args.timeout > 30:
+                    raise CliError("Stop timeout must be greater than 0 and at most 30 seconds.", "invalid_argument")
+                data = launcher.stop(args.cell_id, timeout=args.timeout)
+            elif command == "cells.restart":
+                data = launcher.restart(args.cell_id)
+            elif command == "cells.clone":
+                data = launcher.clone(args.cell_id)
+            elif command == "cells.logs":
+                if args.follow:
+                    _follow_logs(launcher, args, command)
+                    return 0
+                data = {"cell_id": args.cell_id, "lines": launcher.logs(args.cell_id, limit=args.limit)}
+            elif command == "cells.open-url":
+                data = {"cell_id": args.cell_id, "url": launcher.open_url(args.cell_id)}
+            elif command == "cells.artifacts":
+                data = {"cell_id": args.cell_id, "artifacts": launcher.artifacts(args.cell_id, limit=args.limit)}
+            elif command == "cells.prompt":
+                raise CliError(
+                    "Prompt delivery is unavailable until a versioned Harness transport adapter is verified.",
+                    "capability_unavailable",
+                    4,
+                )
+            elif command == "cells.session-log":
+                raise CliError(
+                    "A normalized Harness session transcript is unavailable; use cells logs for process output.",
+                    "capability_unavailable",
+                    4,
+                )
+            else:
+                raise CliError("Unknown command", "unknown_command")
     except CliError as error:
         _write(
             _envelope(command, False, error={"code": error.code, "message": str(error)}),
@@ -222,6 +300,13 @@ def run(
             stream=sys.stderr,
         )
         return error.exit_code
+    except PackageError as error:
+        _write(
+            _envelope(command, False, error={"code": error.code, "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return 2
     except LauncherError as error:
         _write(
             _envelope(command, False, error={"code": "launcher_error", "message": str(error)}),

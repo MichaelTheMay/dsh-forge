@@ -48,10 +48,17 @@ class SnapshotValidation(unittest.TestCase):
         with self.assertRaises(ValueError):
             embed.validate(self.snapshot)
 
-    def test_package_browser_stays_empty_until_upload_contract_exists(self):
+    def test_package_browser_stays_empty_until_signed_publication_exists(self):
         self.snapshot["package_entries"].append({"artifact_id": "package:sample"})
         with self.assertRaises(ValueError):
             embed.validate(self.snapshot)
+
+    def test_offline_composer_does_not_enable_acquisition_or_execution(self):
+        boundary = self.snapshot["package_browser"]
+        self.assertTrue(boundary["composition_enabled"])
+        self.assertFalse(boundary["upload_enabled"])
+        self.assertFalse(boundary["download_enabled"])
+        self.assertFalse(boundary["execution_enabled"])
 
     def test_signed_snapshot_is_not_accepted_without_a_verifier(self):
         self.snapshot["provenance"]["signature_status"] = "verified"

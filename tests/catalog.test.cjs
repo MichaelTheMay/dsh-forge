@@ -43,6 +43,11 @@ test('embedded snapshot preserves ten forks, evidence-ranked plugins, and an emp
   assert.equal(forks.length, 10);
   assert.equal(plugins.length, 6);
   assert.equal(packages.length, 0);
+  assert.equal(snapshot.package_browser.status, 'offline_composer_available');
+  assert.equal(snapshot.package_browser.composition_enabled, true);
+  assert.equal(snapshot.package_browser.upload_enabled, false);
+  assert.equal(snapshot.package_browser.download_enabled, false);
+  assert.equal(snapshot.package_browser.execution_enabled, false);
   assert.deepEqual(forks.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
   assert.deepEqual(plugins.map(r => r.curation.rank), [1, 2, 3, 4, 5, 6]);
   assert(plugins.every(r => r.package.version && /^(?:sha512|sha256)-/.test(r.package.integrity)));
@@ -186,7 +191,8 @@ test('three browsers expose curated plugins, captured forks, and an honest packa
   c.renderVals().repoTypes.find(f => f.id === 'package').select();
   assert.equal(c.renderVals().results.length, 0);
   assert.equal(c.renderVals().emptyTitle, 'No community packages published yet');
-  assert.match(c.renderVals().emptyDescription, /No samples are fabricated/);
+  assert.match(c.renderVals().emptyDescription, /offline composer/);
+  assert.match(c.renderVals().emptyDescription, /not connected/);
   c.renderVals().resetCatalogFilters();
   assert.equal(c.renderVals().results.length, 6);
   assert.equal(windowStub.location.hash, 'plugins');

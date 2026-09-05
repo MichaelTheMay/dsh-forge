@@ -24,11 +24,14 @@ def validate(snapshot):
     if packages != []:
         raise ValueError("Package uploads are not connected; the package seed must remain empty")
     if snapshot.get("package_browser") != {
-        "status": "schema_pending",
+        "status": "offline_composer_available",
+        "schema": "dsh-forge.package/v1",
+        "signature_envelope": "dsse/v1-ed25519",
+        "composition_enabled": True,
         "upload_enabled": False,
         "download_enabled": False,
         "execution_enabled": False,
-        "note": "This collection is reserved for user-published multi-plugin bundles. No sample packages are fabricated.",
+        "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated.",
     }:
         raise ValueError("Invalid package-browser boundary")
     supplemental = snapshot.get("supplemental_snapshot", {})

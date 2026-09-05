@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge canonical package manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "canonicalization", "package", "compatibility", "plugins", "load_order", "provenance", "composition_digest"],
+  "properties": {
+    "schema": {"const": "dsh-forge.package/v1"},
+    "canonicalization": {"const": "RFC8785-JCS-ascii-key-no-number-profile/v1"},
+    "package": {"$ref": "dsh-forge-package-spec-v1.schema.json#/$defs/package"},
+    "compatibility": {"$ref": "dsh-forge-package-spec-v1.schema.json#/$defs/compatibility"},
+    "plugins": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {"$ref": "dsh-forge-package-spec-v1.schema.json#/$defs/plugin"}
+    },
+    "load_order": {"$ref": "dsh-forge-package-spec-v1.schema.json#/$defs/identifiers"},
+    "provenance": {"$ref": "dsh-forge-package-spec-v1.schema.json#/$defs/provenance"},
+    "composition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

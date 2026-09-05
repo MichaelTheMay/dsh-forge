@@ -747,10 +747,13 @@
   ],
   "package_entries": [],
   "package_browser": {
-    "status": "schema_pending",
+    "status": "offline_composer_available",
+    "schema": "dsh-forge.package/v1",
+    "signature_envelope": "dsse/v1-ed25519",
+    "composition_enabled": true,
     "upload_enabled": false,
     "download_enabled": false,
     "execution_enabled": false,
-    "note": "This collection is reserved for user-published multi-plugin bundles. No sample packages are fabricated."
+    "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated."
   }
 }
