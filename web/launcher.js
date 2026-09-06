@@ -478,6 +478,78 @@ const CATALOG_SNAPSHOT = {
   },
   "supplemental_entries": [
     {
+      "artifact_id": "github:1332073142",
+      "github_id": 1332073142,
+      "node_id": "R_kgDOT2XStg",
+      "full_name": "NanmiCoder/dsh-agent-teams",
+      "owner": "NanmiCoder",
+      "name": "dsh-agent-teams",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/NanmiCoder/dsh-agent-teams",
+      "description": "Captain-led, persistent multi-agent teams with dependency-aware tasks, direct messaging, quality gates, recovery, and a live Web activity panel.",
+      "description_origin": "package_manifest_and_repository_summary",
+      "topics": [
+        "agentteams",
+        "deepseek-harness",
+        "dsh-plugin",
+        "multi-agent",
+        "task-dag"
+      ],
+      "language": "JavaScript",
+      "github_stars": 1388,
+      "seed_rank": null,
+      "forks_count": 120,
+      "pushed_at": "2026-09-05T18:08:52Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "1caff61f4c0909711b515ebc56187055556186cd",
+      "parent_repository": null,
+      "source_repository": "NanmiCoder/dsh-agent-teams",
+      "license": {
+        "spdx": "MIT",
+        "status": "repository_and_package_reported"
+      },
+      "compatibility": {
+        "declared_dsh_range": "0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.2",
+        "observed_base": "package manifest pins its development matrix to DeepSeek Harness 0.1.2-rc.1",
+        "summary": "Node ^22.19 or >=24; Web and headless support are declared. The existing 0.1.2-alpha.3 Delta tree is not in the plugin's supported host list."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "@nanmicoder/dsh-agent-teams",
+        "version": "0.1.16-rc.1",
+        "published_at": "2026-09-05T17:42:57.391Z",
+        "release_commit": null,
+        "integrity": "sha512-gHrlUXuFnqz4wBw55v3ury/0PhNNCZ8/1eYycXUWGUgz97sxMzOMOLGGtpBijQ2/TzOqgRkv43+i/zKFU5GIZQ==",
+        "url": "https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams/v/0.1.16-rc.1"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/1785",
+      "curation": {
+        "rank": 1,
+        "taxonomy": [
+          "multi-agent orchestration",
+          "persistent teams",
+          "task dependency graph",
+          "quality gates"
+        ],
+        "scores": {
+          "capability_evidence": 5,
+          "compatibility": 4,
+          "maintenance": 5,
+          "license": 5
+        },
+        "security_risk": "high",
+        "evidence": "Native DSH bundle/client metadata, an explicit compatibility matrix, verification scripts, CI, recovery logic, and documentation were observed; no test was reproduced by Forge yet."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {
+        "metadata_only": true,
+        "executed": false,
+        "security_verified": false
+      }
+    },
+    {
       "artifact_id": "github:1350484605",
       "github_id": 1350484605,
       "node_id": "R_kgDOUH7CfQ",
@@ -525,7 +597,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5423",
       "curation": {
-        "rank": 1,
+        "rank": 2,
         "taxonomy": [
           "ecosystem governance",
           "static package audit",
@@ -595,7 +667,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5623",
       "curation": {
-        "rank": 2,
+        "rank": 3,
         "taxonomy": [
           "agent intelligence",
           "code navigation",
@@ -666,7 +738,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
       "curation": {
-        "rank": 3,
+        "rank": 4,
         "taxonomy": [
           "memory",
           "session evidence",
@@ -736,7 +808,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
       "curation": {
-        "rank": 4,
+        "rank": 5,
         "taxonomy": [
           "memory",
           "long-term policy",
@@ -806,7 +878,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5641",
       "curation": {
-        "rank": 5,
+        "rank": 6,
         "taxonomy": [
           "orchestration",
           "scheduling",
@@ -876,7 +948,7 @@ const CATALOG_SNAPSHOT = {
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5564",
       "curation": {
-        "rank": 6,
+        "rank": 7,
         "taxonomy": [
           "discovery",
           "plugin lifecycle",
@@ -899,17 +971,348 @@ const CATALOG_SNAPSHOT = {
       }
     }
   ],
-  "package_entries": [],
+  "package_entries": [
+    {
+      "schema": "dsh-forge.catalog-package/v1",
+      "id": "catalog-package:agent-teams-builder",
+      "slug": "agent-teams-builder",
+      "name": "AgentTeams Builder",
+      "summary": "A pinned AgentTeams package candidate for using persistent, dependency-aware DeepSeek Harness teams to help build and review DSH Forge.",
+      "kind": "single_plugin",
+      "rank": 1,
+      "featured": true,
+      "publisher": {
+        "id": "dsh-forge-curation",
+        "name": "DSH Forge curation",
+        "kind": "curator"
+      },
+      "components": [
+        {
+          "artifact_id": "github:1332073142",
+          "role": "Captain-led persistent agent teams, task DAGs, direct messaging, quality gates, and live Web inspection.",
+          "package": {
+            "registry": "npm",
+            "name": "@nanmicoder/dsh-agent-teams",
+            "version": "0.1.16-rc.1",
+            "integrity": "sha512-gHrlUXuFnqz4wBw55v3ury/0PhNNCZ8/1eYycXUWGUgz97sxMzOMOLGGtpBijQ2/TzOqgRkv43+i/zKFU5GIZQ==",
+            "url": "https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams/v/0.1.16-rc.1"
+          },
+          "repository": {
+            "full_name": "NanmiCoder/dsh-agent-teams",
+            "url": "https://github.com/NanmiCoder/dsh-agent-teams",
+            "commit": "1caff61f4c0909711b515ebc56187055556186cd"
+          },
+          "compatibility": "Node ^22.19 or >=24; Web and headless support are declared. The existing 0.1.2-alpha.3 Delta tree is not in the plugin's supported host list."
+        }
+      ],
+      "taxonomy": [
+        "multi-agent orchestration",
+        "collaboration",
+        "persistent tasks",
+        "quality gates"
+      ],
+      "compatibility": {
+        "status": "declared",
+        "harness_versions": [
+          "0.1.2-rc.1",
+          "0.1.2-alpha.5",
+          "0.1.2-alpha.2"
+        ],
+        "node": "^22.19.0 || >=24",
+        "surfaces": [
+          "web",
+          "headless"
+        ],
+        "summary": "The publisher declares these exact host versions. Forge has not yet reproduced the matrix; alpha.3 is deliberately excluded."
+      },
+      "license": {
+        "status": "reported",
+        "expressions": [
+          "MIT"
+        ]
+      },
+      "risk": {
+        "level": "high",
+        "permissions": [
+          "subagent creation",
+          "workspace writes",
+          "persistent state",
+          "model calls"
+        ],
+        "notes": "Parallel delegated agents amplify filesystem, model-cost, and prompt-injection risk. Test only in a disposable Apptainer profile before promotion."
+      },
+      "provenance": {
+        "directory_ids": [
+          "dsh-get",
+          "awesome-dsh",
+          "npm",
+          "github"
+        ],
+        "authoritative_sources": [
+          "https://github.com/NanmiCoder/dsh-agent-teams/tree/1caff61f4c0909711b515ebc56187055556186cd",
+          "https://github.com/deepseek-ai/deepseek-harness/discussions/1785",
+          "https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams/v/0.1.16-rc.1"
+        ],
+        "claims_verified": false
+      },
+      "verification": {
+        "metadata_reviewed": true,
+        "artifacts_acquired": false,
+        "installed": false,
+        "executed": false,
+        "sandbox_verified": false
+      },
+      "acquisition": {
+        "enabled": false,
+        "label": "Acquire verified bytes",
+        "status": "requires_signed_dsse",
+        "reason": "No trusted DSSE envelope is published for this catalog recipe; installation and execution are not authorized."
+      },
+      "page": {
+        "route": "#packages/agent-teams-builder"
+      },
+      "updated_at": "2026-09-05T21:30:00Z"
+    },
+    {
+      "schema": "dsh-forge.catalog-package/v1",
+      "id": "catalog-package:code-review-lab",
+      "slug": "code-review-lab",
+      "name": "Code Review Lab",
+      "summary": "A static-review candidate combining pre-install plugin auditing with a repository symbol index and bounded code maps.",
+      "kind": "plugin_stack",
+      "rank": 2,
+      "featured": true,
+      "publisher": {
+        "id": "dsh-forge-curation",
+        "name": "DSH Forge curation",
+        "kind": "curator"
+      },
+      "components": [
+        {
+          "artifact_id": "github:1350484605",
+          "role": "Audit plugin metadata and supply-chain indicators before any install boundary.",
+          "package": {
+            "registry": "npm",
+            "name": "dsh-vet",
+            "version": "0.3.0",
+            "integrity": "sha512-HdQoj+ZxoYJRp3/PUK7fIIc/bj6FhyF86SDxyKapRQB1X23GY9hPM7PNoarzAvSa7k4isv6nrnXR8S7IqfQ0Ig==",
+            "url": "https://www.npmjs.com/package/dsh-vet/v/0.3.0"
+          },
+          "repository": {
+            "full_name": "rogerdigital/dsh-vet",
+            "url": "https://github.com/rogerdigital/dsh-vet",
+            "commit": "01857c72998c7ac7ad5a7241d13a8847c024558e"
+          },
+          "compatibility": "Node >=20; manifest declares fs, shell, and web audit seams, but no exact Harness range."
+        },
+        {
+          "artifact_id": "github:1341363840",
+          "role": "Build a symbol index and bounded repository map for code review context.",
+          "package": {
+            "registry": "npm",
+            "name": "dsh-code-index",
+            "version": "0.3.1",
+            "integrity": "sha512-rTCRRKrw/qJa7BQSE/CRV+I95KQnlgv35CDg1QHHu9cFEO6xH5ugLL4NDdcKoZH4x8fPxrITVIsXbe8rgUpWxg==",
+            "url": "https://www.npmjs.com/package/dsh-code-index/v/0.3.1"
+          },
+          "repository": {
+            "full_name": "lemonxiny55/dsh-code-index",
+            "url": "https://github.com/lemonxiny55/dsh-code-index",
+            "commit": "de81accbc5104fa2a872d692de7205b59d1e6130"
+          },
+          "compatibility": "Node >=22; Cordis ^4.0.1; release 0.3.1 updates web-tree-sitter to >=0.25 compatibility."
+        }
+      ],
+      "taxonomy": [
+        "code intelligence",
+        "static audit",
+        "supply-chain review",
+        "repository mapping"
+      ],
+      "compatibility": {
+        "status": "unknown",
+        "harness_versions": [],
+        "node": ">=22",
+        "surfaces": [
+          "web",
+          "headless"
+        ],
+        "summary": "The components have not been tested together. dsh-code-index declares a broad pre-0.2 tools range; dsh-vet declares no exact Harness range."
+      },
+      "license": {
+        "status": "reported",
+        "expressions": [
+          "MIT"
+        ]
+      },
+      "risk": {
+        "level": "medium-high",
+        "permissions": [
+          "repository reads",
+          "recursive indexing",
+          "archive parsing"
+        ],
+        "notes": "Review path confinement, symlink handling, malicious archive behavior, prompt injection through source text, and resource exhaustion."
+      },
+      "provenance": {
+        "directory_ids": [
+          "awesome-dsh",
+          "show-your-plugins",
+          "npm",
+          "github"
+        ],
+        "authoritative_sources": [
+          "https://github.com/deepseek-ai/deepseek-harness/discussions/5423",
+          "https://github.com/deepseek-ai/deepseek-harness/discussions/5623",
+          "https://github.com/lemonxiny55/dsh-code-index/tree/de81accbc5104fa2a872d692de7205b59d1e6130",
+          "https://github.com/rogerdigital/dsh-vet/tree/01857c72998c7ac7ad5a7241d13a8847c024558e",
+          "https://www.npmjs.com/package/dsh-code-index/v/0.3.1",
+          "https://www.npmjs.com/package/dsh-vet/v/0.3.0"
+        ],
+        "claims_verified": false
+      },
+      "verification": {
+        "metadata_reviewed": true,
+        "artifacts_acquired": false,
+        "installed": false,
+        "executed": false,
+        "sandbox_verified": false
+      },
+      "acquisition": {
+        "enabled": false,
+        "label": "Acquire verified bytes",
+        "status": "requires_signed_dsse",
+        "reason": "No trusted DSSE envelope is published for this catalog recipe; installation and execution are not authorized."
+      },
+      "page": {
+        "route": "#packages/code-review-lab"
+      },
+      "updated_at": "2026-09-05T21:30:00Z"
+    },
+    {
+      "schema": "dsh-forge.catalog-package/v1",
+      "id": "catalog-package:auditable-memory-lab",
+      "slug": "auditable-memory-lab",
+      "name": "Auditable Memory Lab",
+      "summary": "A local-first memory candidate pairing an append-only session evidence ledger with reviewed long-term rules and preferences.",
+      "kind": "plugin_stack",
+      "rank": 3,
+      "featured": false,
+      "publisher": {
+        "id": "dsh-forge-curation",
+        "name": "DSH Forge curation",
+        "kind": "curator"
+      },
+      "components": [
+        {
+          "artifact_id": "github:1295914860",
+          "role": "Retain immutable, queryable evidence from prior sessions.",
+          "package": {
+            "registry": "mcpb",
+            "name": "rawmem",
+            "version": "0.7.1",
+            "integrity": "sha256-184b88f682bf27b7f06b4061f25972e572fbd3b22b147171a6c41dc9e6379266",
+            "url": "https://github.com/Liyuan1992/rawmem/releases/tag/v0.7.1"
+          },
+          "repository": {
+            "full_name": "Liyuan1992/rawmem",
+            "url": "https://github.com/Liyuan1992/rawmem",
+            "commit": "dd0cf91726b903835a1517652e92ec95b4134e68"
+          },
+          "compatibility": "Python >=3.10 MCP sidecar with a DSH example configuration; not a native npm/Cordis bundle."
+        },
+        {
+          "artifact_id": "github:1289127532",
+          "role": "Propose, review, and approve durable memory policy entries.",
+          "package": {
+            "registry": "mcpb",
+            "name": "memdsl",
+            "version": "0.9.2",
+            "integrity": "sha256-244f04d530917ff3fee35e419bf49f9b88d8395ddacfd24b1fdcda365298dd67",
+            "url": "https://github.com/Liyuan1992/memdsl/releases/tag/v0.9.2"
+          },
+          "repository": {
+            "full_name": "Liyuan1992/memdsl",
+            "url": "https://github.com/Liyuan1992/memdsl",
+            "commit": "a061bc4efb9a0dacab04c2fa847bcf4b236146b4"
+          },
+          "compatibility": "Python >=3.9; MCP extra requires Python >=3.10; DSH example configuration is present."
+        }
+      ],
+      "taxonomy": [
+        "memory",
+        "session evidence",
+        "human approval",
+        "local-first"
+      ],
+      "compatibility": {
+        "status": "unknown",
+        "harness_versions": [],
+        "node": null,
+        "surfaces": [
+          "mcp"
+        ],
+        "summary": "Both are Python MCP sidecars with DSH examples, not native Cordis bundles. Their combined lifecycle has not been reproduced."
+      },
+      "license": {
+        "status": "reported",
+        "expressions": [
+          "MIT"
+        ]
+      },
+      "risk": {
+        "level": "medium-high",
+        "permissions": [
+          "session-log reads",
+          "persistent memory writes",
+          "local filesystem"
+        ],
+        "notes": "Review path confinement, retention, redaction, untrusted-record rendering, memory poisoning, and approval bypass before any session data is exposed."
+      },
+      "provenance": {
+        "directory_ids": [
+          "show-your-plugins",
+          "github"
+        ],
+        "authoritative_sources": [
+          "https://github.com/Liyuan1992/memdsl/releases/tag/v0.9.2",
+          "https://github.com/Liyuan1992/memdsl/tree/a061bc4efb9a0dacab04c2fa847bcf4b236146b4",
+          "https://github.com/Liyuan1992/rawmem/releases/tag/v0.7.1",
+          "https://github.com/Liyuan1992/rawmem/tree/dd0cf91726b903835a1517652e92ec95b4134e68",
+          "https://github.com/deepseek-ai/deepseek-harness/discussions/5597"
+        ],
+        "claims_verified": false
+      },
+      "verification": {
+        "metadata_reviewed": true,
+        "artifacts_acquired": false,
+        "installed": false,
+        "executed": false,
+        "sandbox_verified": false
+      },
+      "acquisition": {
+        "enabled": false,
+        "label": "Acquire verified bytes",
+        "status": "requires_signed_dsse",
+        "reason": "No trusted DSSE envelope is published for this catalog recipe; installation and execution are not authorized."
+      },
+      "page": {
+        "route": "#packages/auditable-memory-lab"
+      },
+      "updated_at": "2026-09-05T21:30:00Z"
+    }
+  ],
   "package_browser": {
-    "status": "offline_composer_available",
-    "schema": "dsh-forge.package/v1",
+    "status": "metadata_catalog_preview",
+    "schema": "dsh-forge.catalog-package/v1",
     "signature_envelope": "dsse/v1-ed25519",
     "composition_enabled": true,
     "upload_enabled": false,
     "download_enabled": false,
     "execution_enabled": false,
-    "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated."
-  }
+    "note": "Schema-valid metadata packages and dedicated routes are available. Each recipe still requires a trusted DSSE envelope before acquisition; upload, installation, and execution remain disconnected."
+  },
+  "package_catalog_digest": "sha256:859db6e98ac43f2700d8efc66c0205ec5a9cfdb579f70b8f9641cc089a702c1c"
 };
 // CATALOG_SNAPSHOT_END
 
@@ -918,10 +1321,9 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-const CATALOG = [
+const REPOSITORY_CATALOG = [
   ...CATALOG_SNAPSHOT.entries,
-  ...(CATALOG_SNAPSHOT.supplemental_entries || []),
-  ...(CATALOG_SNAPSHOT.package_entries || [])
+  ...(CATALOG_SNAPSHOT.supplemental_entries || [])
 ].map(a => ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
@@ -945,11 +1347,57 @@ const CATALOG = [
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
 }));
 
+const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(a => ({
+  ...a,
+  verification: {
+    ...a.verification,
+    metadata_only: true,
+    security_verified: false
+  },
+  id: a.id,
+  slug: a.slug,
+  full_name: a.publisher.id + '/' + a.slug,
+  owner: a.publisher.name,
+  type: 'package',
+  url: a.page.route,
+  description: a.summary,
+  topics: a.taxonomy,
+  terms: [
+    ...a.taxonomy,
+    ...a.components.flatMap(component => [
+      component.repository.full_name,
+      component.package.name,
+      component.package.version,
+      component.role
+    ]),
+    ...a.compatibility.surfaces
+  ].join(' '),
+  language: a.kind === 'plugin_stack' ? 'Plugin stack' : 'Single plugin',
+  licenseOk: a.license.status !== 'unknown',
+  licenseLabel: a.license.expressions.join(' + '),
+  starsLabel: '—',
+  github_stars: null,
+  pushed_at: a.updated_at,
+  activity: 'Updated ' + catalogDate(a.updated_at),
+  rankLabel: 'B' + String(a.rank).padStart(2, '0'),
+  versionLabel: a.components.length + (a.components.length === 1 ? ' component' : ' components'),
+  riskLabel: a.risk.level + ' risk',
+  archivedLabel: '',
+  base: a.components.length + ' immutable component pin' + (a.components.length === 1 ? '' : 's'),
+  commitUrl: a.provenance.authoritative_sources[0],
+  pageRoute: a.page.route,
+  catalogPackage: true
+}));
+
+const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
+
 function catalogRoute(hash) {
   if (hash === '#forks' || hash === '#public-repos') return { view: 'catalog', type: 'fork' };
-  if (hash === '#packages') return { view: 'catalog', type: 'package' };
-  if (hash === '#plugins' || hash === '#community') return { view: 'catalog', type: 'plugin' };
-  return { view: 'launch', type: 'plugin' };
+  if (hash === '#packages' || hash === '#community') return { view: 'catalog', type: 'package', packageSlug: null };
+  const packageMatch = /^#packages\/([a-z0-9][a-z0-9-]{1,63})$/.exec(hash);
+  if (packageMatch) return { view: 'catalog', type: 'package', packageSlug: packageMatch[1] };
+  if (hash === '#plugins') return { view: 'catalog', type: 'plugin' };
+  return { view: 'launch', type: 'package' };
 }
 
 const COLUMNS = ['Cell / state', 'Tree', 'Surface', 'URL', 'Process identity', 'Uptime', 'Home / isolation', 'Workspace', 'Trust', 'Health', 'Actions'];
@@ -980,7 +1428,9 @@ class Component extends DCLogic {
       catalogType: initialRoute.type,
       catalogSort: 'recommended',
       knownLicenseOnly: false,
-      artifactId: CATALOG[0] ? CATALOG[0].id : null,
+      artifactId: initialRoute.packageSlug
+        ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
+        : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id,
       toast: '',
       cells: [],
       sidecarConnected: false,
@@ -1010,7 +1460,14 @@ class Component extends DCLogic {
     }, 3000);
     this.hashListener = () => {
       const route = catalogRoute(window.location.hash);
-      this.setState({ view: route.view, catalogType: route.type });
+      const packageArtifact = route.packageSlug
+        ? PACKAGE_CATALOG.find(item => item.slug === route.packageSlug)
+        : null;
+      this.setState({
+        view: route.view,
+        catalogType: route.type,
+        artifactId: packageArtifact ? packageArtifact.id : this.state.artifactId
+      });
     };
     window.addEventListener('hashchange', this.hashListener);
     this.refreshStatus(true);
@@ -1023,12 +1480,19 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
-  navigate(view, type = 'plugin') {
+  navigate(view, type = 'package') {
     this.setState({ view, catalogType: type });
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
         ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
         : 'launch';
+    }
+  }
+
+  selectCatalogArtifact(artifact) {
+    this.setState({ artifactId: artifact.id });
+    if (typeof window !== 'undefined' && artifact.type === 'package') {
+      window.location.hash = artifact.pageRoute.slice(1);
     }
   }
 
@@ -1050,6 +1514,20 @@ class Component extends DCLogic {
       field.remove();
       if (previousFocus && previousFocus.focus) previousFocus.focus();
       this.flash(copied ? 'Copied repository reference' : 'Clipboard unavailable. Use the captured commit link.');
+    }
+  }
+
+  async copyPackagePage(detail) {
+    const base = typeof window !== 'undefined' && window.location && window.location.href
+      ? window.location.href.split('#')[0]
+      : '';
+    const value = base + detail.page.route;
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(value);
+      this.flash('Copied package page');
+    } catch {
+      this.flash('Clipboard unavailable. Use ' + detail.page.route);
     }
   }
 
@@ -1395,9 +1873,17 @@ class Component extends DCLogic {
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
       border: a.id === detail.id ? SELB : BORDER,
       bg: a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
-      select: () => this.setState({ artifactId: a.id })
+      select: () => this.selectCatalogArtifact(a)
     }));
-    const detailRows = !detail.id ? [] : [
+    const detailRows = !detail.id ? [] : (detail.catalogPackage ? [
+      { k: 'Package ID', v: detail.id, color: TXT },
+      { k: 'Publisher', v: detail.publisher.name + ' · ' + detail.publisher.kind, color: TXT },
+      { k: 'Composition', v: detail.kind + ' · ' + detail.components.length + ' pinned component(s)', color: BLUE },
+      { k: 'Dedicated route', v: detail.page.route, color: MUTED },
+      { k: 'Catalog digest', v: CATALOG_SNAPSHOT.package_catalog_digest, color: MUTED },
+      { k: 'License', v: detail.licenseLabel + ' · component metadata', color: detail.licenseOk ? MUTED : WARN },
+      { k: 'Trust', v: 'Metadata reviewed · not acquired or executed', color: WARN }
+    ] : [
       { k: 'Artifact type', v: detail.type, color: TXT },
       { k: 'GitHub identity', v: detail.id, color: TXT },
       { k: 'Default branch', v: detail.default_branch || 'Not reported', color: TXT },
@@ -1411,14 +1897,18 @@ class Component extends DCLogic {
       { k: 'Last push', v: detail.pushed_at || 'Not reported', color: MUTED },
       { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
       { k: 'Trust', v: 'Metadata only · not executed', color: WARN }
-    ];
+    ]);
     const detailCompatibilityText = detail.id
       ? ((detail.compatibility && detail.compatibility.summary) || 'No fork differences or runtime compatibility tests have been computed.')
       : '';
-    const detailEvidenceText = detail.curation
-      ? detail.curation.evidence
-      : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.';
-    const detailTaxonomy = detail.curation ? detail.curation.taxonomy.join(' / ') : 'Unclassified';
+    const detailEvidenceText = detail.catalogPackage
+      ? 'Directory inclusion was used only for discovery. Exact registry versions, integrity values, repository commits, and component roles are shown separately; no component combination has been reproduced.'
+      : (detail.curation
+        ? detail.curation.evidence
+        : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.');
+    const detailTaxonomy = detail.catalogPackage
+      ? detail.taxonomy.join(' / ')
+      : (detail.curation ? detail.curation.taxonomy.join(' / ') : 'Unclassified');
     const packageCount = CATALOG.filter(a => a.type === 'package').length;
     const pluginCount = CATALOG.filter(a => a.type === 'plugin').length;
     const forkCount = CATALOG.filter(a => a.type === 'fork').length;
@@ -1453,7 +1943,7 @@ class Component extends DCLogic {
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
-      goCatalog: () => this.navigate('catalog', 'plugin'),
+      goCatalog: () => this.navigate('catalog', 'package'),
       modeLabel: s.sidecarConnected ? 'sandbox fleet' : 'portable preview',
       sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
       sidecarDot: s.sidecarConnected ? OK : WARN,
@@ -1591,7 +2081,7 @@ class Component extends DCLogic {
       setCatalogSort: e => this.setState({ catalogSort: e.target.value }),
       knownLicenseOnly: s.knownLicenseOnly,
       toggleKnownLicense: e => this.setState({ knownLicenseOnly: !!e.target.checked }),
-      repoTypes: [{ id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }, { id: 'package', label: 'Packages' }].map(f => ({
+      repoTypes: [{ id: 'package', label: 'Packages' }, { id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
         ...f, count: CATALOG.filter(a => a.type === f.id).length,
         selected: s.catalogType === f.id,
         border: s.catalogType === f.id ? 'oklch(0.43 0.05 235)' : 'transparent',
@@ -1612,12 +2102,29 @@ class Component extends DCLogic {
       noResults: results.length === 0,
       hasDetail: !!detail.id,
       detail,
+      detailPopularityLabel: detail.catalogPackage ? detail.components.length + ' pinned component(s)' : detail.starsLabel + ' GitHub stars',
       detailRows,
       detailTopics: (detail.topics || []).slice(0, 8),
       detailCompatibilityText,
       detailEvidenceText,
       detailTaxonomy,
-      detailRisk: detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed',
+      detailRisk: detail.catalogPackage
+        ? detail.risk.level + ' risk · package candidate B' + String(detail.rank).padStart(2, '0')
+        : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed'),
+      isPackageDetail: !!detail.catalogPackage,
+      isRepositoryDetail: !!detail.id && !detail.catalogPackage,
+      packageComponents: detail.catalogPackage ? detail.components.map(component => ({
+        ...component,
+        name: component.package.name,
+        version: component.package.version,
+        registry: component.package.registry,
+        repositoryUrl: component.repository.url + '/tree/' + component.repository.commit,
+        packageUrl: component.package.url,
+        shortCommit: component.repository.commit.slice(0, 12)
+      })) : [],
+      acquireLabel: detail.catalogPackage ? detail.acquisition.label : 'Acquire verified bytes',
+      acquireReason: detail.catalogPackage ? detail.acquisition.reason : 'A schema-valid signed package record is required before acquisition.',
+      sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,
       hasPackageLink: !!(detail.package && detail.package.url),
       detailPackageUrl: detail.package ? detail.package.url : '',
       detailPackageLabel: detail.package ? 'View ' + detail.package.registry + ' package ↗' : '',

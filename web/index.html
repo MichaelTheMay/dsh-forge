@@ -112,6 +112,13 @@
   .repo-detail-table dd { margin: 0; font: 10px/1.55 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
   .repo-commit-link { display: inline-block; font-size: 10px; margin-top: 4px; }
   .repo-muted { color: oklch(0.65 0.014 255); font-size: 10.5px; line-height: 1.7; margin: 10px 0 0; }
+  .repo-package-components { display: flex; flex-direction: column; gap: 8px; }
+  .repo-package-component { padding: 10px; border: 1px solid oklch(0.32 0.016 255); border-radius: 6px; background: oklch(0.19 0.008 255); }
+  .repo-package-component > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+  .repo-package-component strong { font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+  .repo-package-component span { color: oklch(0.62 0.016 255); font-size: 9px; }
+  .repo-package-component p { color: oklch(0.67 0.014 255); font-size: 10px; line-height: 1.55; margin: 7px 0; }
+  .repo-component-links { display: flex; flex-wrap: wrap; gap: 10px; font: 9px 'IBM Plex Mono', monospace; }
   .repo-planned-actions { display: flex; flex-direction: column; gap: 6px; }
   .repo-planned-actions button { border: 1px dashed oklch(0.34 0.012 255); background: transparent; color: oklch(0.55 0.012 255); padding: 8px 10px; border-radius: 4px; text-align: left; font-size: 10.5px; cursor: not-allowed; }
   .repo-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 10px 24px; border-top: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255); font: 9px 'IBM Plex Mono', monospace; color: oklch(0.63 0.012 255); }
@@ -498,8 +505,8 @@
     <div class="repo-masthead">
       <div>
         <div class="repo-eyebrow">COMMUNITY / DEEPSEEK HARNESS</div>
-        <h1>Community browser <span class="repo-label">Static preview</span></h1>
-        <p>Browse evidence-ranked plugins, upstream forks, and future multi-plugin packages. Inspect provenance before trusting code.</p>
+        <h1>Package browser <span class="repo-label">Metadata preview</span></h1>
+        <p>Start with curated plugin packages, then inspect individual plugins and upstream forks. Every package has a stable page and schema-defined provenance.</p>
         <a class="repo-upstream mono" href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><path d="M6 7.5v9M18 7.5v1a4 4 0 0 1-4 4H6"/></svg>
           deepseek-ai/deepseek-harness <span>↗</span>
@@ -558,7 +565,7 @@
               <button class="repo-button" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button>
             </div>
           </sc-if>
-          <div class="repo-list-footnote">Plugin recommendations use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. GitHub stars are display metadata only.</div>
+          <div class="repo-list-footnote">Packages and plugins use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. Directory inclusion and GitHub stars are discovery metadata only.</div>
         </div>
       </section>
 
@@ -566,10 +573,11 @@
         <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ true }}">
           <div class="repo-inspector-eyebrow"><span class="repo-eyebrow">ARTIFACT DETAILS</span><span class="repo-label">Metadata only</span></div>
           <div class="repo-detail-title"><span class="mono">{{ detail.owner }} /</span><h2>{{ detail.name }}</h2></div>
-          <div class="repo-detail-stats"><span class="repo-stars">☆ {{ detail.starsLabel }} GitHub stars</span><span>{{ detail.type }}</span></div>
+          <div class="repo-detail-stats"><span class="repo-stars">☆ {{ detailPopularityLabel }}</span><span>{{ detail.type }}</span></div>
           <p class="repo-detail-description">{{ detail.description }}</p>
           <div class="repo-topic-list"><sc-for list="{{ detailTopics }}" as="topic" hint-placeholder-count="3"><span>{{ topic }}</span></sc-for></div>
-          <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div>
+          <sc-if value="{{ isRepositoryDetail }}" hint-placeholder-val="{{ true }}"><div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div></sc-if>
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-actions"><button class="repo-button repo-button-primary" onClick="{{ sharePackagePage }}">Copy package page</button></div></sc-if>
           <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
           <sc-if value="{{ hasDiscussionLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailDiscussionUrl }}" target="_blank" rel="noopener noreferrer">Official community discussion ↗</a></sc-if>
 
@@ -579,17 +587,25 @@
             <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="7"><div><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
           </dl><a class="repo-commit-link mono" href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a></div>
 
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-section"><h3>Pinned components <span class="repo-label">Exact metadata</span></h3>
+            <div class="repo-package-components"><sc-for list="{{ packageComponents }}" as="component" hint-placeholder-count="2"><article class="repo-package-component">
+              <div><strong>{{ component.name }}</strong><span class="mono">{{ component.registry }} · {{ component.version }}</span></div>
+              <p>{{ component.role }}</p>
+              <div class="repo-component-links"><a href="{{ component.repositoryUrl }}" target="_blank" rel="noopener noreferrer">source @ {{ component.shortCommit }} ↗</a><a href="{{ component.packageUrl }}" target="_blank" rel="noopener noreferrer">package metadata ↗</a></div>
+            </article></sc-for></div>
+          </div></sc-if>
+
           <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
           <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
-          <div class="repo-detail-section"><h3>Acquire & browser-compose <span class="repo-label">Later phase</span></h3>
-            <div class="repo-planned-actions"><button disabled title="Requires a signed acquisition record and pinned package artifact.">Download pinned artifact</button><button disabled title="The offline CLI composer exists; browser composition and publishing are not connected.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
-            <p class="repo-muted">The offline CLI can compose signed metadata. Browsing still cannot install, upload, download, or execute code; those actions remain separate until their registry and sandbox contracts land.</p>
+          <div class="repo-detail-section"><h3>Acquire & browser-compose <span class="repo-label">Fail closed</span></h3>
+            <div class="repo-planned-actions"><button disabled title="{{ acquireReason }}">{{ acquireLabel }}</button><button disabled title="The offline CLI composer exists; browser composition and publishing are not connected.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
+            <p class="repo-muted">{{ acquireReason }} Browser metadata never authorizes install or execution. Those actions require archive inspection, a disposable profile, and a reproducible Apptainer compatibility result.</p>
           </div>
         </sc-if>
         <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>
       </aside>
     </div>
-    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Cached metadata · works without registry access</span><span>Unsigned development seeds · upload, download, and execution disabled</span></footer>
+    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Unsigned development feed · upload, acquisition, installation, and execution disabled</span></footer>
   </main>
   </sc-if>
 

@@ -7,11 +7,12 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
 const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
+const packageFeed = JSON.parse(fs.readFileSync(path.join(root, 'data/package-catalog.seed.json'), 'utf8'));
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
 }
-const windowStub = { location: { hash: '' }, __dcPrecompiledLogicFactories: {} };
+const windowStub = { location: { hash: '', href: 'http://127.0.0.1:3090/' }, __dcPrecompiledLogicFactories: {} };
 const clipboard = [];
 const navigatorStub = { clipboard: { writeText: async value => { clipboard.push(value); } } };
 new Function('window', 'navigator', script)(windowStub, navigatorStub);
@@ -33,26 +34,33 @@ test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   assert.equal(typeof Component, 'function');
 });
 
-test('embedded snapshot preserves ten forks, evidence-ranked plugins, and an empty package collection', () => {
-  assert.deepEqual(CATALOG_SNAPSHOT, snapshot);
+test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
+  assert.deepEqual(CATALOG_SNAPSHOT, {
+    ...snapshot,
+    package_entries: packageFeed.packages,
+    package_catalog_digest: packageFeed.catalog_digest,
+  });
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
   const forks = CATALOG.filter(r => r.type === 'fork');
   const plugins = CATALOG.filter(r => r.type === 'plugin');
   const packages = CATALOG.filter(r => r.type === 'package');
-  assert.equal(CATALOG.length, 16);
+  assert.equal(CATALOG.length, 20);
   assert.equal(forks.length, 10);
-  assert.equal(plugins.length, 6);
-  assert.equal(packages.length, 0);
-  assert.equal(snapshot.package_browser.status, 'offline_composer_available');
+  assert.equal(plugins.length, 7);
+  assert.equal(packages.length, 3);
+  assert.equal(snapshot.package_browser.status, 'metadata_catalog_preview');
   assert.equal(snapshot.package_browser.composition_enabled, true);
   assert.equal(snapshot.package_browser.upload_enabled, false);
   assert.equal(snapshot.package_browser.download_enabled, false);
   assert.equal(snapshot.package_browser.execution_enabled, false);
   assert.deepEqual(forks.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
-  assert.deepEqual(plugins.map(r => r.curation.rank), [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(plugins.map(r => r.curation.rank), [1, 2, 3, 4, 5, 6, 7]);
   assert(plugins.every(r => r.package.version && /^(?:sha512|sha256)-/.test(r.package.integrity)));
-  assert.equal(new Set(CATALOG.map(r => r.github_id)).size, 16);
-  assert(CATALOG.every(r => /^[a-f0-9]{40}$/.test(r.head_sha)));
+  assert.equal(new Set([...forks, ...plugins].map(r => r.github_id)).size, 17);
+  assert([...forks, ...plugins].every(r => /^[a-f0-9]{40}$/.test(r.head_sha)));
+  assert.deepEqual(packages.map(r => r.rank), [1, 2, 3]);
+  assert(packages.every(r => r.page.route === '#packages/' + r.slug));
+  assert(packages.every(r => r.acquisition.enabled === false));
 });
 test('launcher remains default and Community has stable plugin, fork, and package routes', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
@@ -60,7 +68,9 @@ test('launcher remains default and Community has stable plugin, fork, and packag
   assert.equal(c.renderVals().modeLabel, 'portable preview');
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
-  assert.equal(windowStub.location.hash, 'plugins');
+  assert.equal(windowStub.location.hash, 'packages');
+  c.renderVals().results[0].select();
+  assert.equal(windowStub.location.hash, 'packages/agent-teams-builder');
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
   assert.equal(windowStub.location.hash, 'forks');
   c.renderVals().repoTypes.find(f => f.id === 'package').select();
@@ -172,11 +182,13 @@ test('fork star sorting retains captured GitHub order for ties', () => {
 });
 test('search handles case, whitespace, and multiple terms', () => {
   const c = instance(); const target = CATALOG.filter(r => r.type === 'plugin')[1];
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
   c.renderVals().setQuery({ target: { value: '  ' + target.owner.toUpperCase() + '   ' + target.name + '  ' } });
   assert.deepEqual(c.renderVals().results.map(r => r.id), [target.id]);
 });
 test('filtered-out selection never leaves stale detail content', () => {
   const c = instance(); const plugins = CATALOG.filter(r => r.type === 'plugin');
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
   c.renderVals().results[3].select();
   c.renderVals().setQuery({ target: { value: plugins[4].slug } });
   assert.equal(c.renderVals().detail.id, plugins[4].id);
@@ -184,17 +196,18 @@ test('filtered-out selection never leaves stale detail content', () => {
   assert(c.renderVals().noResults); assert(!c.renderVals().hasDetail);
   assert.deepEqual(c.renderVals().detailRows, []);
 });
-test('three browsers expose curated plugins, captured forks, and an honest package empty state', () => {
+test('package-first browser exposes generated packages, plugins, and captured forks', () => {
   const c = instance();
-  assert.equal(c.renderVals().results.length, 6);
-  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['plugin', 6], ['fork', 10], ['package', 0]]);
-  c.renderVals().repoTypes.find(f => f.id === 'package').select();
-  assert.equal(c.renderVals().results.length, 0);
-  assert.equal(c.renderVals().emptyTitle, 'No community packages published yet');
-  assert.match(c.renderVals().emptyDescription, /offline composer/);
-  assert.match(c.renderVals().emptyDescription, /not connected/);
-  c.renderVals().resetCatalogFilters();
-  assert.equal(c.renderVals().results.length, 6);
+  c.renderVals().goCatalog();
+  assert.equal(c.renderVals().results.length, 3);
+  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['package', 3], ['plugin', 7], ['fork', 10]]);
+  const packageDetail = c.renderVals();
+  assert.equal(packageDetail.detail.schema, 'dsh-forge.catalog-package/v1');
+  assert.equal(packageDetail.acquireLabel, 'Acquire verified bytes');
+  assert.equal(packageDetail.isPackageDetail, true);
+  assert(packageDetail.packageComponents.length >= 1);
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  assert.equal(c.renderVals().results.length, 7);
   assert.equal(windowStub.location.hash, 'plugins');
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
   assert.equal(c.renderVals().results.length, 10);
@@ -214,13 +227,14 @@ test('license filter is based on reported metadata, not a verification claim', (
 });
 test('copy pinned ref actually writes the captured commit URL', async () => {
   const c = instance(); const plugin = snapshot.supplemental_entries[0];
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
   await c.renderVals().copyRef();
   assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
   assert.equal(c.lastMessage, 'Copied repository reference');
 });
 test('catalog interactions cannot add, stop, or modify local cells', () => {
   const c = instance(); const before = JSON.stringify(c.state.cells);
-  c.renderVals().goCatalog(); c.renderVals().results[5].select();
+  c.renderVals().goCatalog(); c.renderVals().repoTypes.find(f => f.id === 'plugin').select(); c.renderVals().results[5].select();
   c.renderVals().setQuery({ target: { value: 'desktop' } });
   c.renderVals().goLaunch(); assert.equal(JSON.stringify(c.state.cells), before);
 });
@@ -232,4 +246,17 @@ test('public code actions are disabled and the snapshot has no fabricated analys
   assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
   assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
   assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
+  assert(CATALOG.filter(r => r.type === 'package').every(r => !r.verification.installed && !r.verification.sandbox_verified && !r.acquisition.enabled));
+});
+
+test('dedicated package route selects the requested metadata page and remains non-executable', async () => {
+  const c = instance({}, '#packages/code-review-lab');
+  const values = c.renderVals();
+  assert(values.showCatalog);
+  assert.equal(c.state.catalogType, 'package');
+  assert.equal(values.detail.slug, 'code-review-lab');
+  assert.equal(values.detail.components.length, 2);
+  await values.sharePackagePage();
+  assert.equal(clipboard.at(-1), 'http://127.0.0.1:3090/#packages/code-review-lab');
+  assert.equal(c.lastMessage, 'Copied package page');
 });

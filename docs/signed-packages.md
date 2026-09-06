@@ -137,11 +137,15 @@ layout, failure behavior, limits, and threat-model boundaries.
 
 ## Deliberately deferred
 
-The package catalog remains empty. This release does not provide publisher
-accounts, upload authorization, moderation, registry storage, trusted-root
-distribution, private-registry credentials, dependency installation,
-configuration merging, or sandbox execution. Browser download also remains
-disabled. Those require separate reviewable boundaries.
+The launcher now embeds three unsigned, metadata-only package recipes from a
+bounded local source ledger. They are browser records, not signed package
+envelopes, and cannot initiate acquisition. This release does not provide
+publisher accounts, upload authorization, moderation, registry storage,
+trusted-root distribution, private-registry credentials, dependency
+installation, configuration merging, or sandbox execution. Browser download
+also remains disabled. Those require separate reviewable boundaries. See
+[Package catalog](package-catalog.md) for the distinct catalog-feed schema and
+hosted-publication design.
 
 The next execution-oriented change may pass immutable quarantined bytes to a
 disposable networkless Apptainer inspection/test cell. It must re-check the

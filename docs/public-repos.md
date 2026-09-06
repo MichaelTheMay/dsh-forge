@@ -1,10 +1,11 @@
 # Community browsers implementation boundary
 
-The Community page contains three deliberately separate browsers: Plugins,
-Forks, and Packages. Plugins starts with a bounded, manually reviewed seed;
-Forks retains the ten-row upstream snapshot; Packages is a real route and empty
-collection. The signed metadata schema, offline composer, and separate CLI
-quarantine acquirer now exist, but no browser publication/download path is connected. It does not add
+The Community page contains three deliberately separate browsers: Packages,
+Plugins, and Forks. Packages is the primary browser and starts with three
+schema-validated, metadata-only recipes; Plugins has a bounded, manually
+reviewed seven-row seed; Forks retains the ten-row upstream snapshot. The signed
+metadata schema, offline composer, and separate CLI quarantine acquirer exist,
+but no browser publication/download path is connected. It does not add
 Forge-native stars, accounts, publishing, installation, or social voting.
 
 ## Current implementation
@@ -14,8 +15,9 @@ catalog is presented as the Community page. The application logic is a
 precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
 that class without evaluating the inline design export as JavaScript.
 The page supports search, sort, type routing, details, source/package links, and
-copying a captured commit URL. Stable routes are `#plugins`, `#forks`, and
-`#packages`; the old `#public-repos` link continues to resolve to Forks.
+copying a captured commit URL or package-page route. Stable routes are
+`#packages/<slug>`, `#packages`, `#plugins`, and `#forks`; the old
+`#public-repos` link continues to resolve to Forks.
 
 The metadata snapshot is embedded from `data/public-repos.seed.json`, with the
 ranked REST response retained in `data/github-forks.response.json`. Its source
@@ -33,7 +35,7 @@ The `github_id`, `node_id`, canonical URL, and captured SHA are all retained.
 the production adapter should follow the registry's opaque `node_id` identity
 contract and preserve both identifiers. Never key solely by a mutable name.
 
-Six plugin records are stored in `supplemental_entries`. Each record has an
+Seven plugin records are stored in `supplemental_entries`. Each record has an
 exact npm or MCPB version, registry integrity, an immutable repository commit,
 taxonomy labels, compatibility notes, a static-review rank, and explicit
 unexecuted verification state. The ranking considers capability evidence,
@@ -41,13 +43,19 @@ compatibility, maintenance, reported license, and security risk. Stars are
 shown but do not affect the recommendation order. Presence of manifests,
 tests, or workflows is evidence that files exist—not evidence that tests pass.
 
-`package_entries` must remain empty in this release. The Packages browser is
-for future user-published, multi-plugin bundles rather than individual npm or
-MCPB artifacts. `scripts/embed_catalog.py` rejects non-empty package data until
-uploader authorization, moderation, signed registry metadata, trust-root
-distribution, and immutable blob storage exist. The local
+The raw launcher seed keeps `package_entries` empty so plugin/fork capture and
+package publication remain separate inputs. The bounded, networkless
+`scripts/ingest_package_catalog.py` validates
+`data/package-catalog.sources.json` against the exact plugin metadata, emits
+`data/package-catalog.seed.json`, and `scripts/embed_catalog.py` merges that
+validated feed into the offline browser. The three initial package pages are
+unsigned curation records, not publisher uploads. Uploader authorization,
+moderation, signed registry metadata, trust-root distribution, and immutable
+blob storage remain deferred. The local
 `dsh-forge.package/v1` schema, DSSE/Ed25519 signing path, trust root, and offline
-composer are documented in [Signed packages](signed-packages.md).
+composer are documented in [Signed packages](signed-packages.md). The package
+feed contract and proposed hosted-service boundary are documented in
+[Package catalog](package-catalog.md).
 
 ## Connecting the ingester later
 
@@ -55,12 +63,12 @@ The collaborator owns the registry/ingester. Do not add an automatic scraper to
 this launcher. `scripts/seed_catalog.py` is a manually invoked maintenance tool,
 not a service and not an app-startup action.
 
-Future plugin records remain separate from the top-ten fork ranking with
+Plugin records remain separate from the top-ten fork ranking with
 `seed_rank: null`. Classify plugins using manifest and provenance evidence, not
 only a repository name, topic, store listing, or the presence of plugin-like
 code. A fork must not enter the ranked ten unless it actually ranks there.
 
-The future registry adapter should import a validated, signed, versioned
+The production registry adapter should import a validated, signed, versioned
 snapshot from the registry transactionally and use its local index. This
 prototype does not implement that backend. Its unsigned status, absent source
 analysis, unknown compatibility, and lack of security verification remain
@@ -98,8 +106,9 @@ with no fake live cells.
 
 Tests cover catalog behavior, metadata safety, session-protected API access,
 scanner false positives, protected ports, process ownership, logs, and stop.
-They also enforce the three browser routes, exact plugin package pins, empty
-package collection, and separation between manifest review and execution.
+They also enforce the three browser routes, dedicated package routes, exact
+plugin package pins, deterministic package feed, disabled unsigned acquisition,
+and separation between manifest review and execution.
 Browser layout testing and production runtime adapters remain release tasks.
 This is not a complete production launcher. The bounded Apptainer probe is an
 initial foreign-code test boundary, not a claim of complete hostile-code safety.
