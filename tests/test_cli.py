@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -24,6 +25,12 @@ class LocalCellCliTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        self.versions_directory_environment = mock.patch.dict(
+            os.environ,
+            {"DSH_FORGE_VERSIONS_DIR": str(self.root / "managed-versions")},
+        )
+        self.versions_directory_environment.start()
+        self.addCleanup(self.versions_directory_environment.stop)
         self.tree = self.root / "deepseek-harness"
         self.tree.mkdir()
         (self.tree / "package.json").write_text(
@@ -72,6 +79,34 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(cells["data"]["cells"], [])
         self.assertEqual(cells["data"]["registry"]["schema_version"], CELL_REGISTRY_SCHEMA_VERSION)
+
+    def test_versions_add_rescan_and_remove_manage_only_the_saved_registry(self):
+        code, added = self.invoke("versions", "add", str(self.tree))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(added["data"]["saved_versions"]), 1)
+        saved_id = added["data"]["saved_versions"][0]["id"]
+
+        code, rescanned = self.invoke("versions", "rescan")
+        self.assertEqual(code, 0)
+        self.assertEqual(rescanned["data"]["saved_versions"][0]["id"], saved_id)
+
+        code, removed = self.invoke("versions", "remove", saved_id)
+        self.assertEqual(code, 0)
+        self.assertEqual(removed["data"]["saved_versions"], [])
+        self.assertTrue(self.tree.is_dir())
+
+    def test_versions_configure_persists_safe_one_click_preferences(self):
+        _, added = self.invoke("versions", "add", str(self.tree))
+        saved_id = added["data"]["saved_versions"][0]["id"]
+
+        code, configured = self.invoke(
+            "versions", "configure", saved_id, "--gpu", "allocated", "--open-browser"
+        )
+        self.assertEqual(code, 0)
+        launch = configured["data"]["saved_versions"][0]["launch"]
+        self.assertEqual(launch["resources"]["gpu"], "allocated")
+        self.assertTrue(launch["open_browser"])
+        self.assertEqual(launch["port"], "auto")
 
     def test_start_fails_when_apptainer_runner_is_unavailable(self):
         class UnavailableSandbox(FakeCellSandbox):

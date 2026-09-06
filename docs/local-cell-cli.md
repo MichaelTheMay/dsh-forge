@@ -14,6 +14,17 @@ atomically to `~/.local/state/dsh-forge/cells.json`, guarded by a cross-process
 file lock, and recovered by PID plus process-start identity after a launcher or
 CLI restart.
 
+Harness checkouts under `~/dsh-versions` are found automatically. Other local
+directories can be added through the UI or CLI. All discovered versions are
+persisted in `~/.local/state/dsh-forge/scan-roots.json` with stable IDs, source,
+add time, and a reusable one-click launch preset. The preset always uses a Web
+cell, automatic port, fresh managed home, managed workspace, and host network;
+only automatic opening and access to an existing GPU allocation are user
+preferences. The registry does not copy, mutate, or delete source checkouts.
+Set `DSH_FORGE_VERSIONS_DIR` to change the automatic discovery directory.
+Earlier alpha files containing a simple `roots` string list are loaded and
+migrated on the next write.
+
 The source checkout is mounted read-only, launcher secrets are excluded, and
 the host home and current working directory are hidden. If the image pin,
 capability probe, resource flags, executable digest, mounts, or process creation
@@ -25,9 +36,20 @@ trees remain blocked from complete-cell launch pending promotion.
 Run the CLI from the repository root:
 
 ```bash
-python3 -m dsh_forge --scan-root ~/src/deepseek-harness doctor
-python3 -m dsh_forge --scan-root ~/src/deepseek-harness versions list
+python3 -m dsh_forge versions add ~/src/deepseek-harness
+python3 -m dsh_forge doctor
+python3 -m dsh_forge versions list
 python3 -m dsh_forge cells list
+```
+
+Use `versions rescan` after rebuilding a checkout. Use `versions remove` with
+the saved version ID from `versions list` to forget the path without touching
+the directory:
+
+```bash
+python3 -m dsh_forge versions rescan
+python3 -m dsh_forge versions configure version_0123456789ab --gpu allocated --open-browser
+python3 -m dsh_forge versions remove version_0123456789ab
 ```
 
 Put global options before `doctor`, `versions`, or `cells`. Add `--json` for a
@@ -83,8 +105,9 @@ closed, and resume/session behavior differs across current Harness versions.
 `doctor` is the source of truth for these capability flags:
 
 - `persistent_registry`, `parallel_local_cells`, `sandboxed_cells`,
-  `runtime_logs`, and managed `artifacts` are available when the runner probe
-  passes;
+  `saved_local_versions`, `runtime_logs`, and managed `artifacts` are available;
+- `parallel_local_cells` and `sandboxed_cells` are available when the runner
+  probe passes;
 - `prompt_delivery` and `session_transcript` are unavailable.
 
 ## Apptainer cell acceptance boundary

@@ -58,6 +58,20 @@ def _parser() -> argparse.ArgumentParser:
     versions = commands.add_parser("versions", help="inspect detected Harness versions")
     version_commands = versions.add_subparsers(dest="versions_command", required=True)
     version_commands.add_parser("list", help="list detected local Harness versions")
+    add_version = version_commands.add_parser("add", help="save and scan a local Harness directory")
+    add_version.add_argument("path", nargs="+", metavar="PATH")
+    remove_version = version_commands.add_parser("remove", help="forget a saved directory without deleting it")
+    remove_version.add_argument("version_id")
+    configure_version = version_commands.add_parser("configure", help="save one-click launch preferences")
+    configure_version.add_argument("version_id")
+    configure_version.add_argument("--gpu", choices=("none", "allocated"))
+    configure_version.add_argument(
+        "--open-browser",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="open DSH Web automatically after launch",
+    )
+    version_commands.add_parser("rescan", help="rescan all configured and saved directories")
 
     cells = commands.add_parser("cells", help="control persistent local cells")
     cell_commands = cells.add_subparsers(dest="cells_command", required=True)
@@ -310,7 +324,54 @@ def run(
                 }
             elif command == "versions.list":
                 status = launcher.status()
-                data = {"versions": status["trees"], "coverage_gaps": status["coverage_gaps"]}
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
+            elif command == "versions.add":
+                status = launcher.add_scan_roots(args.path)
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
+            elif command == "versions.remove":
+                status = launcher.remove_saved_version(args.version_id)
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
+            elif command == "versions.configure":
+                updates = {}
+                if args.gpu is not None:
+                    updates["gpu"] = args.gpu
+                if args.open_browser is not None:
+                    updates["open_browser"] = args.open_browser
+                if not updates:
+                    raise CliError(
+                        "Choose --gpu, --open-browser, or --no-open-browser.",
+                        "invalid_argument",
+                    )
+                status = launcher.update_saved_version(args.version_id, updates)
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
+            elif command == "versions.rescan":
+                status = launcher.scan()
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
             elif command == "cells.list":
                 status = launcher.status()
                 data = {"cells": status["cells"], "registry": status["registry"]}

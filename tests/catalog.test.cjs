@@ -65,7 +65,7 @@ test('embedded snapshot preserves forks and plugins and adds only schema-generat
 test('launcher remains default and Community has stable plugin, fork, and package routes', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
-  assert.equal(c.renderVals().modeLabel, 'portable preview');
+  assert.equal(c.renderVals().modeLabel, 'Preview');
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'packages');
@@ -85,11 +85,13 @@ test('live status replaces preview inventory instead of merging it', () => {
   const c = instance();
   c.applyStatus({
     trees: [{ id: 'real', name: 'detected', short: 'detected', kind: 'source', version: '1', path: '~/dsh', exe: '~/dsh/dsh', node: 'bundled', git: null, trust: 'personal', launchability: 'ready' }],
+    saved_versions: [{ id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['real'], primary_tree: { id: 'real', name: 'detected', kind: 'source', version: '1', path: '~/dsh', git: null, trust: 'personal', launchability: 'ready' } }],
     cells: [], suggested_port: 3210, coverage_gaps: [], credentials: []
   });
   assert.equal(c.state.trees.length, 1);
   assert.equal(c.state.trees[0].id, 'real');
-  assert.equal(c.renderVals().modeLabel, 'sandbox fleet');
+  assert.equal(c.state.savedVersions.length, 1);
+  assert.equal(c.renderVals().modeLabel, 'Local');
   assert.equal(c.renderVals().suggested, 3210);
 });
 test('portable preview has two immutable official pins and no fabricated cells', () => {
@@ -99,16 +101,75 @@ test('portable preview has two immutable official pins and no fabricated cells',
   assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
   assert(values.versions.every(v => v.disabled));
   assert.equal(values.cells.length, 0);
-  assert.match(html, /Fail-closed cell fleet/);
-  assert.match(html, /sandbox failure never falls back to a host process/);
+  assert.match(script, /Isolation ready/);
+  assert(!/Fail-closed cell fleet/.test(html));
+  assert(!/quota unenforced/.test(html));
   assert.match(script, /sandbox test .*network none .*no launcher secrets/);
 });
-test('launcher keeps discovery controls out of the primary UI', () => {
-  assert(!/>\s*Rescan\s*</i.test(html));
+test('launcher auto-detects its versions directory and keeps manual add compact', async () => {
+  assert.match(html, />\s*\{\{ addVersionLabel \}\}\s*</i);
+  assert.match(html, /Versions in.*versionsDirectory.*appear automatically/s);
+  assert.match(html, />Add version</);
+  assert(!/Rescan saved versions/.test(html));
   assert(!/>\s*Scan roots\s*</i.test(html));
   assert(!/>\s*Add folder(?:…|\.\.\.)?\s*</i.test(html));
   assert(!/window\.prompt\s*\(/.test(script));
-  assert(!/\b(?:scanLabel|addFolder|rescanLauncher)\b/.test(script));
+  const c = instance(); let request;
+  c.api = async (url, options) => {
+    request = { url, method: options.method, body: JSON.parse(options.body) };
+    return {
+      trees: [], cells: [], saved_versions: [{
+        id: 'version_123456789abc', path: '~/dsh', state: 'no-harness-found', tree_ids: [], primary_tree: null
+      }], suggested_port: 3100, coverage_gaps: ['~/dsh · no strong DSH signature'], credentials: []
+    };
+  };
+  c.setState({ sidecarConnected: true, versionPath: '/tmp/dsh' });
+  await c.saveLocalVersion();
+  assert.deepEqual(request, {
+    url: '/api/v1/scan', method: 'POST', body: { roots: ['/tmp/dsh'] }
+  });
+  assert.equal(c.state.savedVersions.length, 1);
+  assert.equal(c.state.versionFormOpen, false);
+});
+test('saved-version rescan and forget use explicit non-destructive endpoints', async () => {
+  const c = instance(); const requests = [];
+  c.setState({
+    sidecarConnected: true,
+    savedVersions: [{ id: 'version_123456789abc', path: '~/dsh', state: 'missing', tree_ids: [], primary_tree: null }]
+  });
+  c.api = async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    return { trees: [], cells: [], saved_versions: [], suggested_port: 3100, coverage_gaps: [], credentials: [] };
+  };
+  await c.rescanVersions();
+  await c.forgetLocalVersion({ id: 'version_123456789abc' });
+  assert.deepEqual(requests, [
+    { url: '/api/v1/scan', body: {} },
+    { url: '/api/v1/versions/remove', body: { id: 'version_123456789abc' } }
+  ]);
+  assert.match(c.lastMessage, /source files were not changed/);
+});
+test('saved launch preferences use the limited settings endpoint', async () => {
+  const c = instance(); let request;
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', source: 'manual', state: 'ready', tree_ids: ['real'],
+    launch: { surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false, home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' } },
+    primary_tree: { id: 'real', name: 'detected', kind: 'source', version: '1', path: '~/dsh', git: null, trust: 'personal', launchability: 'ready' }
+  };
+  c.applyStatus({
+    trees: [saved.primary_tree], cells: [], saved_versions: [saved], suggested_port: 3100,
+    coverage_gaps: [], credentials: [], versions_directory: { path: '~/dsh-versions', available: true, auto_scan: true },
+    sandbox: { ready: true, reason: 'ready', resource_limits: {} }
+  });
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { trees: [saved.primary_tree], cells: [], saved_versions: [saved], coverage_gaps: [], credentials: [] };
+  };
+  await c.renderVals().versions[0].setGpuMode({ target: { value: 'allocated' } });
+  assert.deepEqual(request, {
+    url: '/api/v1/versions/settings',
+    body: { id: saved.id, launch: { open_browser: false, gpu: 'allocated' } }
+  });
 });
 test('one-click version launch requests automatic isolation', async () => {
   const c = instance(); let request;
