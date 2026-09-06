@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -24,6 +25,12 @@ class LocalCellCliTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        self.versions_directory_environment = mock.patch.dict(
+            os.environ,
+            {"DSH_FORGE_VERSIONS_DIR": str(self.root / "managed-versions")},
+        )
+        self.versions_directory_environment.start()
+        self.addCleanup(self.versions_directory_environment.stop)
         self.tree = self.root / "deepseek-harness"
         self.tree.mkdir()
         (self.tree / "package.json").write_text(
