@@ -18,7 +18,8 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_release_is_tagged_tested_and_main_only(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertRegex(workflow, r"tags:\s*\n\s*- 'v\*'")
-        self.assertIn('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', workflow)
+        self.assertIn('test "$(git rev-list -n 1 "$GITHUB_SHA")" = "$(git rev-parse origin/main)"', workflow)
+        self.assertNotIn('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', workflow)
         self.assertIn("gh release create", workflow)
         self.assertRegex(workflow, r"permissions:\s*\n\s*contents: write")
 

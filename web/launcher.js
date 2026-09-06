@@ -1412,6 +1412,10 @@ class Component extends DCLogic {
       view: initialRoute.view,
       treeId: PREVIEW_TREES[0].id,
       trees: PREVIEW_TREES,
+      savedVersions: [],
+      versionFormOpen: false,
+      versionPath: '',
+      versionBusy: false,
       surface: 'web',
       profile: 'tui-min',
       task: '',
@@ -1564,6 +1568,7 @@ class Component extends DCLogic {
     this.setState({
       sidecarConnected: true, statusLoaded: true, trees, treeId: current,
       cells, selectedCell,
+      savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
       credentials: Array.isArray(status.credentials) ? status.credentials : [],
@@ -1581,6 +1586,51 @@ class Component extends DCLogic {
     } catch (error) {
       this.setState({ statusLoaded: true, sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
+    }
+  }
+
+  async saveLocalVersion() {
+    const path = this.state.versionPath.trim();
+    if (!path) return this.flash('Enter the directory containing a local Harness checkout');
+    this.setState({ versionBusy: true });
+    try {
+      const status = await this.api('/api/v1/scan', {
+        method: 'POST', body: JSON.stringify({ roots: [path] })
+      });
+      this.applyStatus(status);
+      this.setState({ versionPath: '', versionFormOpen: false });
+      this.flash('Local version saved; review its detection status');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ versionBusy: false });
+    }
+  }
+
+  async rescanVersions() {
+    this.setState({ versionBusy: true });
+    try {
+      this.applyStatus(await this.api('/api/v1/scan', { method: 'POST', body: '{}' }));
+      this.flash('Saved local versions rescanned');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ versionBusy: false });
+    }
+  }
+
+  async forgetLocalVersion(version) {
+    this.setState({ versionBusy: true });
+    try {
+      const status = await this.api('/api/v1/versions/remove', {
+        method: 'POST', body: JSON.stringify({ id: version.id })
+      });
+      this.applyStatus(status);
+      this.flash('Version forgotten; source files were not changed');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ versionBusy: false });
     }
   }
 
@@ -1731,23 +1781,54 @@ class Component extends DCLogic {
     const isSystem = portNum === 3080 || portNum === 3090;
     const confirm = this.props.confirmBeforeLaunch ?? true;
     const sandbox = s.sandbox || {};
-    const versions = PINNED_RELEASES.map(pin => {
-      const detected = s.trees.find(tr => tr.version === pin.version || (tr.git && String(tr.git.sha || '').startsWith(pin.commit)));
-      const runnablePin = !!detected && s.sidecarConnected && !!sandbox.ready && detected.trust !== 'foreign' && detected.launchability === 'ready';
+    const savedTreeIds = new Set(s.savedVersions.flatMap(item => item.tree_ids || []));
+    const localVersionCard = (tree, saved = null) => {
+      const canLaunch = !!tree && !!sandbox.ready && tree.trust !== 'foreign' && tree.launchability === 'ready';
+      const status = !tree
+        ? (saved.state === 'missing' ? 'directory missing' : 'Harness not detected')
+        : (canLaunch ? 'sandbox ready' : (!sandbox.ready ? 'runner unavailable' : tree.launchability));
       return {
-        ...pin,
-        treeId: detected && detected.id,
-        installPath: detected ? detected.path : 'Exact installation not detected',
-        status: runnablePin ? 'sandbox ready' : (s.sidecarConnected && detected && !sandbox.ready ? 'runner unavailable' : (s.sidecarConnected ? 'not installed' : 'preview pin')),
-        statusColor: runnablePin ? OK : WARN,
-        buttonLabel: runnablePin ? 'Launch cell' : (s.sidecarConnected && detected && !sandbox.ready ? 'Configure runner' : (s.sidecarConnected ? 'Add installation' : 'Preview only')),
-        disabled: !runnablePin,
-        buttonCursor: runnablePin ? 'pointer' : 'not-allowed',
-        buttonBg: runnablePin ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
-        buttonBorder: runnablePin ? 'oklch(0.52 0.13 155)' : BORDER,
-        launch: () => this.quickLaunch({ ...pin, treeId: detected && detected.id })
+        id: saved ? saved.id : tree.id,
+        name: tree ? tree.name : 'Saved directory',
+        version: tree ? tree.version : 'No version detected',
+        tag: tree && tree.git ? tree.git.branch : (tree ? tree.kind : 'saved path'),
+        commit: tree && tree.git ? tree.git.sha : '—',
+        treeId: tree && tree.id,
+        installPath: saved ? saved.path : tree.path,
+        originLabel: saved ? 'saved' : 'session',
+        status,
+        statusColor: canLaunch ? OK : WARN,
+        buttonLabel: canLaunch ? 'Launch cell' : (!tree ? 'Unavailable' : (!sandbox.ready ? 'Runner unavailable' : 'Not launchable')),
+        disabled: !canLaunch,
+        buttonCursor: canLaunch ? 'pointer' : 'not-allowed',
+        buttonBg: canLaunch ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
+        buttonBorder: canLaunch ? 'oklch(0.52 0.13 155)' : BORDER,
+        showForget: !!saved,
+        launch: () => this.quickLaunch({ version: tree && tree.version, treeId: tree && tree.id }),
+        forget: () => saved && this.forgetLocalVersion(saved)
       };
-    });
+    };
+    const savedCards = s.savedVersions.map(saved => localVersionCard(saved.primary_tree, saved));
+    const sessionCards = s.trees
+      .filter(tree => tree.trust !== 'foreign' && !savedTreeIds.has(tree.id))
+      .map(tree => localVersionCard(tree));
+    const previewCards = PINNED_RELEASES.map(pin => ({
+      ...pin,
+      treeId: null,
+      installPath: 'Official reference; start the sidecar to add a local checkout',
+      originLabel: 'official pin',
+      status: 'preview only',
+      statusColor: WARN,
+      buttonLabel: 'Preview only',
+      disabled: true,
+      buttonCursor: 'not-allowed',
+      buttonBg: 'oklch(0.25 0.01 255)',
+      buttonBorder: BORDER,
+      showForget: false,
+      launch: () => this.quickLaunch(pin),
+      forget: () => {}
+    }));
+    const versions = s.sidecarConnected ? [...savedCards, ...sessionCards] : previewCards;
     const communityTrees = s.trees.filter(tr => tr.trust === 'foreign').map(tr => {
       const result = tr.sandbox_test || {};
       const canTest = s.sidecarConnected && !!sandbox.ready && !['needs-build', 'not-executable'].includes(tr.launchability);
@@ -1958,7 +2039,23 @@ class Component extends DCLogic {
       cellsSummary: s.cells.length + ' cells · ' + s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       versions,
-      pinnedCount: PINNED_RELEASES.length + ' immutable official pins',
+      hasVersions: versions.length > 0,
+      noVersions: versions.length === 0,
+      versionCountLabel: s.sidecarConnected
+        ? s.savedVersions.length + ' saved · ' + versions.length + ' detected'
+        : PINNED_RELEASES.length + ' official references',
+      versionFormOpen: s.versionFormOpen,
+      versionPath: s.versionPath,
+      versionBusy: s.versionBusy,
+      versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
+      addVersionLabel: s.versionFormOpen ? 'Close' : '+ Add version',
+      toggleVersionForm: () => this.setState({
+        versionFormOpen: !s.versionFormOpen,
+        versionPath: s.versionFormOpen ? '' : s.versionPath
+      }),
+      setVersionPath: event => this.setState({ versionPath: event.target.value }),
+      saveVersion: () => this.saveLocalVersion(),
+      rescanVersions: () => this.rescanVersions(),
       communityTrees,
       hasCommunityTrees: communityTrees.length > 0,
       sandboxTitle: sandbox.ready ? 'Apptainer cell runner ready' : 'Apptainer cell runner unavailable',

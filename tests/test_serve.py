@@ -66,6 +66,65 @@ class LauncherFixture(unittest.TestCase):
 
 
 class ScannerAndRunner(LauncherFixture):
+    def test_saved_local_version_registry_survives_restart_and_forget_preserves_source(self):
+        saved_state = self.root / "saved-state"
+        first = serve.Launcher(state_root=saved_state, sandbox=FakeCellSandbox())
+        try:
+            status = first.add_scan_roots([str(self.tree_root)])
+            self.assertEqual(len(status["saved_versions"]), 1)
+            saved = status["saved_versions"][0]
+            self.assertEqual(saved["state"], "ready")
+            self.assertEqual(saved["primary_tree"]["version"], "0.0-test")
+            registry = json.loads((saved_state / "scan-roots.json").read_text(encoding="utf-8"))
+            self.assertEqual(registry["schema_version"], 1)
+            self.assertEqual(registry["roots"][0]["id"], saved["id"])
+        finally:
+            first.shutdown()
+
+        recovered = serve.Launcher(state_root=saved_state, sandbox=FakeCellSandbox())
+        try:
+            self.assertEqual(recovered.status()["saved_versions"][0]["id"], saved["id"])
+            status = recovered.remove_saved_version(saved["id"])
+            self.assertEqual(status["saved_versions"], [])
+            self.assertTrue(self.tree_root.is_dir())
+            self.assertTrue((self.tree_root / "dsh").is_file())
+        finally:
+            recovered.shutdown()
+
+    def test_legacy_string_scan_roots_are_loaded_and_migrated_on_save(self):
+        legacy_state = self.root / "legacy-state"
+        legacy_state.mkdir()
+        (legacy_state / "scan-roots.json").write_text(
+            json.dumps({"roots": [str(self.tree_root)]}), encoding="utf-8"
+        )
+        launcher = serve.Launcher(state_root=legacy_state, sandbox=FakeCellSandbox())
+        try:
+            saved = launcher.status()["saved_versions"]
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(saved[0]["added_at"], 0)
+            launcher.add_scan_roots([str(self.tree_root)])
+            migrated = json.loads((legacy_state / "scan-roots.json").read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], 1)
+            self.assertIsInstance(migrated["roots"][0], dict)
+        finally:
+            launcher.shutdown()
+
+    def test_two_launcher_processes_do_not_clobber_saved_versions(self):
+        shared_state = self.root / "shared-state"
+        other_root = self.root / "other-harness"
+        other_root.mkdir()
+        first = serve.Launcher(state_root=shared_state, sandbox=FakeCellSandbox())
+        second = serve.Launcher(state_root=shared_state, sandbox=FakeCellSandbox())
+        try:
+            first.add_scan_roots([str(self.tree_root)])
+            status = second.add_scan_roots([str(other_root)])
+            self.assertEqual(len(status["saved_versions"]), 2)
+            rescanned = first.scan()
+            self.assertEqual(len(rescanned["saved_versions"]), 2)
+        finally:
+            first.shutdown()
+            second.shutdown()
+
     def test_only_canonical_upstream_remotes_are_official(self):
         self.assertTrue(launcher_module._official_remote("https://github.com/deepseek-ai/deepseek-harness.git"))
         self.assertTrue(launcher_module._official_remote("git@github.com:deepseek-ai/deepseek-harness.git"))
@@ -405,6 +464,17 @@ class LauncherServer(LauncherFixture):
         with self.assertRaises(urllib.error.HTTPError) as context:
             urllib.request.urlopen(bad_origin, timeout=3)
         self.assertEqual(context.exception.code, 403)
+
+    def test_save_and_forget_local_version_endpoints_require_session(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            added = json.load(response)
+        self.assertEqual(len(added["saved_versions"]), 1)
+        saved_id = added["saved_versions"][0]["id"]
+        with self.request("/api/v1/versions/remove", {"id": saved_id}, cookie=cookie) as response:
+            removed = json.load(response)
+        self.assertEqual(removed["saved_versions"], [])
+        self.assertTrue(self.tree_root.is_dir())
 
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()

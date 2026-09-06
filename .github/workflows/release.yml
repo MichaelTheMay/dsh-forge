@@ -19,10 +19,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Verify the release tag belongs to main
+      - name: Verify the release tag points to current main
         run: |
           git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test "$(git rev-list -n 1 "$GITHUB_SHA")" = "$(git rev-parse origin/main)"
       - name: Run the release test suite
         run: |
           git diff --check

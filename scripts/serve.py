@@ -188,6 +188,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     raise LauncherError("roots must be a JSON array")
                 self._json(payload)
                 return
+            if path == "/api/v1/versions/remove":
+                version_id = body.get("id")
+                if not isinstance(version_id, str):
+                    raise LauncherError("id must be a saved local-version ID")
+                self._json(self.server.launcher.remove_saved_version(version_id))
+                return
             if path == "/api/v1/launches/preview":
                 self._json(self.server.launcher.preview(body))
                 return

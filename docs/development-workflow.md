@@ -39,16 +39,24 @@ Launcher and catalog checks / checks
 
 ## Releases
 
-`.github/workflows/release.yml` runs only for `v*` tags. It rejects a tag whose
-commit is not contained in `main`, reruns the complete test suite, builds the
+`.github/workflows/release.yml` runs only for `v*` tags. It rejects a tag unless
+it points to the current `main` tip, reruns the complete test suite, builds the
 portable HTML preview and checksum, and publishes them as a GitHub Release.
 
 ```bash
 git switch main
+git fetch --prune --tags origin
 git pull --ff-only origin main
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+git merge-base --is-ancestor origin/development HEAD
+test -z "$(git tag --list v0.1.0)"
 git tag -a v0.1.0 -m "DSH Forge v0.1.0"
 git push origin v0.1.0
 ```
+
+Create the tag only after the release promotion is merged. If a version tag was
+created early, remove that tag before reusing the version; do not force-move a
+published release tag.
 
 ## Repository rules
 

@@ -164,30 +164,46 @@
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
   <main class="fleet-shell" aria-label="Harness fleet launcher">
 
-    <section class="versions-rail" aria-label="Pinned Harness versions">
+    <section class="versions-rail" aria-label="Local Harness versions">
 
       <div>
-        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Versions</span>
-          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: oklch(0.56 0.01 255);">{{ pinnedCount }}</span>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Local versions</span>
+          <span style="flex:1 1 auto;"></span>
+          <button onClick="{{ rescanVersions }}" disabled="{{ versionControlsDisabled }}" title="Rescan saved versions" aria-label="Rescan saved versions" style="width:24px; height:24px; padding:0; border-radius:5px; border:1px solid oklch(0.32 0.014 255); background:oklch(0.225 0.01 255); color:oklch(0.7 0.01 255); cursor:pointer;">↻</button>
+          <button onClick="{{ toggleVersionForm }}" disabled="{{ versionControlsDisabled }}" style="padding:5px 7px; border-radius:5px; border:1px solid oklch(0.4 0.06 235); background:oklch(0.27 0.035 235); color:oklch(0.86 0.04 235); font-size:10px; font-weight:600; cursor:pointer;">{{ addVersionLabel }}</button>
         </div>
-        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Two immutable official release pins. Launch repeatedly; Forge assigns each Apptainer cell a fresh port, home, and managed workspace.</p>
+        <div style="margin:0 0 10px; font:9px 'IBM Plex Mono',monospace; color:oklch(0.56 0.01 255);">{{ versionCountLabel }}</div>
+        <sc-if value="{{ versionFormOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-bottom:10px; padding:9px; border:1px solid oklch(0.4 0.06 235); border-radius:8px; background:oklch(0.225 0.02 235);">
+            <label style="display:block; margin-bottom:5px; color:oklch(0.76 0.02 255); font-size:10px;">Directory on this machine</label>
+            <input value="{{ versionPath }}" onChange="{{ setVersionPath }}" placeholder="/path/to/deepseek-harness" autocomplete="off" spellcheck="false" style="width:100%; padding:7px 8px; border-radius:5px; border:1px solid oklch(0.36 0.02 255); background:oklch(0.19 0.01 255); color:oklch(0.9 0.01 255); font:10px 'IBM Plex Mono',monospace;" />
+            <button onClick="{{ saveVersion }}" disabled="{{ versionBusy }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid oklch(0.52 0.1 155); background:oklch(0.32 0.07 155); color:oklch(0.92 0.03 155); font-size:10.5px; font-weight:600; cursor:pointer;">Save local version</button>
+            <div style="margin-top:6px; color:oklch(0.58 0.01 255); font:9px/1.5 'IBM Plex Mono',monospace;">Forge stores the path only. It never copies or deletes the checkout.</div>
+          </div>
+        </sc-if>
+        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Save each local Harness checkout once, then launch it repeatedly into isolated Apptainer cells with automatic ports and writable state.</p>
+        <sc-if value="{{ noVersions }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.64 0.012 255); font:10.5px/1.6 'IBM Plex Mono',monospace;">No local Harness versions saved. Add the directory containing the DSH checkout you want to run.</div>
+        </sc-if>
+        <sc-if value="{{ hasVersions }}" hint-placeholder-val="{{ true }}">
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <sc-for list="{{ versions }}" as="t" hint-placeholder-count="2">
             <div style="padding: 12px; border-radius: 9px; border: 1px solid oklch(0.32 0.014 255); background: oklch(0.22 0.012 255); display: flex; flex-direction: column; gap: 7px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-weight: 600; font-size: 12.5px;">{{ t.name }}</span>
+                <span style="font-weight: 600; font-size: 12.5px;">{{ t.version }}</span>
                 <span style="flex: 1 1 auto;"></span>
                 <span style="width: 6px; height: 6px; border-radius: 50%; background: {{ t.statusColor }};"></span>
               </div>
               <div style="font: 10px/1.55 'IBM Plex Mono', monospace; color: oklch(0.72 0.012 255);">
-                <div>{{ t.tag }}</div><div>commit {{ t.commit }}</div><div style="color: oklch(0.57 0.012 255); overflow-wrap: anywhere;">{{ t.installPath }}</div>
+                <div>{{ t.name }}</div><div>{{ t.tag }} · {{ t.commit }}</div><div style="color: oklch(0.57 0.012 255); overflow-wrap: anywhere;">{{ t.installPath }}</div>
               </div>
-              <div style="display:flex; align-items:center; justify-content:space-between; font: 9.5px 'IBM Plex Mono', monospace; color: {{ t.statusColor }};"><span>{{ t.status }}</span><span>official</span></div>
+              <div style="display:flex; align-items:center; gap:6px; font: 9.5px 'IBM Plex Mono', monospace; color: {{ t.statusColor }};"><span>{{ t.status }}</span><span style="flex:1 1 auto;"></span><span>{{ t.originLabel }}</span><sc-if value="{{ t.showForget }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.forget }}" title="Forget saved path; source files stay untouched" style="padding:0; border:0; background:transparent; color:oklch(0.59 0.01 255); font:9.5px 'IBM Plex Mono',monospace; cursor:pointer; text-decoration:underline;">Forget</button></sc-if></div>
               <button onClick="{{ t.launch }}" disabled="{{ t.disabled }}" style="padding: 8px; border-radius: 6px; border: 1px solid {{ t.buttonBorder }}; background: {{ t.buttonBg }}; color: oklch(0.9 0.02 155); font-size: 11px; font-weight: 600; cursor: {{ t.buttonCursor }};">{{ t.buttonLabel }}</button>
             </div>
           </sc-for>
         </div>
+        </sc-if>
         <div style="margin-top: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.68 0.09 85);">{{ coverageGap }}</div>
       </div>
 

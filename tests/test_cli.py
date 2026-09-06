@@ -73,6 +73,21 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(cells["data"]["cells"], [])
         self.assertEqual(cells["data"]["registry"]["schema_version"], CELL_REGISTRY_SCHEMA_VERSION)
 
+    def test_versions_add_rescan_and_remove_manage_only_the_saved_registry(self):
+        code, added = self.invoke("versions", "add", str(self.tree))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(added["data"]["saved_versions"]), 1)
+        saved_id = added["data"]["saved_versions"][0]["id"]
+
+        code, rescanned = self.invoke("versions", "rescan")
+        self.assertEqual(code, 0)
+        self.assertEqual(rescanned["data"]["saved_versions"][0]["id"], saved_id)
+
+        code, removed = self.invoke("versions", "remove", saved_id)
+        self.assertEqual(code, 0)
+        self.assertEqual(removed["data"]["saved_versions"], [])
+        self.assertTrue(self.tree.is_dir())
+
     def test_start_fails_when_apptainer_runner_is_unavailable(self):
         class UnavailableSandbox(FakeCellSandbox):
             ready = False

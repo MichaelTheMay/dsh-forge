@@ -46,17 +46,20 @@ cd ~/dsh-forge
 python3 scripts/serve.py
 ```
 
-The launcher automatically detects `dsh` on `PATH`. Register one or more source
-roots at startup when needed:
+The launcher automatically detects `dsh` on `PATH`. Use **+ Add version** in
+the Versions rail to save a checkout directory across launcher restarts, or
+register one or more source roots at startup when needed:
 
 ```bash
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
 ```
 
-For the two exact official pins shown in the Versions rail, see
-[Fleet sandbox preview](docs/fleet-sandbox-preview.md). When both built source
-trees are registered, each **Launch cell** click selects a free loopback port and
-creates a separate managed home and workspace.
+The disconnected preview shows two immutable official references; a live
+sidecar replaces those references with the local installations it actually
+detected. Each **Launch cell** click selects a free loopback port and creates a
+separate managed home and workspace. **Forget** removes only the saved path and
+never deletes or changes the checkout. See
+[Fleet sandbox preview](docs/fleet-sandbox-preview.md).
 
 The alpha supports the current `dsh web` surface and one-shot `dsh headless`
 tasks. It recognizes the current upstream `apps/cli/lib/bin.js` build artifact
@@ -68,7 +71,8 @@ with capability discovery and local version detection:
 
 ```bash
 python3 -m dsh_forge --scan-root ~/src/deepseek-harness doctor
-python3 -m dsh_forge --scan-root ~/src/deepseek-harness versions list
+python3 -m dsh_forge versions add ~/src/deepseek-harness
+python3 -m dsh_forge versions list
 python3 -m dsh_forge cells list
 ```
 

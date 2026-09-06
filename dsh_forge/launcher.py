@@ -29,6 +29,7 @@ from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 PROTECTED_PORTS = {3080, 3090}
 CELL_REGISTRY_SCHEMA_VERSION = 1
 CELL_REGISTRY_EVENT_LIMIT = 64
+VERSION_REGISTRY_SCHEMA_VERSION = 1
 SECRET_NAMES = (
     "DEEPSEEK_API_KEY",
     "OPENAI_API_KEY",
@@ -165,6 +166,10 @@ def _tree_id(path: Path) -> str:
     return "tree_" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
 
 
+def _version_id(path: Path) -> str:
+    return "version_" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
+
+
 def _candidate_dirs(root: Path, max_depth: int = 3, max_nodes: int = 500) -> Iterable[Path]:
     """Bounded directory traversal; explicit roots only and no candidate execution."""
     root = root.resolve()
@@ -257,6 +262,7 @@ class Launcher:
         self.logs_root.mkdir(exist_ok=True, mode=0o700)
         self.cells_root.mkdir(exist_ok=True, mode=0o700)
         self.roots_file = self.state_root / "scan-roots.json"
+        self.roots_lock_file = self.state_root / "scan-roots.lock"
         self.cells_file = self.state_root / "cells.json"
         self.cells_lock_file = self.state_root / "cells.lock"
         self.sandbox_results_file = self.state_root / "sandbox-results.json"
@@ -272,10 +278,44 @@ class Launcher:
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
         roots.extend(Path(p).expanduser() for p in env_roots.split(os.pathsep) if p)
-        saved = _read_json(self.roots_file).get("roots", [])
-        roots.extend(Path(p).expanduser() for p in saved if isinstance(p, str))
-        self._scan_roots = self._dedupe_paths(roots)
+        self._configured_scan_roots = self._dedupe_paths(roots)
+        self._saved_roots = self._load_roots()
+        self._scan_roots = self._dedupe_paths([
+            *self._configured_scan_roots,
+            *(record["path"] for record in self._saved_roots.values()),
+        ])
         self.scan()
+
+    def _load_roots(self) -> dict[str, dict[str, Any]]:
+        """Load durable local-version roots, accepting the alpha string format."""
+        payload = _read_json(self.roots_file)
+        schema_version = payload.get("schema_version", VERSION_REGISTRY_SCHEMA_VERSION)
+        if schema_version != VERSION_REGISTRY_SCHEMA_VERSION:
+            raise LauncherError(
+                f"Unsupported local-version registry schema {schema_version}; "
+                f"expected {VERSION_REGISTRY_SCHEMA_VERSION}"
+            )
+        raw_roots = payload.get("roots", [])
+        records: dict[str, dict[str, Any]] = {}
+        for raw in raw_roots if isinstance(raw_roots, list) else []:
+            if isinstance(raw, str):
+                raw_path, added_at = raw, 0
+            elif isinstance(raw, dict) and isinstance(raw.get("path"), str):
+                raw_path = raw["path"]
+                added_at = raw.get("added_at", 0)
+            else:
+                continue
+            try:
+                path = Path(raw_path).expanduser().resolve()
+            except OSError:
+                continue
+            record_id = _version_id(path)
+            records[record_id] = {
+                "id": record_id,
+                "path": path,
+                "added_at": added_at if isinstance(added_at, int) and added_at >= 0 else 0,
+            }
+        return records
 
     def _load_sandbox_results(self) -> dict[str, dict[str, Any]]:
         raw = _read_json(self.sandbox_results_file).get("results", {})
@@ -307,6 +347,17 @@ class Launcher:
     def _registry_file_lock(self):
         """Serialize registry mutations across the sidecar and CLI processes."""
         descriptor = os.open(self.cells_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    @contextmanager
+    def _roots_file_lock(self):
+        """Serialize saved local-version mutations across UI and CLI processes."""
+        descriptor = os.open(self.roots_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX)
             yield
@@ -398,7 +449,19 @@ class Launcher:
 
     def _save_roots(self) -> None:
         temporary = self.roots_file.with_suffix(".tmp")
-        temporary.write_text(json.dumps({"roots": [str(p) for p in self._scan_roots]}, indent=2) + "\n", encoding="utf-8")
+        payload = {
+            "schema_version": VERSION_REGISTRY_SCHEMA_VERSION,
+            "updated_at": int(time.time() * 1000),
+            "roots": [
+                {
+                    "id": record["id"],
+                    "path": str(record["path"]),
+                    "added_at": record["added_at"],
+                }
+                for record in self._saved_roots.values()
+            ],
+        }
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         os.chmod(temporary, 0o600)
         temporary.replace(self.roots_file)
 
@@ -411,8 +474,30 @@ class Launcher:
             if not path.is_dir():
                 raise LauncherError(f"Scan root is not a directory: {raw}")
             additions.append(path)
-        self._scan_roots = self._dedupe_paths([*self._scan_roots, *additions])
-        self._save_roots()
+        with self._mutation_lock, self._roots_file_lock():
+            self._saved_roots = self._load_roots()
+            now = int(time.time() * 1000)
+            for path in additions:
+                record_id = _version_id(path)
+                previous = self._saved_roots.get(record_id)
+                self._saved_roots[record_id] = {
+                    "id": record_id,
+                    "path": path,
+                    "added_at": previous["added_at"] if previous else now,
+                }
+            self._save_roots()
+        return self.scan()
+
+    def remove_saved_version(self, version_id: str) -> dict[str, Any]:
+        """Forget one scan root without modifying its source directory."""
+        if not isinstance(version_id, str) or not re.fullmatch(r"version_[a-f0-9]{12}", version_id):
+            raise LauncherError("Choose a valid saved local-version ID")
+        with self._mutation_lock, self._roots_file_lock():
+            self._saved_roots = self._load_roots()
+            if version_id not in self._saved_roots:
+                raise LauncherError("Unknown saved local version")
+            del self._saved_roots[version_id]
+            self._save_roots()
         return self.scan()
 
     def _tree_record(self, root: Path, executable: Path, package: dict[str, Any], kind: str) -> dict[str, Any]:
@@ -456,6 +541,12 @@ class Launcher:
         return record
 
     def scan(self) -> dict[str, Any]:
+        with self._roots_file_lock():
+            self._saved_roots = self._load_roots()
+            self._scan_roots = self._dedupe_paths([
+                *self._configured_scan_roots,
+                *(record["path"] for record in self._saved_roots.values()),
+            ])
         trees: dict[str, dict[str, Any]] = {}
         gaps: list[str] = []
         path_dsh = shutil.which("dsh")
@@ -500,6 +591,43 @@ class Launcher:
 
     def _public_tree(self, tree: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in tree.items() if not k.startswith("real_")}
+
+    def _public_saved_versions(self) -> list[dict[str, Any]]:
+        versions: list[dict[str, Any]] = []
+        trees = list(self._trees.values())
+        for record in self._saved_roots.values():
+            root = record["path"]
+            matched: list[dict[str, Any]] = []
+            for tree in trees:
+                try:
+                    Path(tree["real_path"]).resolve().relative_to(root.resolve())
+                except (KeyError, OSError, ValueError):
+                    continue
+                matched.append(tree)
+            exact = next(
+                (tree for tree in matched if Path(tree["real_path"]).resolve() == root.resolve()),
+                None,
+            )
+            primary = exact or (matched[0] if matched else None)
+            if not root.exists():
+                state = "missing"
+            elif not root.is_dir() or not os.access(root, os.R_OK | os.X_OK):
+                state = "unreadable"
+            elif primary and primary.get("launchability") == "ready":
+                state = "ready"
+            elif primary:
+                state = str(primary.get("launchability") or "detected")
+            else:
+                state = "no-harness-found"
+            versions.append({
+                "id": record["id"],
+                "path": _display_path(root),
+                "added_at": record["added_at"],
+                "state": state,
+                "tree_ids": [tree["id"] for tree in matched],
+                "primary_tree": self._public_tree(primary) if primary else None,
+            })
+        return versions
 
     def suggested_port(self) -> int:
         with self._lock:
@@ -611,6 +739,7 @@ class Launcher:
             "trees": trees,
             "cells": cells,
             "scan_roots": [_display_path(p) for p in self._scan_roots],
+            "saved_versions": self._public_saved_versions(),
             "coverage_gaps": list(self._coverage_gaps),
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
@@ -633,6 +762,12 @@ class Launcher:
                 "available": True,
                 "schema_version": CELL_REGISTRY_SCHEMA_VERSION,
                 "cross_process_lock": True,
+            },
+            "saved_local_versions": {
+                "available": True,
+                "schema_version": VERSION_REGISTRY_SCHEMA_VERSION,
+                "cross_process_lock": True,
+                "source_directories_mutated": False,
             },
             "parallel_local_cells": {
                 "available": sandbox_ready,
