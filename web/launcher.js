@@ -1413,9 +1413,11 @@ class Component extends DCLogic {
       treeId: PREVIEW_TREES[0].id,
       trees: PREVIEW_TREES,
       savedVersions: [],
+      versionsDirectory: { path: '~/dsh-versions', available: false, auto_scan: true },
       versionFormOpen: false,
       versionPath: '',
       versionBusy: false,
+      versionSettingsId: null,
       surface: 'web',
       profile: 'tui-min',
       task: '',
@@ -1458,6 +1460,9 @@ class Component extends DCLogic {
   componentDidMount() {
     this.timer = setInterval(() => this.forceUpdate(), 1000);
     this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
+    this.scanTimer = setInterval(() => {
+      if (this.state.sidecarConnected && !this.state.versionBusy) this.rescanVersions(true);
+    }, 30000);
     this.inspectorTimer = setInterval(() => {
       const cell = this.state.view === 'launch' && this.state.cells.find(item => item.id === this.state.selectedCell);
       if (cell) this.inspectCell(cell, this.state.inspectorTab);
@@ -1479,6 +1484,7 @@ class Component extends DCLogic {
   componentWillUnmount() {
     clearInterval(this.timer);
     clearInterval(this.statusTimer);
+    clearInterval(this.scanTimer);
     clearInterval(this.inspectorTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
@@ -1569,6 +1575,7 @@ class Component extends DCLogic {
       sidecarConnected: true, statusLoaded: true, trees, treeId: current,
       cells, selectedCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
+      versionsDirectory: status.versions_directory || this.state.versionsDirectory,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
       credentials: Array.isArray(status.credentials) ? status.credentials : [],
@@ -1607,13 +1614,13 @@ class Component extends DCLogic {
     }
   }
 
-  async rescanVersions() {
+  async rescanVersions(silent = false) {
     this.setState({ versionBusy: true });
     try {
       this.applyStatus(await this.api('/api/v1/scan', { method: 'POST', body: '{}' }));
-      this.flash('Saved local versions rescanned');
+      if (!silent) this.flash('Local versions refreshed');
     } catch (error) {
-      this.flash(error.message);
+      if (!silent) this.flash(error.message);
     } finally {
       this.setState({ versionBusy: false });
     }
@@ -1627,6 +1634,29 @@ class Component extends DCLogic {
       });
       this.applyStatus(status);
       this.flash('Version forgotten; source files were not changed');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ versionBusy: false });
+    }
+  }
+
+  async saveVersionSettings(version, launch) {
+    this.setState({ versionBusy: true });
+    try {
+      const status = await this.api('/api/v1/versions/settings', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: version.id,
+          launch: {
+            open_browser: !!launch.open_browser,
+            gpu: launch.resources && launch.resources.gpu === 'allocated' ? 'allocated' : 'none'
+          }
+        })
+      });
+      this.applyStatus(status);
+      this.setState({ versionSettingsId: null });
+      this.flash('Launch preferences saved');
     } catch (error) {
       this.flash(error.message);
     } finally {
@@ -1688,18 +1718,33 @@ class Component extends DCLogic {
 
   async quickLaunch(version) {
     if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
-    if (!version.treeId) return this.flash('That exact official release is not configured. Start Forge with its install path as a scan root.');
+    if (!version.treeId) return this.flash('That version is not available on this machine');
+    const launch = version.launchSettings || {
+      surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
+      home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
+    };
+    const pendingWindow = launch.open_browser ? window.open('about:blank', '_blank') : null;
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
-        tree_id: version.treeId, surface: 'web', port: 'auto', open_browser: false,
-        home_mode: 'fresh', workspace: 'managed', network: 'host',
-        resources: { gpu: 'none' }
+        tree_id: version.treeId,
+        surface: 'web',
+        profile: launch.profile || 'tui-min',
+        port: 'auto',
+        open_browser: !!launch.open_browser,
+        home_mode: 'fresh',
+        workspace: 'managed',
+        network: 'host',
+        resources: { gpu: launch.resources && launch.resources.gpu === 'allocated' ? 'allocated' : 'none' }
       }) });
       await this.refreshStatus(true);
       this.setState({ selectedCell: cell.id, inspectorTab: 'logs' });
       await this.inspectCell(cell, 'logs');
-      this.flash('launched ' + version.version + ' on automatic port ' + cell.port);
-    } catch (error) { this.flash(error.message); }
+      this.flash('Launched ' + version.version + ' on port ' + cell.port);
+      if (pendingWindow) this.openCell(cell, pendingWindow);
+    } catch (error) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash(error.message);
+    }
   }
 
   async sandboxTest(tree) {
@@ -1784,9 +1829,14 @@ class Component extends DCLogic {
     const savedTreeIds = new Set(s.savedVersions.flatMap(item => item.tree_ids || []));
     const localVersionCard = (tree, saved = null) => {
       const canLaunch = !!tree && !!sandbox.ready && tree.trust !== 'foreign' && tree.launchability === 'ready';
+      const launchSettings = (saved && saved.launch) || {
+        surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
+        home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
+      };
+      const gpuMode = launchSettings.resources && launchSettings.resources.gpu === 'allocated' ? 'allocated' : 'none';
       const status = !tree
-        ? (saved.state === 'missing' ? 'directory missing' : 'Harness not detected')
-        : (canLaunch ? 'sandbox ready' : (!sandbox.ready ? 'runner unavailable' : tree.launchability));
+        ? (saved.state === 'missing' ? 'Folder missing' : 'Harness not found')
+        : (canLaunch ? 'Ready' : (!sandbox.ready ? 'Setup required' : 'Unavailable'));
       return {
         id: saved ? saved.id : tree.id,
         name: tree ? tree.name : 'Saved directory',
@@ -1795,16 +1845,37 @@ class Component extends DCLogic {
         commit: tree && tree.git ? tree.git.sha : '—',
         treeId: tree && tree.id,
         installPath: saved ? saved.path : tree.path,
-        originLabel: saved ? 'saved' : 'session',
+        originLabel: saved && saved.source === 'auto' ? 'found automatically' : (saved ? 'added manually' : 'found for this session'),
+        launchSettings,
+        launchSummary: 'Auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
         status,
         statusColor: canLaunch ? OK : WARN,
-        buttonLabel: canLaunch ? 'Launch cell' : (!tree ? 'Unavailable' : (!sandbox.ready ? 'Runner unavailable' : 'Not launchable')),
+        buttonLabel: canLaunch ? 'Launch' : (!tree ? 'Unavailable' : (!sandbox.ready ? 'Setup required' : 'Unavailable')),
         disabled: !canLaunch,
         buttonCursor: canLaunch ? 'pointer' : 'not-allowed',
         buttonBg: canLaunch ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
         buttonBorder: canLaunch ? 'oklch(0.52 0.13 155)' : BORDER,
-        showForget: !!saved,
-        launch: () => this.quickLaunch({ version: tree && tree.version, treeId: tree && tree.id }),
+        showSettings: !!saved,
+        settingsOpen: !!saved && s.versionSettingsId === saved.id,
+        showForget: !!saved && (saved.source !== 'auto' || saved.state === 'missing'),
+        openBrowser: !!launchSettings.open_browser,
+        gpuMode,
+        launch: () => this.quickLaunch({
+          version: tree && tree.version,
+          treeId: tree && tree.id,
+          launchSettings
+        }),
+        toggleSettings: () => saved && this.setState({
+          versionSettingsId: s.versionSettingsId === saved.id ? null : saved.id
+        }),
+        toggleOpenBrowserSetting: () => saved && this.saveVersionSettings(saved, {
+          ...launchSettings,
+          open_browser: !launchSettings.open_browser
+        }),
+        setGpuMode: event => saved && this.saveVersionSettings(saved, {
+          ...launchSettings,
+          resources: { gpu: event.target.value }
+        }),
         forget: () => saved && this.forgetLocalVersion(saved)
       };
     };
@@ -1825,6 +1896,9 @@ class Component extends DCLogic {
       buttonBg: 'oklch(0.25 0.01 255)',
       buttonBorder: BORDER,
       showForget: false,
+      showSettings: false,
+      settingsOpen: false,
+      launchSummary: 'Auto port · new session',
       launch: () => this.quickLaunch(pin),
       forget: () => {}
     }));
@@ -2025,30 +2099,29 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       goLaunch: () => this.navigate('launch'),
       goCatalog: () => this.navigate('catalog', 'package'),
-      modeLabel: s.sidecarConnected ? 'sandbox fleet' : 'portable preview',
-      sidecarTitle: s.sidecarConnected ? 'Live loopback sidecar connected; mutation requests require its session cookie.' : 'Static preview; no local process controller is connected.',
+      modeLabel: s.sidecarConnected ? 'Local' : 'Preview',
+      sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,
       sidecarAddress: typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090',
-      sidecarState: s.sidecarConnected ? 'connected' : 'offline',
+      sidecarState: s.sidecarConnected ? 'Connected' : 'Offline',
       launchTabBg: s.view === 'launch' ? 'oklch(0.3 0.02 255)' : 'transparent',
       launchTabFg: s.view === 'launch' ? 'oklch(0.95 0.01 255)' : MUTED,
       launchTabBorder: s.view === 'launch' ? 'oklch(0.42 0.03 255)' : 'transparent',
       catalogTabBg: s.view === 'catalog' ? 'oklch(0.3 0.02 255)' : 'transparent',
       catalogTabFg: s.view === 'catalog' ? 'oklch(0.95 0.01 255)' : MUTED,
       catalogTabBorder: s.view === 'catalog' ? 'oklch(0.42 0.03 255)' : 'transparent',
-      cellsSummary: s.cells.length + ' cells · ' + s.cells.filter(c => c.state === 'running').length + ' running',
+      cellsSummary: s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       versions,
       hasVersions: versions.length > 0,
       noVersions: versions.length === 0,
-      versionCountLabel: s.sidecarConnected
-        ? s.savedVersions.length + ' saved · ' + versions.length + ' detected'
-        : PINNED_RELEASES.length + ' official references',
+      versionCountLabel: versions.length + (versions.length === 1 ? ' version found' : ' versions found'),
+      versionsDirectory: (s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions',
       versionFormOpen: s.versionFormOpen,
       versionPath: s.versionPath,
       versionBusy: s.versionBusy,
       versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
-      addVersionLabel: s.versionFormOpen ? 'Close' : '+ Add version',
+      addVersionLabel: s.versionFormOpen ? 'Close' : 'Add',
       toggleVersionForm: () => this.setState({
         versionFormOpen: !s.versionFormOpen,
         versionPath: s.versionFormOpen ? '' : s.versionPath
@@ -2058,7 +2131,7 @@ class Component extends DCLogic {
       rescanVersions: () => this.rescanVersions(),
       communityTrees,
       hasCommunityTrees: communityTrees.length > 0,
-      sandboxTitle: sandbox.ready ? 'Apptainer cell runner ready' : 'Apptainer cell runner unavailable',
+      sandboxTitle: sandbox.ready ? 'Isolation ready' : 'Isolation setup required',
       sandboxReason: sandbox.reason || 'No capability result is available.',
       sandboxColor: sandbox.ready ? OK : WARN,
       sandboxBorder: sandbox.ready ? 'oklch(0.42 0.08 155)' : 'oklch(0.42 0.07 85)',
@@ -2084,7 +2157,9 @@ class Component extends DCLogic {
         };
       }),
       treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
-      coverageGap: s.coverageGaps.length ? s.coverageGaps.length + ' coverage gap(s): ' + s.coverageGaps.join('; ') : (s.sidecarConnected ? 'Configured roots scanned; candidate code was not executed.' : 'Preview records are illustrative and cannot be launched.'),
+      coverageGap: s.coverageGaps.length
+        ? s.coverageGaps.length + (s.coverageGaps.length === 1 ? ' folder needs attention' : ' folders need attention')
+        : '',
       surfaces: [
         { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }
       ].map(x => ({

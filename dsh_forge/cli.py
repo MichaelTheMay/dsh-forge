@@ -62,6 +62,15 @@ def _parser() -> argparse.ArgumentParser:
     add_version.add_argument("path", nargs="+", metavar="PATH")
     remove_version = version_commands.add_parser("remove", help="forget a saved directory without deleting it")
     remove_version.add_argument("version_id")
+    configure_version = version_commands.add_parser("configure", help="save one-click launch preferences")
+    configure_version.add_argument("version_id")
+    configure_version.add_argument("--gpu", choices=("none", "allocated"))
+    configure_version.add_argument(
+        "--open-browser",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="open DSH Web automatically after launch",
+    )
     version_commands.add_parser("rescan", help="rescan all configured and saved directories")
 
     cells = commands.add_parser("cells", help="control persistent local cells")
@@ -318,6 +327,7 @@ def run(
                 data = {
                     "versions": status["trees"],
                     "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
             elif command == "versions.add":
@@ -325,6 +335,7 @@ def run(
                 data = {
                     "versions": status["trees"],
                     "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
             elif command == "versions.remove":
@@ -332,6 +343,25 @@ def run(
                 data = {
                     "versions": status["trees"],
                     "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
+                    "coverage_gaps": status["coverage_gaps"],
+                }
+            elif command == "versions.configure":
+                updates = {}
+                if args.gpu is not None:
+                    updates["gpu"] = args.gpu
+                if args.open_browser is not None:
+                    updates["open_browser"] = args.open_browser
+                if not updates:
+                    raise CliError(
+                        "Choose --gpu, --open-browser, or --no-open-browser.",
+                        "invalid_argument",
+                    )
+                status = launcher.update_saved_version(args.version_id, updates)
+                data = {
+                    "versions": status["trees"],
+                    "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
             elif command == "versions.rescan":
@@ -339,6 +369,7 @@ def run(
                 data = {
                     "versions": status["trees"],
                     "saved_versions": status["saved_versions"],
+                    "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
             elif command == "cells.list":

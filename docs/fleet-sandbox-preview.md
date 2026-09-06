@@ -45,7 +45,8 @@ python3 scripts/serve.py \
   --scan-root ~/dsh-official/alpha-2
 ```
 
-Alternatively, save each directory once through **+ Add version** or the CLI:
+Put checkouts under `~/dsh-versions` for automatic discovery. Alternatively,
+save each directory once through **Add** or the CLI:
 
 ```bash
 python3 -m dsh_forge versions add \
@@ -54,7 +55,9 @@ python3 -m dsh_forge versions add \
 ```
 
 Saved paths survive launcher restarts. Forgetting one removes only the registry
-record; Forge never deletes the source checkout.
+record; Forge never deletes the source checkout. Each version also retains its
+one-click launch preferences while ports, home directories, and workspaces stay
+automatic and unique.
 
 ## What is isolated now
 

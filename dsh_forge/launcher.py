@@ -30,6 +30,17 @@ PROTECTED_PORTS = {3080, 3090}
 CELL_REGISTRY_SCHEMA_VERSION = 1
 CELL_REGISTRY_EVENT_LIMIT = 64
 VERSION_REGISTRY_SCHEMA_VERSION = 1
+DEFAULT_VERSIONS_DIRECTORY = "dsh-versions"
+DEFAULT_VERSION_LAUNCH = {
+    "surface": "web",
+    "profile": "tui-min",
+    "port": "auto",
+    "open_browser": False,
+    "home_mode": "fresh",
+    "workspace": "managed",
+    "network": "host",
+    "resources": {"gpu": "none"},
+}
 SECRET_NAMES = (
     "DEEPSEEK_API_KEY",
     "OPENAI_API_KEY",
@@ -85,6 +96,20 @@ def _read_json(path: Path) -> dict[str, Any]:
         return value if isinstance(value, dict) else {}
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
+
+
+def _version_launch_settings(raw: Any = None) -> dict[str, Any]:
+    """Return the small, safe preset supported by one-click local launches."""
+    value = raw if isinstance(raw, dict) else {}
+    resources = value.get("resources") if isinstance(value.get("resources"), dict) else {}
+    gpu = str(value.get("gpu") or resources.get("gpu") or "none").strip().lower()
+    if gpu not in {"none", "allocated"}:
+        gpu = "none"
+    return {
+        **DEFAULT_VERSION_LAUNCH,
+        "open_browser": value.get("open_browser") is True,
+        "resources": {"gpu": gpu},
+    }
 
 
 def _file_sha256(path: Path) -> str | None:
@@ -278,6 +303,14 @@ class Launcher:
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
         roots.extend(Path(p).expanduser() for p in env_roots.split(os.pathsep) if p)
+        managed_directory = os.environ.get("DSH_FORGE_VERSIONS_DIR")
+        self.versions_directory = (
+            Path(managed_directory).expanduser()
+            if managed_directory
+            else Path.home() / DEFAULT_VERSIONS_DIRECTORY
+        ).resolve()
+        if self.versions_directory.is_dir():
+            roots.append(self.versions_directory)
         self._configured_scan_roots = self._dedupe_paths(roots)
         self._saved_roots = self._load_roots()
         self._scan_roots = self._dedupe_paths([
@@ -310,10 +343,13 @@ class Launcher:
             except OSError:
                 continue
             record_id = _version_id(path)
+            source = raw.get("source") if isinstance(raw, dict) else "manual"
             records[record_id] = {
                 "id": record_id,
                 "path": path,
                 "added_at": added_at if isinstance(added_at, int) and added_at >= 0 else 0,
+                "source": source if source in {"auto", "manual"} else "manual",
+                "launch": _version_launch_settings(raw.get("launch") if isinstance(raw, dict) else None),
             }
         return records
 
@@ -457,6 +493,8 @@ class Launcher:
                     "id": record["id"],
                     "path": str(record["path"]),
                     "added_at": record["added_at"],
+                    "source": record.get("source", "manual"),
+                    "launch": _version_launch_settings(record.get("launch")),
                 }
                 for record in self._saved_roots.values()
             ],
@@ -484,7 +522,43 @@ class Launcher:
                     "id": record_id,
                     "path": path,
                     "added_at": previous["added_at"] if previous else now,
+                    "source": "manual",
+                    "launch": _version_launch_settings(previous.get("launch") if previous else None),
                 }
+            self._save_roots()
+        return self.scan()
+
+    def update_saved_version(self, version_id: str, raw: dict[str, Any]) -> dict[str, Any]:
+        """Persist the limited launch preferences exposed by the simple UI."""
+        if not isinstance(version_id, str) or not re.fullmatch(r"version_[a-f0-9]{12}", version_id):
+            raise LauncherError("Choose a valid saved local-version ID")
+        if not isinstance(raw, dict):
+            raise LauncherError("Launch settings must be a JSON object")
+        unknown = set(raw) - {"open_browser", "gpu", "resources"}
+        if unknown:
+            raise LauncherError("Only open-browser and GPU preferences can be changed")
+        if "open_browser" in raw and not isinstance(raw["open_browser"], bool):
+            raise LauncherError("Open-browser preference must be true or false")
+        if "resources" in raw and not isinstance(raw["resources"], dict):
+            raise LauncherError("Resource preferences must be a JSON object")
+        with self._mutation_lock, self._roots_file_lock():
+            self._saved_roots = self._load_roots()
+            record = self._saved_roots.get(version_id)
+            if not record:
+                raise LauncherError("Unknown saved local version")
+            current = _version_launch_settings(record.get("launch"))
+            resources = raw.get("resources") if isinstance(raw.get("resources"), dict) else {}
+            requested_gpu_value = raw["gpu"] if "gpu" in raw else resources.get(
+                "gpu", current["resources"]["gpu"]
+            )
+            update = {
+                "open_browser": raw.get("open_browser", current["open_browser"]),
+                "gpu": requested_gpu_value,
+            }
+            requested_gpu = str(update["gpu"]).strip().lower()
+            if requested_gpu not in {"none", "allocated"}:
+                raise LauncherError("GPU preference must be 'none' or 'allocated'")
+            record["launch"] = _version_launch_settings(update)
             self._save_roots()
         return self.scan()
 
@@ -584,6 +658,32 @@ class Launcher:
                 found = True
             if not found:
                 gaps.append(f"{_display_path(root)} · no strong DSH signature")
+        discovered_in_managed_directory = []
+        for tree in trees.values():
+            try:
+                Path(tree["real_path"]).resolve().relative_to(self.versions_directory)
+            except (KeyError, OSError, ValueError):
+                continue
+            discovered_in_managed_directory.append(Path(tree["real_path"]).resolve())
+        if discovered_in_managed_directory:
+            with self._roots_file_lock():
+                self._saved_roots = self._load_roots()
+                changed = False
+                now = int(time.time() * 1000)
+                for path in discovered_in_managed_directory:
+                    record_id = _version_id(path)
+                    if record_id in self._saved_roots:
+                        continue
+                    self._saved_roots[record_id] = {
+                        "id": record_id,
+                        "path": path,
+                        "added_at": now,
+                        "source": "auto",
+                        "launch": _version_launch_settings(),
+                    }
+                    changed = True
+                if changed:
+                    self._save_roots()
         with self._lock:
             self._trees = trees
             self._coverage_gaps = gaps
@@ -623,6 +723,8 @@ class Launcher:
                 "id": record["id"],
                 "path": _display_path(root),
                 "added_at": record["added_at"],
+                "source": record.get("source", "manual"),
+                "launch": _version_launch_settings(record.get("launch")),
                 "state": state,
                 "tree_ids": [tree["id"] for tree in matched],
                 "primary_tree": self._public_tree(primary) if primary else None,
@@ -740,6 +842,11 @@ class Launcher:
             "cells": cells,
             "scan_roots": [_display_path(p) for p in self._scan_roots],
             "saved_versions": self._public_saved_versions(),
+            "versions_directory": {
+                "path": _display_path(self.versions_directory),
+                "available": self.versions_directory.is_dir(),
+                "auto_scan": True,
+            },
             "coverage_gaps": list(self._coverage_gaps),
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
@@ -768,6 +875,8 @@ class Launcher:
                 "schema_version": VERSION_REGISTRY_SCHEMA_VERSION,
                 "cross_process_lock": True,
                 "source_directories_mutated": False,
+                "auto_discovery_directory": _display_path(self.versions_directory),
+                "one_click_presets": True,
             },
             "parallel_local_cells": {
                 "available": sandbox_ready,

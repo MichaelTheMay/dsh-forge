@@ -66,6 +66,31 @@ class LauncherFixture(unittest.TestCase):
 
 
 class ScannerAndRunner(LauncherFixture):
+    def test_managed_versions_directory_is_discovered_and_saved_automatically(self):
+        managed = self.root / "dsh-versions"
+        managed_tree = managed / "dsh-v-test"
+        managed_tree.mkdir(parents=True)
+        (managed_tree / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/deepseek-harness", "version": "0.0-auto"}),
+            encoding="utf-8",
+        )
+        executable = managed_tree / "dsh"
+        executable.write_text(FAKE_DSH, encoding="utf-8")
+        executable.chmod(0o755)
+        with mock.patch.dict(os.environ, {"DSH_FORGE_VERSIONS_DIR": str(managed)}):
+            launcher = serve.Launcher(state_root=self.root / "auto-state", sandbox=FakeCellSandbox())
+            try:
+                status = launcher.status()
+                self.assertEqual(status["versions_directory"]["path"], str(managed))
+                self.assertEqual(len(status["saved_versions"]), 1)
+                saved = status["saved_versions"][0]
+                self.assertEqual(saved["source"], "auto")
+                self.assertEqual(saved["primary_tree"]["version"], "0.0-auto")
+                self.assertEqual(saved["launch"]["port"], "auto")
+                self.assertEqual(saved["launch"]["home_mode"], "fresh")
+            finally:
+                launcher.shutdown()
+
     def test_saved_local_version_registry_survives_restart_and_forget_preserves_source(self):
         saved_state = self.root / "saved-state"
         first = serve.Launcher(state_root=saved_state, sandbox=FakeCellSandbox())
@@ -78,6 +103,8 @@ class ScannerAndRunner(LauncherFixture):
             registry = json.loads((saved_state / "scan-roots.json").read_text(encoding="utf-8"))
             self.assertEqual(registry["schema_version"], 1)
             self.assertEqual(registry["roots"][0]["id"], saved["id"])
+            self.assertEqual(registry["roots"][0]["source"], "manual")
+            self.assertEqual(registry["roots"][0]["launch"]["resources"]["gpu"], "none")
         finally:
             first.shutdown()
 
@@ -88,6 +115,33 @@ class ScannerAndRunner(LauncherFixture):
             self.assertEqual(status["saved_versions"], [])
             self.assertTrue(self.tree_root.is_dir())
             self.assertTrue((self.tree_root / "dsh").is_file())
+        finally:
+            recovered.shutdown()
+
+    def test_saved_launch_preferences_are_limited_and_persistent(self):
+        state = self.root / "settings-state"
+        launcher = serve.Launcher(state_root=state, sandbox=FakeCellSandbox())
+        try:
+            saved = launcher.add_scan_roots([str(self.tree_root)])["saved_versions"][0]
+            status = launcher.update_saved_version(saved["id"], {
+                "open_browser": True,
+                "gpu": "allocated",
+            })
+            launch = status["saved_versions"][0]["launch"]
+            self.assertTrue(launch["open_browser"])
+            self.assertEqual(launch["resources"]["gpu"], "allocated")
+            self.assertEqual(launch["port"], "auto")
+            self.assertEqual(launch["workspace"], "managed")
+            with self.assertRaisesRegex(launcher_module.LauncherError, "Only open-browser"):
+                launcher.update_saved_version(saved["id"], {"network": "none"})
+        finally:
+            launcher.shutdown()
+
+        recovered = serve.Launcher(state_root=state, sandbox=FakeCellSandbox())
+        try:
+            launch = recovered.status()["saved_versions"][0]["launch"]
+            self.assertTrue(launch["open_browser"])
+            self.assertEqual(launch["resources"]["gpu"], "allocated")
         finally:
             recovered.shutdown()
 
@@ -475,6 +529,19 @@ class LauncherServer(LauncherFixture):
             removed = json.load(response)
         self.assertEqual(removed["saved_versions"], [])
         self.assertTrue(self.tree_root.is_dir())
+
+    def test_saved_version_settings_endpoint_updates_safe_preferences(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with self.request(
+            "/api/v1/versions/settings",
+            {"id": saved_id, "launch": {"open_browser": True, "gpu": "allocated"}},
+            cookie=cookie,
+        ) as response:
+            updated = json.load(response)["saved_versions"][0]
+        self.assertTrue(updated["launch"]["open_browser"])
+        self.assertEqual(updated["launch"]["resources"]["gpu"], "allocated")
 
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()

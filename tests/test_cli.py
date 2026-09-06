@@ -88,6 +88,19 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(removed["data"]["saved_versions"], [])
         self.assertTrue(self.tree.is_dir())
 
+    def test_versions_configure_persists_safe_one_click_preferences(self):
+        _, added = self.invoke("versions", "add", str(self.tree))
+        saved_id = added["data"]["saved_versions"][0]["id"]
+
+        code, configured = self.invoke(
+            "versions", "configure", saved_id, "--gpu", "allocated", "--open-browser"
+        )
+        self.assertEqual(code, 0)
+        launch = configured["data"]["saved_versions"][0]["launch"]
+        self.assertEqual(launch["resources"]["gpu"], "allocated")
+        self.assertTrue(launch["open_browser"])
+        self.assertEqual(launch["port"], "auto")
+
     def test_start_fails_when_apptainer_runner_is_unavailable(self):
         class UnavailableSandbox(FakeCellSandbox):
             ready = False

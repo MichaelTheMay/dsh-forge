@@ -54,11 +54,12 @@ register one or more source roots at startup when needed:
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
 ```
 
-The disconnected preview shows two immutable official references; a live
-sidecar replaces those references with the local installations it actually
-detected. Each **Launch cell** click selects a free loopback port and creates a
-separate managed home and workspace. **Forget** removes only the saved path and
-never deletes or changes the checkout. See
+The disconnected preview shows two immutable official references. A live
+sidecar automatically finds Harness checkouts under `~/dsh-versions` and also
+lets the user add any other local directory once. Each **Launch** click uses the
+saved safe preset, selects a free loopback port, and creates a separate managed
+home and workspace. **Forget** removes only the saved path and never deletes or
+changes the checkout. See
 [Fleet sandbox preview](docs/fleet-sandbox-preview.md).
 
 The alpha supports the current `dsh web` surface and one-shot `dsh headless`
@@ -73,6 +74,7 @@ with capability discovery and local version detection:
 python3 -m dsh_forge --scan-root ~/src/deepseek-harness doctor
 python3 -m dsh_forge versions add ~/src/deepseek-harness
 python3 -m dsh_forge versions list
+python3 -m dsh_forge versions configure VERSION_ID --gpu none --no-open-browser
 python3 -m dsh_forge cells list
 ```
 

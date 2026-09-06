@@ -14,9 +14,14 @@ atomically to `~/.local/state/dsh-forge/cells.json`, guarded by a cross-process
 file lock, and recovered by PID plus process-start identity after a launcher or
 CLI restart.
 
-Local version roots are separately persisted in
-`~/.local/state/dsh-forge/scan-roots.json`. The registry stores stable IDs,
-paths, and add times; it does not copy, mutate, or delete source checkouts.
+Harness checkouts under `~/dsh-versions` are found automatically. Other local
+directories can be added through the UI or CLI. All discovered versions are
+persisted in `~/.local/state/dsh-forge/scan-roots.json` with stable IDs, source,
+add time, and a reusable one-click launch preset. The preset always uses a Web
+cell, automatic port, fresh managed home, managed workspace, and host network;
+only automatic opening and access to an existing GPU allocation are user
+preferences. The registry does not copy, mutate, or delete source checkouts.
+Set `DSH_FORGE_VERSIONS_DIR` to change the automatic discovery directory.
 Earlier alpha files containing a simple `roots` string list are loaded and
 migrated on the next write.
 
@@ -43,6 +48,7 @@ the directory:
 
 ```bash
 python3 -m dsh_forge versions rescan
+python3 -m dsh_forge versions configure version_0123456789ab --gpu allocated --open-browser
 python3 -m dsh_forge versions remove version_0123456789ab
 ```
 
