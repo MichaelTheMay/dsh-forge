@@ -228,6 +228,9 @@ class PackageJsonSafetyTests(unittest.TestCase):
     def test_public_json_schemas_are_bounded_and_closed(self):
         root = Path(__file__).resolve().parents[1] / "schemas"
         expected = {
+            "dsh-forge-catalog-feed-v1.schema.json",
+            "dsh-forge-catalog-package-v1.schema.json",
+            "dsh-forge-catalog-sources-v1.schema.json",
             "dsh-forge-package-spec-v1.schema.json",
             "dsh-forge-package-v1.schema.json",
             "dsh-forge-quarantine-receipt-v1.schema.json",

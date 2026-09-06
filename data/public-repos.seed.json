@@ -451,6 +451,55 @@
   },
   "supplemental_entries": [
     {
+      "artifact_id": "github:1332073142",
+      "github_id": 1332073142,
+      "node_id": "R_kgDOT2XStg",
+      "full_name": "NanmiCoder/dsh-agent-teams",
+      "owner": "NanmiCoder",
+      "name": "dsh-agent-teams",
+      "artifact_type": "plugin",
+      "source": "github",
+      "repository_url": "https://github.com/NanmiCoder/dsh-agent-teams",
+      "description": "Captain-led, persistent multi-agent teams with dependency-aware tasks, direct messaging, quality gates, recovery, and a live Web activity panel.",
+      "description_origin": "package_manifest_and_repository_summary",
+      "topics": ["agentteams", "deepseek-harness", "dsh-plugin", "multi-agent", "task-dag"],
+      "language": "JavaScript",
+      "github_stars": 1388,
+      "seed_rank": null,
+      "forks_count": 120,
+      "pushed_at": "2026-09-05T18:08:52Z",
+      "archived": false,
+      "default_branch": "main",
+      "head_sha": "1caff61f4c0909711b515ebc56187055556186cd",
+      "parent_repository": null,
+      "source_repository": "NanmiCoder/dsh-agent-teams",
+      "license": {"spdx": "MIT", "status": "repository_and_package_reported"},
+      "compatibility": {
+        "declared_dsh_range": "0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.2",
+        "observed_base": "package manifest pins its development matrix to DeepSeek Harness 0.1.2-rc.1",
+        "summary": "Node ^22.19 or >=24; Web and headless support are declared. The existing 0.1.2-alpha.3 Delta tree is not in the plugin's supported host list."
+      },
+      "package": {
+        "registry": "npm",
+        "name": "@nanmicoder/dsh-agent-teams",
+        "version": "0.1.16-rc.1",
+        "published_at": "2026-09-05T17:42:57.391Z",
+        "release_commit": null,
+        "integrity": "sha512-gHrlUXuFnqz4wBw55v3ury/0PhNNCZ8/1eYycXUWGUgz97sxMzOMOLGGtpBijQ2/TzOqgRkv43+i/zKFU5GIZQ==",
+        "url": "https://www.npmjs.com/package/@nanmicoder/dsh-agent-teams/v/0.1.16-rc.1"
+      },
+      "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/1785",
+      "curation": {
+        "rank": 1,
+        "taxonomy": ["multi-agent orchestration", "persistent teams", "task dependency graph", "quality gates"],
+        "scores": {"capability_evidence": 5, "compatibility": 4, "maintenance": 5, "license": 5},
+        "security_risk": "high",
+        "evidence": "Native DSH bundle/client metadata, an explicit compatibility matrix, verification scripts, CI, recovery logic, and documentation were observed; no test was reproduced by Forge yet."
+      },
+      "analysis_status": "manifest_reviewed",
+      "verification": {"metadata_only": true, "executed": false, "security_verified": false}
+    },
+    {
       "artifact_id": "github:1350484605",
       "github_id": 1350484605,
       "node_id": "R_kgDOUH7CfQ",
@@ -490,7 +539,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5423",
       "curation": {
-        "rank": 1,
+        "rank": 2,
         "taxonomy": ["ecosystem governance", "static package audit", "supply-chain review"],
         "scores": {"capability_evidence": 4, "compatibility": 3, "maintenance": 5, "license": 5},
         "security_risk": "medium",
@@ -539,7 +588,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5623",
       "curation": {
-        "rank": 2,
+        "rank": 3,
         "taxonomy": ["agent intelligence", "code navigation", "context retrieval"],
         "scores": {"capability_evidence": 4, "compatibility": 4, "maintenance": 5, "license": 5},
         "security_risk": "medium-high",
@@ -588,7 +637,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
       "curation": {
-        "rank": 3,
+        "rank": 4,
         "taxonomy": ["memory", "session evidence", "history retrieval"],
         "scores": {"capability_evidence": 4, "compatibility": 3, "maintenance": 4, "license": 5},
         "security_risk": "medium",
@@ -637,7 +686,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5597",
       "curation": {
-        "rank": 4,
+        "rank": 5,
         "taxonomy": ["memory", "long-term policy", "human approval"],
         "scores": {"capability_evidence": 4, "compatibility": 3, "maintenance": 4, "license": 5},
         "security_risk": "medium-high",
@@ -686,7 +735,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5641",
       "curation": {
-        "rank": 5,
+        "rank": 6,
         "taxonomy": ["orchestration", "scheduling", "autonomous task creation"],
         "scores": {"capability_evidence": 3, "compatibility": 3, "maintenance": 5, "license": 5},
         "security_risk": "high",
@@ -735,7 +784,7 @@
       },
       "discussion_url": "https://github.com/deepseek-ai/deepseek-harness/discussions/5564",
       "curation": {
-        "rank": 6,
+        "rank": 7,
         "taxonomy": ["discovery", "plugin lifecycle", "compatibility gating"],
         "scores": {"capability_evidence": 4, "compatibility": 3, "maintenance": 5, "license": 5},
         "security_risk": "critical",
@@ -747,13 +796,13 @@
   ],
   "package_entries": [],
   "package_browser": {
-    "status": "offline_composer_available",
-    "schema": "dsh-forge.package/v1",
+    "status": "metadata_catalog_preview",
+    "schema": "dsh-forge.catalog-package/v1",
     "signature_envelope": "dsse/v1-ed25519",
     "composition_enabled": true,
     "upload_enabled": false,
     "download_enabled": false,
     "execution_enabled": false,
-    "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated."
+    "note": "Schema-valid metadata packages and dedicated routes are available. Each recipe still requires a trusted DSSE envelope before acquisition; upload, installation, and execution remain disconnected."
   }
 }

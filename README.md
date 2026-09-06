@@ -15,7 +15,9 @@ trusted local cells with automatic ports, separate writable homes, managed
 workspaces, process groups, recent logs, clone/restart controls, and a live
 inspector. It controls only processes whose PID and process-start identity it
 recorded. Community contains a dated metadata snapshot of ten real community
-forks plus six evidence-ranked plugin candidates.
+forks, seven evidence-ranked plugin candidates, and three curated package
+recipes. Packages are the primary browser; every package has a stable detail
+route and schema-defined metadata, but remains unsigned and non-executable.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
@@ -127,14 +129,16 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
 
 ## Community browsers
 
-- Browse Plugins, Forks, and Packages through stable, shareable routes.
+- Browse Packages, Plugins, and Forks through stable, shareable routes.
 - Search names, authors, descriptions, capabilities, and taxonomy labels.
 - Sort by static-review recommendation, GitHub stars, most recent push, or name.
 - Inspect source links, exact package versions and integrity, captured commit
   references, compatibility notes, reported licenses, risk, and provenance.
-- Browse six evidence-ranked plugin records and ten captured forks without
-  GitHub or registry access. Packages has an honest empty state while publishing
-  and browser acquisition remain disconnected.
+- Browse three metadata-only package recipes, seven evidence-ranked plugin
+  records, and ten captured forks without GitHub or registry access. Package
+  detail pages expose exact component versions, integrity pins, source commits,
+  compatibility, provenance, license, and risk. Browser acquisition stays
+  disabled until a package has a trusted DSSE envelope.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
@@ -159,8 +163,15 @@ python3 -m dsh_forge packages compose \
   --output /tmp/review-stack.manifest.json
 ```
 
-The composer is metadata-only and makes no network requests. Successful
-verification explicitly returns `execution_authorized: false`. A separate CLI
+The composer and package-catalog ingester are metadata-only and make no network
+requests. The ingester validates the source ledger and emits deterministic
+package pages from exact plugin metadata:
+
+```bash
+python3 scripts/ingest_package_catalog.py --check
+```
+
+Successful verification explicitly returns `execution_authorized: false`. A separate CLI
 boundary can verify that signed envelope, download its exact artifacts over
 credential-free HTTPS, recompute their signed integrity, and place immutable
 bytes in a content-addressed quarantine:
@@ -175,7 +186,11 @@ Acquisition does not extract archives, install dependencies, alter a Harness
 profile, or execute code. Both `installation_authorized` and
 `execution_authorized` remain false. See [Signed packages](docs/signed-packages.md)
 and [Quarantine acquisition](docs/quarantine-acquisition.md) for the trust model
-and enforced limits.
+and enforced limits. See [Package catalog](docs/package-catalog.md) for the
+metadata contract, directory-ingestion boundary, dedicated pages, and proposed
+hosted-registry API. The separate
+[AgentTeams sandbox evaluation](docs/agentteams-sandbox-evaluation.md) pins the
+first candidate and installs it only inside a disposable Apptainer profile.
 
 ## Development
 

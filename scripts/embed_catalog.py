@@ -5,13 +5,19 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from dsh_forge.catalog import load_json, validate_feed  # noqa: E402
+
 UPSTREAM = "deepseek-ai/deepseek-harness"
 
 
-def validate(snapshot):
+def validate(snapshot, package_feed=None):
     if snapshot.get("schema_version") != 1 or snapshot.get("upstream") != UPSTREAM:
         raise ValueError("Unsupported snapshot version or upstream")
     entries = snapshot.get("entries")
@@ -21,17 +27,26 @@ def validate(snapshot):
         raise ValueError("The seed must contain exactly ten ranked forks")
     if not isinstance(extras, list) or len(extras) > 100:
         raise ValueError("Invalid supplemental entries")
-    if packages != []:
-        raise ValueError("Package uploads are not connected; the package seed must remain empty")
+    if package_feed is None:
+        if packages != []:
+            raise ValueError("Package entries must come from the separately validated catalog feed")
+        if "package_catalog_digest" in snapshot:
+            raise ValueError("Raw snapshots must not claim a package-feed digest")
+    else:
+        validate_feed(package_feed)
+        if packages != package_feed["packages"]:
+            raise ValueError("Embedded package entries disagree with the package catalog feed")
+        if snapshot.get("package_catalog_digest") != package_feed["catalog_digest"]:
+            raise ValueError("Embedded package-feed digest disagrees with the package catalog feed")
     if snapshot.get("package_browser") != {
-        "status": "offline_composer_available",
-        "schema": "dsh-forge.package/v1",
+        "status": "metadata_catalog_preview",
+        "schema": "dsh-forge.catalog-package/v1",
         "signature_envelope": "dsse/v1-ed25519",
         "composition_enabled": True,
         "upload_enabled": False,
         "download_enabled": False,
         "execution_enabled": False,
-        "note": "Offline composition and signature verification are available. Publication, acquisition, installation, and execution remain disconnected; no sample packages are fabricated.",
+        "note": "Schema-valid metadata packages and dedicated routes are available. Each recipe still requires a trusted DSSE envelope before acquisition; upload, installation, and execution remain disconnected.",
     }:
         raise ValueError("Invalid package-browser boundary")
     supplemental = snapshot.get("supplemental_snapshot", {})
@@ -128,12 +143,16 @@ def encode(snapshot):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--snapshot", type=Path, default=ROOT / "data/public-repos.seed.json")
+    parser.add_argument("--package-feed", type=Path, default=ROOT / "data/package-catalog.seed.json")
     parser.add_argument("--html", type=Path, default=ROOT / "web/launcher.js", help="JavaScript source containing the snapshot markers")
     args = parser.parse_args()
     if args.snapshot.stat().st_size > 2_000_000:
         raise ValueError("Snapshot exceeds 2 MB")
     snapshot = json.loads(args.snapshot.read_text(encoding="utf-8"))
-    validate(snapshot)
+    package_feed = load_json(args.package_feed, max_bytes=4_000_000)
+    snapshot["package_entries"] = package_feed["packages"]
+    snapshot["package_catalog_digest"] = package_feed["catalog_digest"]
+    validate(snapshot, package_feed)
     html = args.html.read_text(encoding="utf-8")
     start, end = "// CATALOG_SNAPSHOT_START", "// CATALOG_SNAPSHOT_END"
     if html.count(start) != 1 or html.count(end) != 1:
