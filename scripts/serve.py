@@ -206,6 +206,21 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             if path == "/api/v1/launches/preview":
                 self._json(self.server.launcher.preview(body))
                 return
+            if path == "/api/v1/packages/install":
+                package_slug = body.get("package_slug")
+                version_id = body.get("version_id")
+                profile = body.get("profile", "web")
+                if not isinstance(package_slug, str) or not isinstance(version_id, str) or not isinstance(profile, str):
+                    raise LauncherError("package_slug, version_id, and profile must be strings")
+                self._json(
+                    self.server.launcher.install_trusted_catalog_package(
+                        package_slug=package_slug,
+                        version_id=version_id,
+                        profile=profile,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
             if path == "/api/v1/cells":
                 self._json(self.server.launcher.launch(body), HTTPStatus.CREATED)
                 return

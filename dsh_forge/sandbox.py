@@ -388,6 +388,7 @@ class ApptainerSandbox:
         network: str,
         read_only_mounts: Sequence[tuple[Path, str]],
         container_environment: Mapping[str, str] | None = None,
+        wall_seconds: int | None = None,
     ) -> dict[str, Any]:
         """Build a supervised command for a disposable package operation."""
 
@@ -407,12 +408,15 @@ class ApptainerSandbox:
         )
         if not self.timeout_binary:
             raise SandboxError("Cell wall-time supervisor is unavailable")
+        supervised_seconds = wall_seconds if wall_seconds is not None else self.config.cell_timeout_seconds
+        if type(supervised_seconds) is not int or not 5 <= supervised_seconds <= self.config.cell_timeout_seconds:
+            raise SandboxError("Package operation wall time is outside the configured sandbox limit")
         supervised = [
             self.timeout_binary,
             "--foreground",
             "--signal=TERM",
             "--kill-after=5",
-            str(self.config.cell_timeout_seconds),
+            str(supervised_seconds),
             *command,
         ]
         return {

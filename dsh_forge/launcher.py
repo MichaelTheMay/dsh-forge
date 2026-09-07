@@ -31,6 +31,7 @@ PROTECTED_PORTS = {3080, 3090}
 CELL_REGISTRY_SCHEMA_VERSION = 1
 CELL_REGISTRY_EVENT_LIMIT = 64
 VERSION_REGISTRY_SCHEMA_VERSION = 1
+PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION = 1
 DEFAULT_VERSIONS_DIRECTORY = "dsh-versions"
 DEFAULT_VERSION_LAUNCH = {
     "surface": "web",
@@ -292,6 +293,10 @@ class Launcher:
         self.cells_file = self.state_root / "cells.json"
         self.cells_lock_file = self.state_root / "cells.lock"
         self.sandbox_results_file = self.state_root / "sandbox-results.json"
+        self.package_installs_file = self.state_root / "package-installations.json"
+        self.package_installs_lock_file = self.state_root / "package-installations.lock"
+        self.trusted_package_recipes_root = self.state_root / "trusted-package-recipes"
+        self.trusted_package_recipes_root.mkdir(exist_ok=True, mode=0o700)
         self._lock = threading.RLock()
         self._mutation_lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
@@ -301,6 +306,7 @@ class Launcher:
         self._coverage_gaps: list[str] = []
         self.sandbox = sandbox or ApptainerSandbox(SandboxConfig.from_environment(), self.state_root / "sandbox")
         self._sandbox_results = self._load_sandbox_results()
+        self._package_installations = self._load_package_installations()
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
         roots.extend(Path(p).expanduser() for p in env_roots.split(os.pathsep) if p)
@@ -360,6 +366,31 @@ class Launcher:
             return {}
         return {str(key): value for key, value in raw.items() if isinstance(value, dict)}
 
+    def _load_package_installations(self) -> dict[str, dict[str, Any]]:
+        payload = _read_json(self.package_installs_file)
+        schema_version = payload.get("schema_version", PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION)
+        if schema_version != PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION:
+            raise LauncherError(
+                f"Unsupported package-install registry schema {schema_version}; "
+                f"expected {PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION}"
+            )
+        records: dict[str, dict[str, Any]] = {}
+        for record in payload.get("installations", []) if isinstance(payload.get("installations", []), list) else []:
+            if isinstance(record, dict) and re.fullmatch(r"install_[a-f0-9]{20}", str(record.get("id") or "")):
+                records[record["id"]] = record
+        return records
+
+    def _save_package_installations(self) -> None:
+        temporary = self.package_installs_file.with_suffix(".tmp")
+        payload = {
+            "schema_version": PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION,
+            "updated_at": int(time.time() * 1000),
+            "installations": list(self._package_installations.values())[-128:],
+        }
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(self.package_installs_file)
+
     def _save_sandbox_results(self) -> None:
         temporary = self.sandbox_results_file.with_suffix(".tmp")
         temporary.write_text(json.dumps({"results": self._sandbox_results}, indent=2) + "\n", encoding="utf-8")
@@ -395,6 +426,16 @@ class Launcher:
     def _roots_file_lock(self):
         """Serialize saved local-version mutations across UI and CLI processes."""
         descriptor = os.open(self.roots_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    @contextmanager
+    def _package_installs_file_lock(self):
+        descriptor = os.open(self.package_installs_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX)
             yield
@@ -843,6 +884,8 @@ class Launcher:
             "cells": cells,
             "scan_roots": [_display_path(p) for p in self._scan_roots],
             "saved_versions": self._public_saved_versions(),
+            "package_installations": list(self._package_installations.values())[-25:],
+            "trusted_package_recipes": self.trusted_package_recipes(),
             "versions_directory": {
                 "path": _display_path(self.versions_directory),
                 "available": self.versions_directory.is_dir(),
@@ -878,6 +921,13 @@ class Launcher:
                 "source_directories_mutated": False,
                 "auto_discovery_directory": _display_path(self.versions_directory),
                 "one_click_presets": True,
+            },
+            "package_profile_installation": {
+                "available": sandbox_ready,
+                "backend": "signed-quarantine-apptainer-v1",
+                "atomic_promotion": True,
+                "host_fallback": False,
+                "reason": sandbox_status.get("reason"),
             },
             "parallel_local_cells": {
                 "available": sandbox_ready,
@@ -962,7 +1012,37 @@ class Launcher:
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
 
-    def install_package(
+    def _tree_for_saved_version(self, version_id: str) -> dict[str, Any]:
+        if not re.fullmatch(r"version_[a-f0-9]{12}", str(version_id or "")):
+            raise LauncherError("Choose a saved Harness version")
+        record = self._saved_roots.get(version_id)
+        if not record:
+            raise LauncherError("Saved Harness version was not found")
+        root = record["path"].resolve()
+        candidates = []
+        for tree in self._trees.values():
+            try:
+                Path(tree["real_path"]).resolve().relative_to(root)
+            except (KeyError, OSError, ValueError):
+                continue
+            candidates.append(tree)
+        exact = next((tree for tree in candidates if Path(tree["real_path"]).resolve() == root), None)
+        selected = exact or (candidates[0] if candidates else None)
+        if not selected:
+            raise LauncherError("Saved version no longer contains a detected Harness")
+        return self._tree(selected["id"])
+
+    def _update_package_installation(self, install_id: str, **changes: Any) -> dict[str, Any]:
+        with self._package_installs_file_lock():
+            self._package_installations = self._load_package_installations()
+            record = self._package_installations.get(install_id, {"id": install_id})
+            record.update(changes)
+            record["updated_at"] = int(time.time() * 1000)
+            self._package_installations[install_id] = record
+            self._save_package_installations()
+            return dict(record)
+
+    def install_acquired_package(
         self,
         *,
         tree_id: str,
@@ -973,7 +1053,7 @@ class Launcher:
         profile: str = "web",
         timeout_seconds: int = 900,
     ) -> dict[str, Any]:
-        """Install a signed package into a new sandbox-owned profile."""
+        """Low-level CLI boundary for an already acquired signed package."""
 
         from .installation import install_in_sandbox
 
@@ -991,6 +1071,136 @@ class Launcher:
             )
         except (PackageError, SandboxError) as error:
             raise LauncherError(str(error)) from error
+
+    def install_package(
+        self,
+        *,
+        version_id: str,
+        envelope: dict[str, Any],
+        trust_root: dict[str, Any],
+        profile: str = "web",
+        timeout_seconds: int = 900,
+    ) -> dict[str, Any]:
+        """Acquire, inspect, sandbox-test, and atomically promote one package."""
+
+        from .acquisition import acquire
+        from .installation import install_in_sandbox
+        from .packages import verify
+
+        tree = self._tree_for_saved_version(version_id)
+        install_id = "install_" + secrets.token_hex(10)
+        try:
+            verified = verify(envelope, trust_root)
+            package = verified["manifest"]["package"]
+        except PackageError as error:
+            raise LauncherError(str(error)) from error
+        self._update_package_installation(
+            install_id,
+            state="running",
+            step="verify",
+            detail="Verifying signed package and explicit trust root",
+            package=package,
+            version_id=version_id,
+            tree_id=tree["id"],
+            profile=profile,
+            rollback_preserved=True,
+            created_at=int(time.time() * 1000),
+        )
+
+        def progress(step: str, detail: str) -> None:
+            self._update_package_installation(install_id, state="running", step=step, detail=detail)
+
+        try:
+            progress("acquire", "Acquiring exact bytes into content-addressed quarantine")
+            acquisition = acquire(
+                envelope,
+                trust_root,
+                self.state_root / "quarantine",
+                total_timeout_seconds=min(timeout_seconds, 3600),
+            )
+            result = install_in_sandbox(
+                envelope,
+                trust_root,
+                acquisition["receipt"],
+                tree=tree,
+                sandbox=self.sandbox,
+                install_root=self.state_root / "package-profiles",
+                profile=profile,
+                timeout_seconds=timeout_seconds,
+                transaction_id=install_id,
+                progress=progress,
+            )
+        except (PackageError, SandboxError) as error:
+            self._update_package_installation(
+                install_id,
+                state="failed",
+                step="failed",
+                detail=str(error),
+                error={"code": getattr(error, "code", "install_failed"), "message": str(error)},
+                rollback_preserved=True,
+            )
+            raise LauncherError(str(error)) from error
+        return self._update_package_installation(
+            install_id,
+            state="ready",
+            step="complete",
+            detail="Compatibility-tested profile promoted",
+            receipt=result["receipt"],
+            home=result["home"],
+            rollback_install_id=result["rollback_install_id"],
+            rollback_preserved=True,
+        )
+
+    def trusted_package_recipes(self) -> list[dict[str, Any]]:
+        """List only local recipe slots; signatures are rechecked at install time."""
+
+        recipes: list[dict[str, Any]] = []
+        try:
+            candidates = sorted(self.trusted_package_recipes_root.iterdir())
+        except OSError:
+            return recipes
+        for directory in candidates[:128]:
+            if directory.is_symlink() or not directory.is_dir() or not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", directory.name):
+                continue
+            envelope = directory / "envelope.json"
+            trust_root = directory / "trust-root.json"
+            if envelope.is_file() and trust_root.is_file() and not envelope.is_symlink() and not trust_root.is_symlink():
+                recipes.append({"slug": directory.name, "configured": True, "verified_at_install": True})
+        return recipes
+
+    def install_trusted_catalog_package(
+        self,
+        *,
+        package_slug: str,
+        version_id: str,
+        profile: str = "web",
+    ) -> dict[str, Any]:
+        """Install one locally trusted catalog recipe without accepting browser file paths."""
+
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", str(package_slug or "")):
+            raise LauncherError("Choose a valid package")
+        directory = self.trusted_package_recipes_root / package_slug
+        if directory.is_symlink() or not directory.is_dir():
+            raise LauncherError("This package has no locally configured signed recipe")
+        envelope_path = directory / "envelope.json"
+        trust_path = directory / "trust-root.json"
+        if envelope_path.is_symlink() or trust_path.is_symlink():
+            raise LauncherError("Trusted package recipe may not contain symlinked inputs")
+        from .packages import read_json, verify
+        try:
+            envelope = read_json(envelope_path)
+            trust_root = read_json(trust_path)
+            manifest = verify(envelope, trust_root)["manifest"]
+        except PackageError as error:
+            raise LauncherError(str(error)) from error
+        if manifest["package"]["id"] != package_slug:
+            raise LauncherError("Signed package identity does not match its catalog route")
+        return self.install_package(
+            version_id=version_id,
+            envelope=envelope,
+            trust_root=trust_root,
+            profile=profile,
+        )
 
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
         tree = self._tree(str(raw.get("tree_id", "")))

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge package installation registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "installations"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "updated_at": {"type": "integer", "minimum": 0},
+    "installations": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "required": ["id", "state", "step", "detail", "version_id", "tree_id", "profile", "rollback_preserved", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^install_[0-9a-f]{20}$"},
+          "state": {"enum": ["running", "ready", "failed"]},
+          "step": {"enum": ["verify", "acquire", "profile", "install", "probe", "promote", "complete", "failed"]},
+          "detail": {"type": "string", "maxLength": 4096},
+          "package": {"type": "object"},
+          "version_id": {"type": "string", "pattern": "^version_[0-9a-f]{12}$"},
+          "tree_id": {"type": "string", "pattern": "^tree_[0-9a-f]{12}$"},
+          "profile": {"type": "string"},
+          "rollback_preserved": {"const": true},
+          "created_at": {"type": "integer", "minimum": 0},
+          "updated_at": {"type": "integer", "minimum": 0},
+          "error": {"type": "object"},
+          "receipt": {"type": "string"},
+          "home": {"type": "string"},
+          "rollback_install_id": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

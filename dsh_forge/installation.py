@@ -9,15 +9,19 @@ home. The user's existing DSH home is never mounted or modified.
 from __future__ import annotations
 
 import datetime as dt
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import secrets
+import shutil
 import stat
 import subprocess
 import tarfile
+import time
 from typing import Any, Callable, Mapping, Sequence
 
 from .acquisition import RECEIPT_SCHEMA
@@ -37,6 +41,14 @@ MAX_LOG_BYTES = 1024 * 1024
 _OBJECT = re.compile(r"objects/sha256/[0-9a-f]{2}/([0-9a-f]{64})/artifact")
 _PACKAGE_NAME = re.compile(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+")
 _SAFE_ID = re.compile(r"[a-z0-9][a-z0-9._-]{1,127}")
+_BINARY_SUFFIXES = {
+    ".a", ".bin", ".class", ".dll", ".dylib", ".exe", ".jar", ".node",
+    ".o", ".so", ".wasm",
+}
+_PROFILE_EXCLUDES = {
+    ".cache", "cache", "caches", "credentials", "locks", "pids", "secrets",
+    "session", "sessions", "sockets",
+}
 
 
 class InstallationError(PackageError):
@@ -142,6 +154,11 @@ def inspect_npm_archive(path: Path, expected_name: str, expected_version: str) -
                 if not (member.isfile() or member.isdir()):
                     raise InstallationError(f"Archive contains an unsupported entry: {name}", "unsafe_archive")
                 if member.isfile():
+                    if PurePosixPath(name).suffix.lower() in _BINARY_SUFFIXES:
+                        raise InstallationError(
+                            f"Archive contains an unexpected binary artifact: {name}",
+                            "unsafe_archive",
+                        )
                     if member.size < 0 or member.size > MAX_FILE_BYTES:
                         raise InstallationError(f"Archive member exceeds the file limit: {name}", "archive_too_large")
                     total_size += member.size
@@ -176,6 +193,17 @@ def inspect_npm_archive(path: Path, expected_name: str, expected_version: str) -
             "unsupported_dependency_source",
         )
     lifecycle_names = sorted(set(scripts).intersection({"preinstall", "install", "postinstall", "prepare"}))
+    if lifecycle_names:
+        raise InstallationError(
+            "Archive declares forbidden lifecycle scripts: " + ", ".join(lifecycle_names),
+            "unsafe_archive",
+        )
+    runtime_dependencies = dependency_counts["dependencies"] + dependency_counts["optionalDependencies"]
+    if runtime_dependencies:
+        raise InstallationError(
+            "V1 packages must carry a closed top-level artifact set and may not resolve runtime dependencies",
+            "incomplete_dependency_closure",
+        )
     return {
         "format": "npm-tgz",
         "entry_count": len(names),
@@ -285,6 +313,48 @@ def inspect_acquisition(
 
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+Progress = Callable[[str, str], None]
+
+
+@contextmanager
+def _install_lock(root: Path):
+    lock = root / ".install.lock"
+    descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
+def _copy_profile(source: Path, destination: Path) -> None:
+    """Copy a profile home without links, sessions, caches, or credential-like files."""
+
+    if source.is_symlink() or not source.is_dir():
+        raise InstallationError("Existing promoted profile is not a safe directory", "profile_corrupt")
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        ignored: set[str] = set()
+        for name in names:
+            lowered = name.lower()
+            candidate = Path(directory) / name
+            if (
+                candidate.is_symlink()
+                or lowered in _PROFILE_EXCLUDES
+                or lowered.endswith((".lock", ".pid", ".sock"))
+                or lowered.startswith((".env", "credential", "secret"))
+            ):
+                ignored.add(name)
+        return ignored
+
+    shutil.copytree(source, destination, symlinks=False, ignore=ignore)
+    os.chmod(destination, 0o700)
+
+
+def _bounded_output(value: str | None) -> str:
+    rendered = (value or "").encode("utf-8", errors="replace")[-MAX_LOG_BYTES:]
+    return rendered.decode("utf-8", errors="replace")
 
 
 def _run(command: Sequence[str], environment: Mapping[str, str], timeout: int, runner: Runner) -> subprocess.CompletedProcess[str]:
@@ -310,33 +380,76 @@ def install_in_sandbox(
     profile: str = "web",
     timeout_seconds: int = 900,
     runner: Runner = subprocess.run,
+    transaction_id: str | None = None,
+    progress: Progress | None = None,
 ) -> dict[str, Any]:
-    """Install exact top-level npm artifacts into a new contained DSH home."""
+    """Install a closed signed artifact set and atomically promote a tested profile."""
 
     if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", profile):
         raise InstallationError("Profile contains unsupported characters", "invalid_install_argument")
     if type(timeout_seconds) is not int or not 30 <= timeout_seconds <= 3600:
         raise InstallationError("Install timeout must be between 30 and 3600 seconds", "invalid_install_argument")
+    def report(step: str, detail: str) -> None:
+        if progress is None:
+            return
+        try:
+            progress(step, detail)
+        except Exception:
+            # Progress persistence is observational and cannot change the
+            # install boundary's promotion result.
+            return
+    report("verify", "Verifying signed package and acquisition receipt")
     inspection = inspect_acquisition(envelope, trust_root, receipt_path)
     verification = verify(envelope, trust_root)
     manifest = verification["manifest"]
     if not sandbox.ready:
-        raise InstallationError(str(sandbox.status().get("reason") or "Apptainer sandbox is unavailable"), "sandbox_unavailable")
+        raise InstallationError(
+            str(sandbox.status().get("reason") or "Apptainer sandbox is unavailable"),
+            "sandbox_unavailable",
+        )
 
     package_id = manifest["package"]["id"]
-    if not _SAFE_ID.fullmatch(package_id):
-        raise InstallationError("Signed package ID is invalid", "invalid_package")
+    tree_id = str(tree.get("id") or "")
+    if not _SAFE_ID.fullmatch(package_id) or not re.fullmatch(r"tree_[a-f0-9]{12}", tree_id):
+        raise InstallationError("Signed package or Harness identity is invalid", "invalid_package")
     payload_hex = verification["payload_digest"].removeprefix("sha256:")
-    install_id = f"install_{payload_hex[:12]}_{secrets.token_hex(4)}"
-    root = Path(install_root).expanduser().resolve() / install_id
+    install_id = transaction_id or f"install_{payload_hex[:12]}{secrets.token_hex(4)}"
+    if not re.fullmatch(r"install_[a-f0-9]{12,32}", install_id):
+        raise InstallationError("Install transaction identity is invalid", "invalid_install_argument")
+
+    base = Path(install_root).expanduser().absolute()
+    if base.exists() and base.is_symlink():
+        raise InstallationError("Install root may not be a symlink", "unsafe_install_root")
+    base.mkdir(parents=True, exist_ok=True, mode=0o700)
+    profile_root = base / "profiles" / tree_id / profile
+    releases = profile_root / "releases"
+    staging_root = base / ".staging"
+    failed_root = base / "failed"
+    evidence_root = base / "evidence"
+    for directory in (profile_root, releases, staging_root, failed_root, evidence_root):
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if directory.is_symlink():
+            raise InstallationError("Install layout contains a symlink", "unsafe_install_root")
+    root = staging_root / install_id
     if root.exists():
         raise InstallationError("Generated installation identity already exists", "install_conflict")
     home = root / "home"
     workspace = root / "workspace"
-    root.mkdir(parents=True, mode=0o700)
-    home.mkdir(mode=0o700)
+    root.mkdir(mode=0o700)
     workspace.mkdir(mode=0o700)
     log_path = workspace / "install.log"
+    current_path = profile_root / "current.json"
+    previous: dict[str, Any] | None = None
+    if current_path.is_file() and not current_path.is_symlink():
+        previous = read_json(current_path)
+        previous_home = Path(str(previous.get("home") or ""))
+        try:
+            previous_home.resolve().relative_to(releases.resolve())
+        except (OSError, ValueError) as error:
+            raise InstallationError("Current promoted profile escapes its release root", "profile_corrupt") from error
+        _copy_profile(previous_home, home)
+    else:
+        home.mkdir(mode=0o700)
 
     acquisition_receipt = read_json(receipt_path)
     quarantine_root = Path(acquisition_receipt["quarantine_root"]).expanduser().resolve()
@@ -344,13 +457,27 @@ def install_in_sandbox(
     plugin_by_id = {plugin["id"]: plugin for plugin in manifest["plugins"]}
     output_parts: list[str] = []
     installed: list[dict[str, str]] = []
+    evidence: Path | None = None
     environment = {
         "CI": "1", "NPM_CONFIG_IGNORE_SCRIPTS": "true", "NPM_CONFIG_AUDIT": "false",
-        "NPM_CONFIG_FUND": "false", "NPM_CONFIG_USERCONFIG": "/dev/null",
-        "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0", "DSH_PROFILE": profile,
+        "NPM_CONFIG_FUND": "false", "NPM_CONFIG_OFFLINE": "true",
+        "NPM_CONFIG_USERCONFIG": "/dev/null", "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+        "DSH_PROFILE": profile,
     }
 
     try:
+        report("profile", "Preparing disposable Harness profile")
+        initialize = sandbox.package_command_plan(
+            tree=tree, home=home, workspace=workspace,
+            payload=["--profile", profile, "--dump-config"], network="none",
+            read_only_mounts=[], container_environment=environment,
+        )
+        completed = _run(initialize["argv"], initialize["environment"], min(timeout_seconds, 300), runner)
+        output_parts.append("[profile-initialize]\n" + _bounded_output(completed.stdout))
+        if completed.returncode != 0:
+            raise InstallationError("Disposable profile could not be initialized", "profile_initialize_failed")
+
+        report("install", "Installing signed artifacts without network or package scripts")
         for index, plugin_id in enumerate(manifest["load_order"]):
             plugin = plugin_by_id[plugin_id]
             artifact = artifact_receipts[plugin_id]
@@ -358,71 +485,141 @@ def install_in_sandbox(
             target = f"/quarantine/{index:03d}-{plugin_id}.tgz"
             plan = sandbox.package_command_plan(
                 tree=tree, home=home, workspace=workspace,
-                payload=["plugin", "--profile", profile, "add", "--save-exact", "--ignore-scripts", f"file:{target}"],
-                network="host", read_only_mounts=[(host_artifact, target)],
+                payload=[
+                    "plugin", "--profile", profile, "add", "--save-exact",
+                    "--offline", "--ignore-scripts", f"file:{target}",
+                ],
+                network="none", read_only_mounts=[(host_artifact, target)],
                 container_environment=environment,
             )
             completed = _run(plan["argv"], plan["environment"], timeout_seconds, runner)
-            output_parts.append(f"[{plugin_id}]\n{completed.stdout or ''}")
+            output_parts.append(f"[{plugin_id}]\n{_bounded_output(completed.stdout)}")
             if completed.returncode != 0:
                 raise InstallationError(
-                    f"Sandbox package installation failed for {plugin_id} with exit code {completed.returncode}; evidence: {root}",
+                    f"Offline sandbox installation failed for {plugin_id}; evidence is retained under {failed_root}",
                     "install_failed",
                 )
-            installed.append({"plugin_id": plugin_id, "name": plugin["source"]["name"], "version": plugin["source"]["version"]})
+            installed.append({
+                "plugin_id": plugin_id,
+                "name": plugin["source"]["name"],
+                "version": plugin["source"]["version"],
+            })
 
+        report("probe", "Checking composition and Web startup inside Apptainer")
         probe = sandbox.package_command_plan(
-            tree=tree, home=home, workspace=workspace, payload=["--profile", profile, "--dump-config"],
-            network="none", read_only_mounts=[], container_environment=environment,
+            tree=tree, home=home, workspace=workspace,
+            payload=["--profile", profile, "--dump-config"], network="none",
+            read_only_mounts=[], container_environment=environment,
         )
         completed = _run(probe["argv"], probe["environment"], min(timeout_seconds, 300), runner)
-        output_parts.append(f"[composition-probe]\n{completed.stdout or ''}")
+        output_parts.append("[composition-probe]\n" + _bounded_output(completed.stdout))
         if completed.returncode != 0:
-            raise InstallationError(
-                f"Networkless package composition probe failed with exit code {completed.returncode}; evidence: {root}",
-                "compatibility_probe_failed",
-            )
+            raise InstallationError("Networkless package composition probe failed", "compatibility_probe_failed")
         missing = [item["name"] for item in installed if item["name"] not in (completed.stdout or "")]
         if missing:
             raise InstallationError(
-                "Networkless composition output did not identify installed package(s): " + ", ".join(missing),
+                "Composition output did not identify installed package(s): " + ", ".join(missing),
                 "compatibility_probe_failed",
             )
-    finally:
+
+        web_probe = sandbox.package_command_plan(
+            tree=tree, home=home, workspace=workspace,
+            payload=["web", "--host", "127.0.0.1", "--port", "3189", "--no-open"],
+            network="none", read_only_mounts=[], container_environment=environment,
+            wall_seconds=10,
+        )
+        completed = _run(web_probe["argv"], web_probe["environment"], 20, runner)
+        output_parts.append("[web-smoke]\n" + _bounded_output(completed.stdout))
+        web_output = completed.stdout or ""
+        if completed.returncode not in {0, 124, 143} or "dsh web:" not in web_output:
+            raise InstallationError("DeepSeek Web did not reach its startup marker", "compatibility_probe_failed")
+
         rendered = "\n".join(output_parts).encode("utf-8", errors="replace")[-MAX_LOG_BYTES:]
         log_path.write_bytes(rendered)
         os.chmod(log_path, 0o600)
-
-    receipt = {
-        "schema": INSTALL_RECEIPT_SCHEMA,
-        "install_id": install_id,
-        "package": manifest["package"],
-        "payload_digest": verification["payload_digest"],
-        "composition_digest": manifest["composition_digest"],
-        "installed_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        "profile": profile,
-        "home": str(home),
-        "workspace": str(workspace),
-        "log": str(log_path),
-        "plugins": installed,
-        "archive_inspection": inspection,
-        "sandbox": {
-            "mode": "apptainer-cell-v1", "image_sha256": sandbox.status().get("image_sha256"),
-            "network_during_install": "host", "network_during_probe": "none",
-            "secrets_forwarded": False, "host_home_exposed": False,
-        },
-        "dependency_resolution": {
-            "top_level_artifacts_signed": True, "transitive_dependencies_signed": False,
-            "source": "credential-free public npm inside disposable sandbox",
-        },
-        "lifecycle_scripts_allowed": False,
-        "host_profile_modified": False,
-        "sandbox_installed": True,
-        "composition_probe_passed": True,
-        "ready_for_sandbox_launch": True,
-    }
-    output = root / "receipt.json"
-    write_json(output, receipt)
-    output.chmod(0o400)
-    receipt["receipt"] = str(output)
-    return receipt
+        report("promote", "Atomically promoting the tested profile")
+        release_home = releases / install_id
+        evidence = evidence_root / install_id
+        final_log = evidence / "workspace" / "install.log"
+        promoted_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        promoted = {
+            "schema": "dsh-forge.promoted-profile/v1",
+            "install_id": install_id,
+            "package_id": package_id,
+            "tree_id": tree_id,
+            "profile": profile,
+            "home": str(release_home),
+            "previous_install_id": previous.get("install_id") if previous else None,
+            "promoted_at": promoted_at,
+        }
+        receipt = {
+            "schema": INSTALL_RECEIPT_SCHEMA,
+            "install_id": install_id,
+            "package": manifest["package"],
+            "payload_digest": verification["payload_digest"],
+            "composition_digest": manifest["composition_digest"],
+            "installed_at": promoted_at,
+            "tree_id": tree_id,
+            "profile": profile,
+            "home": str(release_home),
+            "workspace": str(evidence / "workspace"),
+            "log": str(final_log),
+            "plugins": installed,
+            "archive_inspection": inspection,
+            "sandbox": {
+                "mode": "apptainer-cell-v1",
+                "image_sha256": sandbox.status().get("image_sha256"),
+                "network_during_install": "none",
+                "network_during_probe": "none",
+                "secrets_forwarded": False,
+                "host_home_exposed": False,
+            },
+            "dependency_resolution": {
+                "top_level_artifacts_signed": True,
+                "runtime_dependencies_allowed": False,
+                "peer_dependencies_from_target_profile": True,
+                "source": "signed archives plus existing target profile; no registry access",
+            },
+            "lifecycle_scripts_allowed": False,
+            "host_profile_modified": False,
+            "sandbox_installed": True,
+            "composition_probe_passed": True,
+            "web_smoke_passed": True,
+            "atomically_promoted": True,
+            "rollback_install_id": promoted["previous_install_id"],
+            "ready_for_sandbox_launch": True,
+        }
+        staged_receipt = home / ".dsh-forge-install-receipt.json"
+        write_json(staged_receipt, receipt)
+        staged_receipt.chmod(0o400)
+        with _install_lock(base):
+            if release_home.exists():
+                raise InstallationError("Install release already exists", "install_conflict")
+            home.replace(release_home)
+            root.replace(evidence)
+            temporary = profile_root / f".current-{install_id}.json"
+            write_json(temporary, promoted)
+            temporary.chmod(0o600)
+            os.replace(temporary, current_path)
+        receipt["receipt"] = str(release_home / ".dsh-forge-install-receipt.json")
+        report("complete", "Package profile is ready")
+        return receipt
+    except Exception:
+        rendered = "\n".join(output_parts).encode("utf-8", errors="replace")[-MAX_LOG_BYTES:]
+        retained_log = log_path
+        if not retained_log.parent.is_dir() and evidence is not None:
+            retained_log = evidence / "workspace" / "install.log"
+        if retained_log.parent.is_dir():
+            retained_log.write_bytes(rendered)
+            os.chmod(retained_log, 0o600)
+        failed = failed_root / install_id
+        if root.exists() and not failed.exists():
+            root.replace(failed)
+        retained = failed if failed.exists() else (evidence if evidence and evidence.exists() else failed)
+        report("failed", f"Original profile preserved; evidence: {retained}")
+        raise
+    finally:
+        if root.exists():
+            rendered = "\n".join(output_parts).encode("utf-8", errors="replace")[-MAX_LOG_BYTES:]
+            log_path.write_bytes(rendered)
+            os.chmod(log_path, 0o600)

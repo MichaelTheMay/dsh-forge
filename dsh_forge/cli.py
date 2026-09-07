@@ -204,6 +204,16 @@ def _parser() -> argparse.ArgumentParser:
     install.add_argument("--install-root", default=str(DEFAULT_INSTALL_ROOT), metavar="DIR")
     install.add_argument("--timeout", type=int, default=900, metavar="SECONDS")
 
+    transact = package_commands.add_parser(
+        "install",
+        help="acquire and promote a signed package for one saved Harness version",
+    )
+    transact.add_argument("--bundle", required=True, metavar="JSON")
+    transact.add_argument("--trust-root", required=True, metavar="JSON")
+    transact.add_argument("--version", required=True, dest="version_id")
+    transact.add_argument("--profile", default="web")
+    transact.add_argument("--timeout", type=int, default=900, metavar="SECONDS")
+
     return parser
 
 
@@ -344,12 +354,21 @@ def run(
                 data = {**data, "output": str(Path(args.output).expanduser())}
         elif command == "packages.install-sandbox":
             launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
-            data = launcher.install_package(
+            data = launcher.install_acquired_package(
                 tree_id=args.tree_id,
                 envelope=read_json(args.bundle),
                 trust_root=read_json(args.trust_root),
                 receipt_path=args.receipt,
                 install_root=args.install_root,
+                profile=args.profile,
+                timeout_seconds=args.timeout,
+            )
+        elif command == "packages.install":
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            data = launcher.install_package(
+                version_id=args.version_id,
+                envelope=read_json(args.bundle),
+                trust_root=read_json(args.trust_root),
                 profile=args.profile,
                 timeout_seconds=args.timeout,
             )
