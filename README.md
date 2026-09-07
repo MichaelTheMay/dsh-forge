@@ -36,8 +36,8 @@ promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
 
-Python 3.9+ is sufficient to serve the app. There is no package installation or
-build step, and no API key is needed.
+Python 3.9+ is sufficient to serve the app. There is no frontend dependency
+installation or build step, and no API key is needed to browse local metadata.
 
 From an existing checkout:
 
@@ -197,6 +197,15 @@ metadata contract, directory-ingestion boundary, dedicated pages, and proposed
 hosted-registry API. The separate
 [AgentTeams sandbox evaluation](docs/agentteams-sandbox-evaluation.md) pins the
 first candidate and installs it only inside a disposable Apptainer profile.
+
+The package page can now connect those boundaries for a locally configured
+signed recipe. Select a saved, launch-ready Harness version and choose **Verify,
+test & install**. The launcher acquires exact bytes, rejects unsafe npm archives,
+installs without network or lifecycle scripts into a disposable profile, checks
+composition and DeepSeek Web startup inside Apptainer, and atomically promotes a
+versioned profile pointer. A failed transaction leaves the current profile
+unchanged and retains bounded evidence. See
+[Sandbox package installation](docs/package-installation.md).
 
 ## Development
 

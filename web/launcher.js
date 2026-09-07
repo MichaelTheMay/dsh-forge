@@ -1413,6 +1413,10 @@ class Component extends DCLogic {
       treeId: PREVIEW_TREES[0].id,
       trees: PREVIEW_TREES,
       savedVersions: [],
+      trustedPackageRecipes: [],
+      packageInstallations: [],
+      packageVersionId: '',
+      packageInstallBusy: false,
       versionsDirectory: { path: '~/dsh-versions', available: false, auto_scan: true },
       versionFormOpen: false,
       versionPath: '',
@@ -1541,6 +1545,29 @@ class Component extends DCLogic {
     }
   }
 
+  async installPackage(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    if (!this.state.trustedPackageRecipes.some(item => item.slug === detail.slug && item.configured)) {
+      return this.flash('Add a signed envelope and trust root for this package first');
+    }
+    this.setState({ packageInstallBusy: true, packageVersionId: versionId });
+    try {
+      await this.api('/api/v1/packages/install', {
+        method: 'POST',
+        body: JSON.stringify({ package_slug: detail.slug, version_id: versionId, profile: 'web' })
+      });
+      await this.refreshStatus(true);
+      this.flash('Package verified, tested, and saved');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.flash(error.message);
+    } finally {
+      this.setState({ packageInstallBusy: false });
+    }
+  }
+
   flash(msg) {
     this.setState({ toast: msg });
     if (this.toastTimer) clearTimeout(this.toastTimer);
@@ -1575,6 +1602,8 @@ class Component extends DCLogic {
       sidecarConnected: true, statusLoaded: true, trees, treeId: current,
       cells, selectedCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
+      trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
+      packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
       versionsDirectory: status.versions_directory || this.state.versionsDirectory,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
@@ -2023,6 +2052,18 @@ class Component extends DCLogic {
     });
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
+    const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
+      id: item.id,
+      label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
+      selected: item.id === (s.packageVersionId || ((s.savedVersions.find(candidate => candidate.state === 'ready') || {}).id)),
+    }));
+    const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
+    const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
+      item => item.slug === detail.slug && item.configured
+    );
+    const latestPackageInstall = detail.catalogPackage
+      ? [...s.packageInstallations].reverse().find(item => item.package && item.package.id === detail.slug)
+      : null;
     const results = filtered.map(a => ({
       ...a, selected: a.id === detail.id,
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
@@ -2294,6 +2335,16 @@ class Component extends DCLogic {
         packageUrl: component.package.url,
         shortCommit: component.repository.commit.slice(0, 12)
       })) : [],
+      packageVersions,
+      noPackageVersions: packageVersions.length === 0,
+      selectedPackageVersion,
+      setPackageVersion: event => this.setState({ packageVersionId: event.target.value }),
+      installPackage: () => detail.catalogPackage ? this.installPackage(detail) : undefined,
+      installDisabled: !detail.catalogPackage || !s.sidecarConnected || !sandbox.ready || !selectedPackageVersion || !recipeConfigured || s.packageInstallBusy,
+      installLabel: s.packageInstallBusy ? 'Testing package…' : (latestPackageInstall && latestPackageInstall.state === 'ready' ? 'Install again' : 'Verify, test & install'),
+      installStatus: latestPackageInstall
+        ? (latestPackageInstall.state === 'ready' ? 'Ready · tested profile saved' : latestPackageInstall.detail)
+        : (recipeConfigured ? 'Signed recipe configured locally' : 'Signed recipe required'),
       acquireLabel: detail.catalogPackage ? detail.acquisition.label : 'Acquire verified bytes',
       acquireReason: detail.catalogPackage ? detail.acquisition.reason : 'A schema-valid signed package record is required before acquisition.',
       sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,

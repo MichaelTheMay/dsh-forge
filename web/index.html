@@ -591,15 +591,24 @@
 
           <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
           <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
-          <div class="repo-detail-section"><h3>Acquire & browser-compose <span class="repo-label">Fail closed</span></h3>
-            <div class="repo-planned-actions"><button disabled title="{{ acquireReason }}">{{ acquireLabel }}</button><button disabled title="The offline CLI composer exists; browser composition and publishing are not connected.">Add to package</button><button disabled title="Requires reproducible execution inside the fail-closed sandbox.">Test and run in sandbox</button></div>
-            <p class="repo-muted">{{ acquireReason }} Browser metadata never authorizes install or execution. Those actions require archive inspection, a disposable profile, and a reproducible Apptainer compatibility result.</p>
-          </div>
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Install package <span class="repo-label">Fail closed</span></h3>
+            <label class="repo-muted" for="package-version">Harness version</label>
+            <select id="package-version" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
+              <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+            </select>
+            <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="false"><p class="repo-muted">Save a launch-ready local Harness version from the Launcher first.</p></sc-if>
+            <div class="repo-planned-actions"><button onClick="{{ installPackage }}" disabled="{{ installDisabled }}">{{ installLabel }}</button><button disabled title="Package composition and upload are a separate boundary.">Add to package</button></div>
+            <p class="repo-muted">{{ installStatus }}. Installation verifies trust, acquires exact bytes, rejects unsafe archives, uses an offline disposable profile, boots it in Apptainer, and promotes only after both smoke checks pass.</p>
+          </div></sc-if>
+          <sc-if value="{{ isRepositoryDetail }}" hint-placeholder-val="true"><div class="repo-detail-section"><h3>Package workflow <span class="repo-label">Metadata only</span></h3>
+            <div class="repo-planned-actions"><button disabled title="{{ acquireReason }}">{{ acquireLabel }}</button><button disabled>Add to package</button></div>
+            <p class="repo-muted">Select a signed package recipe to install; repository listings never authorize execution.</p>
+          </div></sc-if>
         </sc-if>
         <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>
       </aside>
     </div>
-    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Unsigned development feed · upload, acquisition, installation, and execution disabled</span></footer>
+    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Install requires a local signed recipe, saved Harness version, and passing Apptainer checks</span></footer>
   </main>
   </sc-if>
 

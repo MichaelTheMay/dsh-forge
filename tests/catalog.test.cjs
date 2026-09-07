@@ -299,15 +299,42 @@ test('catalog interactions cannot add, stop, or modify local cells', () => {
   c.renderVals().setQuery({ target: { value: 'desktop' } });
   c.renderVals().goLaunch(); assert.equal(JSON.stringify(c.state.cells), before);
 });
-test('public code actions are disabled and the snapshot has no fabricated analysis', () => {
+test('repository actions stay disabled while signed package install is locally gated', () => {
   const section = html.slice(html.indexOf('<main class="public-browser"'), html.indexOf('<sc-if value="{{ previewOpen }}"'));
-  assert.equal((section.match(/<button disabled title=/g) || []).length, 3);
-  assert(!/onClick="{{.*(?:install|clone|run|sandbox)/i.test(section));
+  assert.equal((section.match(/<button disabled(?: title=)?/g) || []).length, 3);
+  assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
   assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
   assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
   assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
   assert(CATALOG.filter(r => r.type === 'package').every(r => !r.verification.installed && !r.verification.sandbox_verified && !r.acquisition.enabled));
+});
+
+test('package page selects a saved version and posts only stable local identities', async () => {
+  const c = instance({}, '#packages/agent-teams-builder');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], package_installations: [],
+    trusted_package_recipes: [{ slug: 'agent-teams-builder', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { state: 'ready' };
+  };
+  c.refreshStatus = async () => {};
+  const values = c.renderVals();
+  assert.equal(values.installDisabled, false);
+  assert.equal(values.packageVersions.length, 1);
+  await values.installPackage();
+  assert.deepEqual(request, {
+    url: '/api/v1/packages/install',
+    body: { package_slug: 'agent-teams-builder', version_id: saved.id, profile: 'web' }
+  });
 });
 
 test('dedicated package route selects the requested metadata page and remains non-executable', async () => {
