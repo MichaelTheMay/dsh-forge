@@ -23,6 +23,7 @@ from typing import Any, Iterable
 
 import fcntl
 
+from .packages import PackageError
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
 
@@ -960,6 +961,36 @@ class Launcher:
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
+
+    def install_package(
+        self,
+        *,
+        tree_id: str,
+        envelope: dict[str, Any],
+        trust_root: dict[str, Any],
+        receipt_path: str | Path,
+        install_root: str | Path,
+        profile: str = "web",
+        timeout_seconds: int = 900,
+    ) -> dict[str, Any]:
+        """Install a signed package into a new sandbox-owned profile."""
+
+        from .installation import install_in_sandbox
+
+        tree = self._tree(tree_id)
+        try:
+            return install_in_sandbox(
+                envelope,
+                trust_root,
+                receipt_path,
+                tree=tree,
+                sandbox=self.sandbox,
+                install_root=install_root,
+                profile=profile,
+                timeout_seconds=timeout_seconds,
+            )
+        except (PackageError, SandboxError) as error:
+            raise LauncherError(str(error)) from error
 
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
         tree = self._tree(str(raw.get("tree_id", "")))

@@ -18,6 +18,7 @@ from .acquisition import (
     DEFAULT_TOTAL_TIMEOUT_SECONDS,
     acquire as acquire_package,
 )
+from .installation import DEFAULT_INSTALL_ROOT, inspect_acquisition
 from .launcher import Launcher, LauncherError
 from .packages import (
     PackageError,
@@ -181,6 +182,28 @@ def _parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
     )
 
+    inspect = package_commands.add_parser(
+        "inspect",
+        help="re-verify acquired artifacts and inspect npm archives without host extraction",
+    )
+    inspect.add_argument("--bundle", required=True, metavar="JSON")
+    inspect.add_argument("--trust-root", required=True, metavar="JSON")
+    inspect.add_argument("--receipt", required=True, metavar="JSON")
+    inspect.add_argument("--output", metavar="JSON")
+    inspect.add_argument("--force", action="store_true")
+
+    install = package_commands.add_parser(
+        "install-sandbox",
+        help="install a signed acquired package into a fresh Apptainer DSH profile",
+    )
+    install.add_argument("--bundle", required=True, metavar="JSON")
+    install.add_argument("--trust-root", required=True, metavar="JSON")
+    install.add_argument("--receipt", required=True, metavar="JSON")
+    install.add_argument("--tree", required=True, dest="tree_id")
+    install.add_argument("--profile", default="web")
+    install.add_argument("--install-root", default=str(DEFAULT_INSTALL_ROOT), metavar="DIR")
+    install.add_argument("--timeout", type=int, default=900, metavar="SECONDS")
+
     return parser
 
 
@@ -309,6 +332,26 @@ def run(
                 max_total_bytes=args.max_total_bytes,
                 timeout_seconds=args.timeout,
                 total_timeout_seconds=args.total_timeout,
+            )
+        elif command == "packages.inspect":
+            data = inspect_acquisition(
+                read_json(args.bundle),
+                read_json(args.trust_root),
+                args.receipt,
+            )
+            if args.output:
+                write_json(args.output, data, force=args.force)
+                data = {**data, "output": str(Path(args.output).expanduser())}
+        elif command == "packages.install-sandbox":
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            data = launcher.install_package(
+                tree_id=args.tree_id,
+                envelope=read_json(args.bundle),
+                trust_root=read_json(args.trust_root),
+                receipt_path=args.receipt,
+                install_root=args.install_root,
+                profile=args.profile,
+                timeout_seconds=args.timeout,
             )
         else:
             launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)

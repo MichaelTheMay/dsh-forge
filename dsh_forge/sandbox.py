@@ -298,6 +298,7 @@ class ApptainerSandbox:
         network: str = "none",
         gpu: bool = False,
         container_environment: Mapping[str, str] | None = None,
+        read_only_mounts: Sequence[tuple[Path, str]] = (),
         validate_paths: bool = True,
         include_resource_limits: bool | None = None,
     ) -> list[str]:
@@ -345,6 +346,16 @@ class ApptainerSandbox:
             if validate_paths and (not tree_root.is_dir() or tree_root.is_symlink()):
                 raise SandboxError("Sandbox source tree must be an existing non-symlink directory")
             command.extend(["--mount", self._mount(tree_root, "/opt/dsh", read_only=True)])
+        destinations: set[str] = set()
+        for source, destination in read_only_mounts:
+            if not isinstance(destination, str) or not re.fullmatch(r"/[A-Za-z0-9._/-]{1,255}", destination):
+                raise SandboxError("Additional sandbox mount has an invalid destination")
+            if destination in destinations or destination in {"/home/dsh", "/workspace", "/opt/dsh"}:
+                raise SandboxError("Additional sandbox mount destination collides with a protected mount")
+            destinations.add(destination)
+            if validate_paths and (source.is_symlink() or not source.is_file()):
+                raise SandboxError("Additional sandbox mount must be an existing non-symlink file")
+            command.extend(["--mount", self._mount(source, destination, read_only=True)])
         environment = {
             "DSH_HOME": "/home/dsh",
             # Stop the APPTAINER_BIND propagation described by Apptainer for
@@ -366,6 +377,52 @@ class ApptainerSandbox:
             *[str(item) for item in payload],
         ])
         return command
+
+    def package_command_plan(
+        self,
+        *,
+        tree: Mapping[str, Any],
+        home: Path,
+        workspace: Path,
+        payload: Sequence[str],
+        network: str,
+        read_only_mounts: Sequence[tuple[Path, str]],
+        container_environment: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Build a supervised command for a disposable package operation."""
+
+        root, executable, relative = self._verify_pinned_inputs(tree)
+        executable_payload = [str(Path("/opt/dsh") / relative)]
+        if executable.suffix == ".js":
+            executable_payload.insert(0, "node")
+        command = self.command(
+            home=home,
+            workspace=workspace,
+            tree_root=root,
+            payload=[*executable_payload, *[str(item) for item in payload]],
+            network=network,
+            gpu=False,
+            container_environment=container_environment,
+            read_only_mounts=read_only_mounts,
+        )
+        if not self.timeout_binary:
+            raise SandboxError("Cell wall-time supervisor is unavailable")
+        supervised = [
+            self.timeout_binary,
+            "--foreground",
+            "--signal=TERM",
+            "--kill-after=5",
+            str(self.config.cell_timeout_seconds),
+            *command,
+        ]
+        return {
+            "argv": supervised,
+            "environment": dict(self._host_environment()),
+            "network": network,
+            "image_sha256": self.image_digest,
+            "executable_sha256": self._sha256(executable),
+            "secrets_forwarded": False,
+        }
 
     def _verify_pinned_inputs(self, tree: Mapping[str, Any]) -> tuple[Path, Path, Path]:
         if not self.ready:
