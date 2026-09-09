@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>DSH Forge — Launcher & Community Browser</title>
-<meta name="description" content="DSH Forge local launcher with cached browsers for DeepSeek Harness plugins, forks, and community packages.">
+<title>DSH Forge — Launcher, Community & Assistant</title>
+<meta name="description" content="Browse DeepSeek Harness packages, plugins, and forks; save configurations; and run isolated local Harness cells.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
@@ -124,12 +124,21 @@
   .repo-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 10px 24px; border-top: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255); font: 9px 'IBM Plex Mono', monospace; color: oklch(0.63 0.012 255); }
   .repo-status-dot { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: oklch(0.73 0.11 235); }
   .repo-list-footnote { padding: 12px 5px 0; font-size: 10px; color: oklch(0.57 0.014 255); line-height: 1.7; }
+  .assistant-shell { min-height:0; flex:1 1 auto; display:grid; grid-template-columns:320px minmax(0,1fr); background:oklch(0.185 0.008 255); }
+  .assistant-sidebar { overflow-y:auto; padding:22px; border-right:1px solid oklch(0.3 0.012 255); background:oklch(0.205 0.01 255); }
+  .assistant-sidebar h1 { margin:4px 0 8px; font-size:22px; font-weight:550; letter-spacing:-.02em; }
+  .assistant-sidebar p { color:oklch(0.68 0.012 255); font-size:11px; line-height:1.65; }
+  .assistant-frame { min-width:0; min-height:0; display:flex; flex-direction:column; }
+  .assistant-frame iframe { width:100%; height:100%; border:0; background:white; }
+  .config-card { margin-top:9px; padding:11px; border:1px solid oklch(0.31 0.012 255); border-radius:7px; background:oklch(0.19 0.008 255); }
+  .config-card strong { display:block; font-size:11px; font-weight:600; overflow-wrap:anywhere; }
+  .config-meta { margin:5px 0 8px; color:oklch(0.6 0.012 255); font:9px/1.5 'IBM Plex Mono',monospace; }
   .repo-empty, .repo-detail-empty { padding: 46px 12px; text-align: center; }
   .repo-empty-icon { font-size: 30px; color: oklch(0.7 0.04 235); }
   .repo-empty h2, .repo-detail-empty h2 { font-size: 16px; font-weight: 500; }
   .repo-empty p, .repo-detail-empty p { color: oklch(0.67 0.016 255); font-size: 12px; line-height: 1.7; max-width: 380px; margin: 12px auto 20px; }
   @media (max-width: 1150px) { .header-snapshot { display: none !important; } .repo-workspace { grid-template-columns: minmax(0,1fr) 340px; } .repo-controls, .repo-results { padding-left: 16px; padding-right: 16px; } .repo-ranking-note { display: none; } .repo-inspector { padding: 18px; } }
-  @media (max-width: 800px) { .app-header { height: auto !important; min-height: 52px; padding: 10px 14px !important; gap: 10px !important; flex-wrap: wrap; } .header-loopback { display: none !important; } .public-browser { overflow-y: auto; } .repo-workspace { display: block; flex: 0 0 auto; } .repo-browse { border-right: 0; } .repo-results { max-height: 58vh; min-height: 190px; } .repo-inspector { overflow: visible; border-top: 1px solid oklch(0.3 0.012 255); padding: 22px; } .repo-masthead { padding: 20px; } .repo-snapshot-summary { display: none; } .repo-masthead h1 { font-size: 23px; } .repo-footer { padding: 12px 20px; } }
+  @media (max-width: 800px) { .app-header { height: auto !important; min-height: 52px; padding: 10px 14px !important; gap: 10px !important; flex-wrap: wrap; } .header-loopback { display: none !important; } .public-browser { overflow-y: auto; } .repo-workspace { display: block; flex: 0 0 auto; } .repo-browse { border-right: 0; } .repo-results { max-height: 58vh; min-height: 190px; } .repo-inspector { overflow: visible; border-top: 1px solid oklch(0.3 0.012 255); padding: 22px; } .repo-masthead { padding: 20px; } .repo-snapshot-summary { display: none; } .repo-masthead h1 { font-size: 23px; } .repo-footer { padding: 12px 20px; } .assistant-shell { display:flex; flex-direction:column; overflow-y:auto; } .assistant-sidebar { flex:0 0 auto; border-right:0; border-bottom:1px solid oklch(0.3 0.012 255); } .assistant-frame { min-height:620px; } }
   @media (max-width: 440px) { .repo-search-row { flex-wrap: wrap; } .repo-search { flex-basis: 100%; } .repo-sort select { padding: 7px 10px; } .repo-rank { display: none; } .repo-card { gap: 6px; padding: 12px; } .repo-masthead h1 { font-size: 21px; } .repo-upstream { font-size: 10px; } }
 
 </style>
@@ -150,6 +159,7 @@
       <sc-if value="{{ catalogEnabled }}" hint-placeholder-val="{{ true }}">
         <button onClick="{{ goCatalog }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ catalogTabBorder }}; background: {{ catalogTabBg }}; color: {{ catalogTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Community</button>
       </sc-if>
+      <button onClick="{{ goAssistant }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ assistantTabBorder }}; background: {{ assistantTabBg }}; color: {{ assistantTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Assistant</button>
     </nav>
     <div style="flex: 1 1 auto;"></div>
     <div class="header-snapshot" style="display: flex; align-items: center; gap: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.62 0.01 255);">
@@ -534,6 +544,9 @@
                 <button class="repo-type" onClick="{{ f.select }}" aria-pressed="{{ f.selected }}" style="background: {{ f.bg }}; color: {{ f.color }}; border-color: {{ f.border }};">{{ f.label }} <span>{{ f.count }}</span></button>
               </sc-for>
             </div>
+            <div class="repo-types" role="group" aria-label="Catalog scope">
+              <sc-for list="{{ catalogScopes }}" as="scope" hint-placeholder-count="2"><button class="repo-type" onClick="{{ scope.select }}" aria-pressed="{{ scope.selected }}" style="background:{{ scope.bg }}; color:{{ scope.color }}; border-color:{{ scope.border }};">{{ scope.label }}</button></sc-for>
+            </div>
             <label class="repo-license-filter"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
           </div>
           <div class="repo-result-line"><span aria-live="polite">{{ resultCount }}</span><span class="repo-ranking-note">{{ sortExplanation }}</span></div>
@@ -545,7 +558,7 @@
               <span class="repo-rank mono">{{ r.rankLabel }}</span>
               <span class="repo-card-body">
                 <span class="repo-card-heading"><span class="repo-owner mono">{{ r.owner }} /</span><span class="repo-stars mono"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ r.starsLabel }}</span></span>
-                <strong class="repo-name">{{ r.name }}</strong>
+                <strong class="repo-name">{{ r.name }} <sc-if value="{{ r.featured }}" hint-placeholder-val="{{ false }}"><span class="repo-label">{{ r.featuredLabel }}</span></sc-if></strong>
                 <span class="repo-description">{{ r.description }}</span>
                 <span class="repo-card-meta"><span class="repo-kind">{{ r.type }}</span><span>{{ r.versionLabel }}</span><span class="repo-language"><i></i>{{ r.language }}</span><span>{{ r.licenseLabel }}</span><span>{{ r.riskLabel }}</span><span>{{ r.activity }}</span><span>{{ r.archivedLabel }}</span></span>
               </span>
@@ -591,6 +604,7 @@
 
           <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
           <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
+          <div class="repo-detail-section"><h3>Save configuration</h3><button class="repo-button repo-button-primary" onClick="{{ saveConfiguration }}" disabled="{{ saveConfigurationDisabled }}">{{ saveConfigurationLabel }}</button><p class="repo-muted">Signed, installed packages can become runnable configurations. Raw plugin and fork selections are saved as inert drafts until composed and signed.</p></div>
           <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Install package <span class="repo-label">Fail closed</span></h3>
             <label class="repo-muted" for="package-version">Harness version</label>
             <select id="package-version" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
@@ -609,6 +623,30 @@
       </aside>
     </div>
     <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Install requires a local signed recipe, saved Harness version, and passing Apptainer checks</span></footer>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ showAssistant }}" hint-placeholder-val="{{ false }}">
+  <main class="assistant-shell" aria-label="DSH Forge discovery assistant">
+    <aside class="assistant-sidebar">
+      <div class="repo-eyebrow">LOCAL / ISOLATED</div>
+      <h1>Forge Assistant</h1>
+      <p>Open a disposable DeepSeek Harness with read-only catalog tools for finding complementary plugins, packages, and forks. It can save drafts for review; it cannot install or run community code.</p>
+      <label class="repo-muted" for="assistant-version">Harness version</label>
+      <select id="assistant-version" value="{{ selectedAssistantVersion }}" onChange="{{ setAssistantVersion }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
+        <sc-for list="{{ assistantVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+      </select>
+      <button class="repo-button repo-button-primary" onClick="{{ startAssistant }}" disabled="{{ assistantStartDisabled }}" style="width:100%;">{{ assistantStartLabel }}</button>
+      <p class="repo-muted">Requires a saved local Harness, the MCP client plugin in that Harness, and a passing pinned Apptainer capability probe. There is no host fallback.</p>
+      <div class="repo-detail-section"><h3>Saved configurations</h3>
+        <sc-if value="{{ noConfigurations }}" hint-placeholder-val="{{ true }}"><p class="repo-muted">Save a package or catalog selection to see it here and run it later from the CLI.</p></sc-if>
+        <sc-for list="{{ configurations }}" as="configuration" hint-placeholder-count="2"><article class="config-card"><strong>{{ configuration.name }}</strong><div class="config-meta">{{ configuration.versionLabel }} · {{ configuration.selectionLabel }} · <span style="color:{{ configuration.statusColor }};">{{ configuration.statusLabel }}</span></div><button class="repo-button" onClick="{{ configuration.run }}" disabled="{{ configuration.runDisabled }}">{{ configuration.runLabel }}</button><p class="repo-muted">{{ configuration.runtime.reason }}</p></article></sc-for>
+      </div>
+    </aside>
+    <section class="assistant-frame">
+      <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe src="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
+      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="repo-empty" style="margin:auto;"><div class="repo-empty-icon" aria-hidden="true">◇</div><h2>Start the isolated assistant</h2><p>The embedded Harness will appear here after its authenticated loopback URL is ready.</p></div></sc-if>
+    </section>
   </main>
   </sc-if>
 

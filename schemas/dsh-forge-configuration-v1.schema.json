@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge saved Harness configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "name", "description", "version_id", "package_slug", "selections", "launch", "status", "source", "created_at", "updated_at"],
+  "properties": {
+    "schema": {"const": "dsh-forge.configuration/v1"},
+    "id": {"type": "string", "pattern": "^config_[0-9a-f]{20}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 80},
+    "description": {"type": "string", "maxLength": 4000},
+    "version_id": {"type": "string", "pattern": "^version_[0-9a-f]{12}$"},
+    "package_slug": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$"}
+      ]
+    },
+    "selections": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "id"],
+        "properties": {
+          "type": {"enum": ["package", "plugin", "fork"]},
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9@:/._+\\-]{1,240}$"}
+        }
+      }
+    },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "profile", "task", "port", "open_browser", "network", "resources", "workspace"],
+      "properties": {
+        "surface": {"enum": ["web", "headless"]},
+        "profile": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$"},
+        "task": {"type": "string", "maxLength": 20000},
+        "port": {
+          "oneOf": [
+            {"const": "auto"},
+            {"type": "integer", "minimum": 1024, "maximum": 65535}
+          ]
+        },
+        "open_browser": {"type": "boolean"},
+        "network": {"enum": ["none", "host"]},
+        "workspace": {"const": "managed"},
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gpu"],
+          "properties": {"gpu": {"enum": ["none", "allocated"]}}
+        }
+      }
+    },
+    "status": {"enum": ["draft", "ready"]},
+    "source": {"enum": ["user", "mcp-draft"]},
+    "created_at": {"type": "integer", "minimum": 0},
+    "updated_at": {"type": "integer", "minimum": 0}
+  }
+}

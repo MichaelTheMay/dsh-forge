@@ -231,6 +231,7 @@ class PackageJsonSafetyTests(unittest.TestCase):
             "dsh-forge-catalog-feed-v1.schema.json",
             "dsh-forge-catalog-package-v1.schema.json",
             "dsh-forge-catalog-sources-v1.schema.json",
+            "dsh-forge-configuration-v1.schema.json",
             "dsh-forge-archive-inspection-v1.schema.json",
             "dsh-forge-package-spec-v1.schema.json",
             "dsh-forge-package-installation-registry-v1.schema.json",

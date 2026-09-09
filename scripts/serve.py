@@ -48,7 +48,7 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'")
         super().end_headers()
 
     def _loopback_host(self) -> bool:
@@ -220,6 +220,42 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     ),
                     HTTPStatus.CREATED,
                 )
+                return
+            if path == "/api/v1/configurations":
+                self._json(
+                    self.server.launcher.save_configuration(
+                        name=body.get("name"),
+                        description=body.get("description", ""),
+                        version_id=body.get("version_id"),
+                        package_slug=body.get("package_slug"),
+                        selections=body.get("selections"),
+                        launch=body.get("launch"),
+                        draft=body.get("draft") is True,
+                        source="user",
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
+            if path == "/api/v1/configurations/approve":
+                self._json(self.server.launcher.approve_configuration(body.get("id")))
+                return
+            if path == "/api/v1/configurations/remove":
+                self._json({"configurations": self.server.launcher.remove_configuration(body.get("id"))})
+                return
+            if path == "/api/v1/configurations/run":
+                task = body.get("task")
+                if task is not None and not isinstance(task, str):
+                    raise LauncherError("task must be a string")
+                self._json(
+                    self.server.launcher.run_configuration(body.get("id"), task=task),
+                    HTTPStatus.CREATED,
+                )
+                return
+            if path == "/api/v1/assistant/start":
+                version_id = body.get("version_id")
+                if not isinstance(version_id, str):
+                    raise LauncherError("version_id must be a saved local-version ID")
+                self._json(self.server.launcher.launch_assistant(version_id), HTTPStatus.CREATED)
                 return
             if path == "/api/v1/cells":
                 self._json(self.server.launcher.launch(body), HTTPStatus.CREATED)

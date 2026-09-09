@@ -465,6 +465,7 @@ class ApptainerSandbox:
         profile: str,
         network: str,
         gpu: bool,
+        patches: Sequence[str] = (),
         validate_paths: bool = True,
     ) -> dict[str, Any]:
         """Return a complete immutable launch plan or fail before process creation."""
@@ -489,6 +490,10 @@ class ApptainerSandbox:
             payload.extend(["headless", task])
         else:
             payload.extend(["web", "--host", "127.0.0.1", "--port", str(port), "--no-open"])
+        for patch in patches:
+            if not isinstance(patch, str) or not re.fullmatch(r"/workspace/[A-Za-z0-9_.-]{1,128}", patch):
+                raise SandboxError("Harness patches must be simple files inside the managed workspace")
+            payload.extend(["--patch", patch])
         environment = {"DSH_PROFILE": "web" if surface == "web" else profile}
         if port:
             environment["DSH_PORT"] = str(port)
