@@ -39,7 +39,7 @@ promoted into complete cells. Public repository acquisition remains disabled.
 ## Open the UI
 
 Browse the permanent disconnected demo at
-<https://michaelthemay.github.io/dsh-forge/>. It exposes the full application
+<https://dsh-forge.vercel.app/>. It exposes the full application
 shell and embedded community catalog. Local detection, installation, and launch
 controls remain disabled until the loopback sidecar below is running.
 
