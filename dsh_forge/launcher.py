@@ -10,6 +10,7 @@ import re
 import secrets
 import shlex
 import shutil
+import sqlite3
 import signal
 import socket
 import subprocess
@@ -20,9 +21,10 @@ import urllib.request
 from urllib.parse import urlsplit
 import uuid
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
+from .catalog_store import CatalogStore, CatalogStoreError, build
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError
@@ -369,6 +371,7 @@ class Launcher:
         self._profiles: dict[str, dict[str, Any]] = {}
         self._coverage_gaps: list[str] = []
         self.sandbox = sandbox or ApptainerSandbox(SandboxConfig.from_environment(), self.state_root / "sandbox")
+        self.catalog_store = CatalogStore(self.state_root / "catalog.sqlite3")
         self._sandbox_results = self._load_sandbox_results()
         self._package_installations = self._load_package_installations()
         roots = [Path(p).expanduser() for p in scan_roots]
@@ -914,6 +917,43 @@ class Launcher:
             })
         return versions
 
+    def import_catalog(self, snapshot: Mapping[str, Any], *, package_feed: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """Build the local catalog store from an already-validated snapshot.
+
+        Import is inert: it indexes metadata and never fetches, unpacks, or
+        executes anything, and it never upgrades the snapshot's recorded trust.
+        """
+        payload = dict(snapshot)
+        if package_feed is not None:
+            payload["package_entries"] = list(package_feed.get("packages") or [])
+        self.catalog_store.close()
+        try:
+            result = build(self.catalog_store.path, payload)
+        except (OSError, sqlite3.Error, ValueError) as error:
+            raise LauncherError(f"Could not import the catalog snapshot: {error}") from error
+        return {**result, "path": _display_path(self.catalog_store.path), **self.catalog_store.status()}
+
+    def catalog_search(self, **options: Any) -> dict[str, Any]:
+        """Search the imported catalog store.
+
+        The embedded snapshot stays the corpus for the disconnected preview;
+        this reads the imported store, which is the only path that scales to
+        the real fork network.
+        """
+        try:
+            return self.catalog_store.search(**options)
+        except CatalogStoreError as error:
+            raise LauncherError(str(error)) from error
+
+    def catalog_artifact(self, artifact_id: str) -> dict[str, Any]:
+        try:
+            record = self.catalog_store.get(artifact_id)
+        except CatalogStoreError as error:
+            raise LauncherError(str(error)) from error
+        if record is None:
+            raise LauncherError("Unknown catalog artifact")
+        return record
+
     def suggested_port(self) -> int:
         with self._lock:
             managed = {c.get("port") for c in self._cells.values() if c.get("state") not in {"stopped", "exited"}}
@@ -1040,6 +1080,7 @@ class Launcher:
             "suggested_port": self.suggested_port(),
             "credentials": [{"name": name, "present": bool(os.environ.get(name))} for name in SECRET_NAMES],
             "sandbox": self.sandbox.status(),
+            "catalog_store": self.catalog_store.status(),
             "registry": {
                 "schema_version": CELL_REGISTRY_SCHEMA_VERSION,
                 "generation": self._registry_generation,
@@ -1073,6 +1114,11 @@ class Launcher:
                 "cross_process_lock": True,
                 "mcp_drafts_require_approval": True,
                 "community_code_executed_on_load": False,
+            },
+            "catalog_store": {
+                **self.catalog_store.status(),
+                "embedded_snapshot_is_fallback": True,
+                "import_executes_code": False,
             },
             "local_profiles": {
                 "available": True,
@@ -2362,3 +2408,4 @@ class Launcher:
                 self.stop(cell_id, timeout=1)
             except LauncherError:
                 pass
+        self.catalog_store.close()

@@ -506,6 +506,43 @@ class LauncherServer(LauncherFixture):
                 urllib.request.urlopen(self.url + path, timeout=3)
             self.assertEqual(context.exception.code, 404)
 
+    def test_catalog_search_requires_a_session_and_pages_the_imported_store(self):
+        # Without an imported store the endpoint fails closed rather than 500ing.
+        cookie, _ = self.establish_session()
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(
+                urllib.request.Request(self.url + "/api/v1/catalog/search", headers={"Cookie": cookie}), timeout=3
+            )
+        self.assertEqual(context.exception.code, 409)
+
+        snapshot = json.loads((Path(serve.__file__).resolve().parents[1] / "data/public-repos.seed.json").read_text(encoding="utf-8"))
+        self.launcher.import_catalog(snapshot)
+
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                self.url + "/api/v1/catalog/search?q=desktop&type=fork&sort=stars&limit=2",
+                headers={"Cookie": cookie},
+            ), timeout=3
+        ) as response:
+            payload = json.load(response)
+        self.assertLessEqual(len(payload["artifacts"]), 2)
+        self.assertTrue(all(item["artifact_type"] == "fork" for item in payload["artifacts"]))
+        self.assertEqual(payload["provenance"]["signature_status"], "unsigned_development_seed")
+
+        # An invalid limit is a client error, not a crash.
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(
+                urllib.request.Request(
+                    self.url + "/api/v1/catalog/search?limit=9999", headers={"Cookie": cookie}
+                ), timeout=3
+            )
+        self.assertEqual(context.exception.code, 409)
+
+        # Reading the catalog still requires the launcher session.
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(self.url + "/api/v1/catalog/search", timeout=3)
+        self.assertEqual(context.exception.code, 403)
+
     def test_mutations_require_the_launcher_session(self):
         body = {"tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"}
         with self.assertRaises(urllib.error.HTTPError) as context:

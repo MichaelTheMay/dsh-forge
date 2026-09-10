@@ -161,6 +161,26 @@ This is intentionally a weaker boundary than the signed-package path, and
 `capabilities.local_profiles` reports `sandboxed: false` rather than implying
 otherwise. See [docs/local-profiles.md](docs/local-profiles.md).
 
+## Catalog store and scale
+
+The embedded snapshot in `web/launcher.js` stays the corpus for the
+disconnected preview, which must remain a single self-contained file. A
+connected sidecar reads from an imported FTS5-indexed SQLite store instead —
+the only path that scales to the real fork network. The upstream fork endpoint
+captured in the seed reports roughly 24,000 forks; ten are embedded today.
+
+```bash
+python3 -m dsh_forge catalog import data/public-repos.seed.json   --package-feed data/package-catalog.seed.json
+python3 -m dsh_forge catalog search "agent teams" --limit 10
+python3 -m dsh_forge catalog search --type fork --sort stars
+```
+
+Import is offline and inert, and it never upgrades trust: the snapshot's
+recorded provenance is stored verbatim and repeated in every search response,
+so an unsigned development seed stays visibly unsigned. Builds are atomic, so a
+failed import leaves the previous store intact. Page size, query length, and
+paging depth are all bounded. See [docs/catalog-store.md](docs/catalog-store.md).
+
 ## Community browsers
 
 - A curated "Forge picks" strip highlights administrator-selected hidden gems —

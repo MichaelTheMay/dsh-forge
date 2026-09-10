@@ -14,7 +14,7 @@ from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "web"
@@ -125,6 +125,32 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         if path == "/api/v1/trees":
             if self._api_guard() and self._session_ok():
                 self._json({"trees": self.server.launcher.status()["trees"]})
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
+        if path == "/api/v1/catalog/search":
+            if self._api_guard() and self._session_ok():
+                query = parse_qs(urlsplit(self.path).query)
+
+                def flag(name, default=False):
+                    raw = query.get(name, [""])[0].strip().lower()
+                    return default if raw == "" else raw in {"1", "true", "yes"}
+
+                try:
+                    self._json(self.server.launcher.catalog_search(
+                        query=query.get("q", [""])[0],
+                        types=query.get("type", []),
+                        sort=query.get("sort", ["relevance"])[0],
+                        limit=int(query.get("limit", ["50"])[0] or 50),
+                        cursor=query.get("cursor", [""])[0],
+                        featured_only=flag("featured"),
+                        licensed_only=flag("licensed"),
+                        include_archived=flag("archived", True),
+                    ))
+                except ValueError as error:
+                    self._json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
