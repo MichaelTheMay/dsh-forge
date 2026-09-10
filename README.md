@@ -3,8 +3,9 @@
 DSH Forge is the open-source local launcher and catalog client for discovering,
 inspecting, and running trusted DeepSeek Harness installations.
 
-The public ecosystem crawler and catalog publisher live in the separate
-`dsh-forge-registry` repository.
+The public ecosystem crawler and catalog publisher are planned as a separate,
+agent-tool-neutral `dsh-forge-registry` service. This repository already owns
+the versioned catalog contract and offline client boundary.
 
 ## Status
 
@@ -36,6 +37,11 @@ capability probe, and that probe requires per-cell cgroup controls. They are not
 promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
+
+Browse the permanent disconnected demo at
+<https://michaelthemay.github.io/dsh-forge/>. It exposes the full application
+shell and embedded community catalog. Local detection, installation, and launch
+controls remain disabled until the loopback sidecar below is running.
 
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.
