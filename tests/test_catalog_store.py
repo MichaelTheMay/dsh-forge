@@ -7,27 +7,35 @@ upgrades the trust of what it imported, it survives free-text input, and it
 stays bounded at fork-network scale.
 """
 
+import base64
 import contextlib
 import io
 import json
 import os
 from pathlib import Path
+import shutil
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import unittest
 
 from dsh_forge import cli
-from dsh_forge.launcher import Launcher
-from tests.helpers import FakeCellSandbox
 from dsh_forge.catalog_store import (
+    CATALOG_PAYLOAD_TYPE,
     MAX_OFFSET,
     MAX_PAGE_SIZE,
     STORE_SCHEMA_VERSION,
     CatalogStore,
     CatalogStoreError,
     build,
+    canonical_snapshot_bytes,
+    sign_snapshot,
+    verify_snapshot,
 )
+from dsh_forge.launcher import Launcher, LauncherError
+from dsh_forge.packages import create_trust_root
+from tests.helpers import FakeCellSandbox
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -280,6 +288,112 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertEqual(len(searched["artifacts"]), 10)
         # A page stays small regardless of corpus size, so responses stay bounded.
         self.assertLess(len(json.dumps(searched["artifacts"])), 200_000)
+
+
+@unittest.skipUnless(shutil.which("openssl"), "openssl is required to sign catalog snapshots")
+class SignedSnapshotTests(unittest.TestCase):
+    """A signed envelope is the only thing that may raise recorded trust."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.private = self.root / "private.pem"
+        self.public = self.root / "public.pem"
+        subprocess.run(["openssl", "genpkey", "-algorithm", "Ed25519", "-out", self.private],
+                       check=True, capture_output=True)
+        self.private.chmod(0o600)
+        subprocess.run(["openssl", "pkey", "-in", self.private, "-pubout", "-out", self.public],
+                       check=True, capture_output=True)
+        self.trust_root = create_trust_root(self.public, "registry-root", "2099-01-01T00:00:00Z")
+        self.snapshot = {"entries": synthetic(4), "snapshot_id": "signed", "fetched_at": "2026-09-10T00:00:00Z"}
+        self.launcher = Launcher(state_root=self.root / "state", sandbox=FakeCellSandbox())
+        self.addCleanup(self.launcher.shutdown)
+
+    def other_root(self):
+        private = self.root / "other.pem"
+        public = self.root / "other-public.pem"
+        subprocess.run(["openssl", "genpkey", "-algorithm", "Ed25519", "-out", private],
+                       check=True, capture_output=True)
+        private.chmod(0o600)
+        subprocess.run(["openssl", "pkey", "-in", private, "-pubout", "-out", public],
+                       check=True, capture_output=True)
+        return create_trust_root(public, "other-root", "2099-01-01T00:00:00Z")
+
+    def test_signed_snapshot_round_trips_and_records_its_signers(self):
+        envelope = sign_snapshot(self.snapshot, self.private)
+        self.assertEqual(envelope["payloadType"], CATALOG_PAYLOAD_TYPE)
+
+        result = self.launcher.import_catalog(envelope=envelope, trust_root=self.trust_root)
+        signature = result["signature"]
+        self.assertTrue(signature["verified"])
+        self.assertEqual(signature["threshold"], 1)
+        self.assertEqual(len(signature["valid_signers"]), 1)
+        self.assertTrue(signature["payload_digest"].startswith("sha256:"))
+        # Every search answer repeats how the corpus it read was trusted.
+        self.assertEqual(self.launcher.catalog_search()["signature"]["verified"], True)
+
+    def test_an_unsigned_import_is_recorded_as_unverified_rather_than_trusted(self):
+        result = self.launcher.import_catalog(self.snapshot)
+        self.assertEqual(result["signature"], {"verified": False})
+        self.assertFalse(self.launcher.catalog_search()["signature"]["verified"])
+
+    def test_tampering_with_a_signed_payload_is_refused(self):
+        envelope = sign_snapshot(self.snapshot, self.private)
+        payload = json.loads(base64.b64decode(envelope["payload"]))
+        payload["entries"][0]["github_stars"] = 999_999
+        tampered = {**envelope, "payload": base64.b64encode(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).decode()}
+        with self.assertRaises(LauncherError):
+            self.launcher.import_catalog(envelope=tampered, trust_root=self.trust_root)
+        # A refused import must not leave a store behind.
+        self.assertFalse(self.launcher.catalog_store.available)
+
+    def test_an_untrusted_signer_expired_root_or_wrong_payload_type_is_refused(self):
+        envelope = sign_snapshot(self.snapshot, self.private)
+        with self.assertRaises(CatalogStoreError):
+            verify_snapshot(envelope, self.other_root())
+
+        expired = create_trust_root(self.public, "expired-root", "2000-01-01T00:00:00Z")
+        with self.assertRaises(CatalogStoreError):
+            verify_snapshot(envelope, expired)
+
+        # A package envelope must not be accepted as a catalog snapshot.
+        with self.assertRaises(CatalogStoreError):
+            verify_snapshot({**envelope, "payloadType": "application/vnd.dsh-forge.package.v1+json"}, self.trust_root)
+
+    def test_a_trust_root_is_required_and_only_applies_to_an_envelope(self):
+        envelope = sign_snapshot(self.snapshot, self.private)
+        with self.assertRaises(LauncherError):
+            self.launcher.import_catalog(envelope=envelope)
+        with self.assertRaises(LauncherError):
+            self.launcher.import_catalog(self.snapshot, trust_root=self.trust_root)
+        with self.assertRaises(LauncherError):
+            self.launcher.import_catalog()
+
+    def test_canonical_form_is_stable_and_rejects_ambiguous_numbers(self):
+        # Key order must not change the signed bytes.
+        self.assertEqual(
+            canonical_snapshot_bytes({"a": 1, "b": [2, 3]}),
+            canonical_snapshot_bytes({"b": [2, 3], "a": 1}),
+        )
+        # Integers are allowed because they have one spelling; floats do not.
+        canonical_snapshot_bytes({"stars": 142, "archived": False, "name": None})
+        with self.assertRaises(CatalogStoreError):
+            canonical_snapshot_bytes({"score": 1.5})
+        with self.assertRaises(CatalogStoreError):
+            canonical_snapshot_bytes({"nested": {"deep": [1, 2.5]}})
+
+    def test_a_noncanonical_but_correctly_signed_payload_is_refused(self):
+        # Signed over bytes that are valid JSON but not the canonical spelling.
+        from dsh_forge.packages import sign_payload
+
+        noncanonical = json.dumps(self.snapshot, indent=2).encode()
+        envelope = sign_payload(noncanonical, self.private, payload_type=CATALOG_PAYLOAD_TYPE)
+        with self.assertRaises(CatalogStoreError) as context:
+            verify_snapshot(envelope, self.trust_root)
+        self.assertIn("canonical", str(context.exception))
 
 
 class CatalogCliTests(unittest.TestCase):

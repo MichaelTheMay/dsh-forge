@@ -27,10 +27,58 @@ python3 -m dsh_forge catalog status
 Import is offline and inert. It parses metadata, writes rows, and builds a text
 index. It never fetches, unpacks, or executes anything.
 
-Import **never upgrades trust**. Whatever `provenance` the snapshot recorded is
-stored verbatim and repeated in every search response, so an
+Import **never upgrades trust on its own**. Whatever `provenance` the snapshot
+recorded is stored verbatim and repeated in every search response, so an
 `unsigned_development_seed` stays visibly unsigned all the way to the UI.
-Verifying signed catalog updates is a separate boundary that does not exist yet.
+
+## Signed snapshots
+
+A registry that Forge does not run can sign its snapshot, and Forge will verify
+it against an explicit local trust root before importing:
+
+```bash
+python3 -m dsh_forge catalog sign snapshot.json --key private.pem --output signed.json
+python3 -m dsh_forge packages trust-root --public-key public.pem   --root-id registry-root --expires-at 2027-01-01T00:00:00Z --output root.json
+python3 -m dsh_forge catalog import --envelope signed.json --trust-root root.json
+```
+
+Verification reuses the same DSSE/Ed25519 boundary as signed packages, with a
+catalog-specific payload type
+(`application/vnd.dsh-forge.catalog-snapshot.v1+json`) so a package envelope can
+never be replayed as a catalog and vice versa. A signed import is refused when
+the payload was tampered with, the signer is not in the trust root, the trust
+root has expired, the signature threshold is not met, or the payload is not in
+canonical form. A refused import leaves no store behind.
+
+`--envelope` requires `--trust-root`; passing a trust root without an envelope is
+refused rather than silently ignored, so an import can never *look* verified
+because a flag was accepted and dropped.
+
+### Two independent facts
+
+`signature` and `provenance.signature_status` answer different questions, and
+both are reported:
+
+| Field | Question it answers |
+| ----- | ------------------- |
+| `signature.verified` | Was **this envelope** signed by a key in the trust root? |
+| `provenance.signature_status` | How was the **underlying data** collected? |
+
+A verified envelope wrapping the current development seed reports
+`signature.verified: true` alongside
+`provenance.signature_status: unsigned_development_seed`. That combination is
+correct and deliberate: someone trusted vouched for these exact bytes, and the
+bytes themselves still came from an unsigned one-shot capture. Signing does not
+retroactively make the collection method trustworthy.
+
+### Canonical form
+
+Snapshot payloads use a canonical JSON profile: sorted keys, no whitespace,
+UTF-8, ASCII object keys. The package profile forbids numbers entirely, but a
+catalog is full of star counts and ranks, so integers are permitted — they have
+exactly one JSON spelling. **Floats are rejected**, because their spelling varies
+between writers and a signature over an ambiguous encoding cannot be re-checked
+reliably. A correctly signed but non-canonical payload is refused.
 
 The store is built into a temporary file and then atomically replaced, so a
 failed import leaves the previous store intact and never leaves a partial one

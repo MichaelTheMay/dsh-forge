@@ -175,9 +175,13 @@ python3 -m dsh_forge catalog search "agent teams" --limit 10
 python3 -m dsh_forge catalog search --type fork --sort stars
 ```
 
-Import is offline and inert, and it never upgrades trust: the snapshot's
-recorded provenance is stored verbatim and repeated in every search response,
-so an unsigned development seed stays visibly unsigned. Builds are atomic, so a
+Import is offline and inert. A snapshot produced by a registry Forge does not
+run can be signed and verified against an explicit local trust root, reusing the
+same DSSE/Ed25519 boundary as signed packages with a catalog-specific payload
+type. Verification is the only thing that raises recorded trust: the snapshot's
+own provenance is still stored verbatim and repeated in every search response,
+so a verified envelope around an unsigned development seed reports both facts
+rather than collapsing them. Builds are atomic, so a
 failed import leaves the previous store intact. Page size, query length, and
 paging depth are all bounded.
 

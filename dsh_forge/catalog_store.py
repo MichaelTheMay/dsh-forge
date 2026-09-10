@@ -24,6 +24,8 @@ import threading
 import time
 from typing import Any, Iterable, Iterator, Mapping, Sequence
 
+from .packages import PackageError, sign_payload, verify_signed_payload
+
 
 STORE_SCHEMA_VERSION = 1
 CATALOG_STORE_SCHEMA = "dsh-forge.catalog-store/v1"
@@ -50,6 +52,97 @@ _SORT_COLUMNS = {
 
 class CatalogStoreError(RuntimeError):
     """The catalog store is missing, stale, or was asked for something invalid."""
+
+
+CATALOG_PAYLOAD_TYPE = "application/vnd.dsh-forge.catalog-snapshot.v1+json"
+# A catalog snapshot is orders of magnitude larger than a package manifest.
+MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
+
+
+def _canonical_snapshot_value(value: Any, label: str = "snapshot") -> None:
+    """Reject anything without exactly one JSON spelling.
+
+    The package profile forbids numbers outright, but a catalog is full of star
+    counts and ranks. Integers have a single representation, so they are
+    allowed; floats are not, because their spelling varies between writers.
+    """
+    if value is None or isinstance(value, (bool, str)):
+        return
+    if isinstance(value, int):
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _canonical_snapshot_value(item, f"{label}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str) or not key.isascii():
+                raise CatalogStoreError(f"{label} object keys must be ASCII strings")
+            _canonical_snapshot_value(item, f"{label}.{key}")
+        return
+    raise CatalogStoreError(f"{label} contains a float or unsupported JSON value")
+
+
+def canonical_snapshot_bytes(snapshot: Mapping[str, Any]) -> bytes:
+    """Deterministic bytes for a catalog snapshot payload."""
+    if not isinstance(snapshot, Mapping):
+        raise CatalogStoreError("A catalog snapshot must be a JSON object")
+    _canonical_snapshot_value(dict(snapshot))
+    encoded = json.dumps(dict(snapshot), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    if len(encoded) > MAX_SNAPSHOT_BYTES:
+        raise CatalogStoreError("Catalog snapshot exceeds the signing size limit")
+    return encoded
+
+
+def sign_snapshot(snapshot: Mapping[str, Any], private_key: str | Path) -> dict[str, Any]:
+    """Wrap a catalog snapshot in a signed DSSE envelope."""
+    try:
+        return sign_payload(
+            canonical_snapshot_bytes(snapshot), private_key, payload_type=CATALOG_PAYLOAD_TYPE
+        )
+    except PackageError as error:
+        raise CatalogStoreError(f"Could not sign the catalog snapshot: {error}") from error
+
+
+def verify_snapshot(
+    envelope: Mapping[str, Any],
+    trust_root: Mapping[str, Any],
+    *,
+    now: Any = None,
+) -> dict[str, Any]:
+    """Verify a signed catalog snapshot and return it with its signer evidence.
+
+    Verification is the only thing that may raise the recorded trust of an
+    imported catalog above 'unsigned'.
+    """
+    try:
+        verified = verify_signed_payload(
+            dict(envelope), dict(trust_root),
+            payload_type=CATALOG_PAYLOAD_TYPE,
+            max_payload_bytes=MAX_SNAPSHOT_BYTES,
+            now=now,
+        )
+    except PackageError as error:
+        raise CatalogStoreError(f"Catalog snapshot signature rejected: {error}") from error
+    payload = verified["payload"]
+    try:
+        snapshot = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CatalogStoreError(f"Signed catalog payload is invalid UTF-8 JSON: {error}") from error
+    if not isinstance(snapshot, dict):
+        raise CatalogStoreError("Signed catalog payload must be a JSON object")
+    if canonical_snapshot_bytes(snapshot) != payload:
+        raise CatalogStoreError("Signed catalog payload is not canonical")
+    return {
+        "snapshot": snapshot,
+        "signature": {
+            "verified": True,
+            "payload_type": CATALOG_PAYLOAD_TYPE,
+            "valid_signers": verified["valid_signers"],
+            "threshold": verified["threshold"],
+            "payload_digest": verified["payload_digest"],
+        },
+    }
 
 
 def _text(value: Any, limit: int = 4096) -> str:
@@ -204,6 +297,7 @@ def build(
     snapshot: Mapping[str, Any],
     *,
     provenance: Mapping[str, Any] | None = None,
+    signature: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a fresh store from a snapshot and atomically replace any existing one."""
     destination = Path(destination).expanduser()
@@ -253,6 +347,8 @@ def build(
                     "fetched_at": _text(snapshot.get("fetched_at"), 64),
                     # Carried through verbatim; importing never upgrades trust.
                     "provenance": json.dumps(provenance or snapshot.get("provenance") or {}, sort_keys=True),
+                    # Only a verified envelope may record a signature here.
+                    "signature": json.dumps(dict(signature) if signature else {"verified": False}, sort_keys=True),
                 }
                 connection.executemany(
                     "INSERT INTO meta (key, value) VALUES (?, ?)", sorted(recorded.items())
@@ -354,6 +450,7 @@ class CatalogStore:
             "snapshot_id": values.get("snapshot_id", ""),
             "fetched_at": values.get("fetched_at", ""),
             "provenance": json.loads(values.get("provenance", "{}")),
+            "signature": json.loads(values.get("signature", '{"verified": false}')),
         }
 
     def status(self) -> dict[str, Any]:
@@ -449,6 +546,7 @@ class CatalogStore:
             "generation": meta["generation"],
             "snapshot_id": meta["snapshot_id"],
             "provenance": meta["provenance"],
+            "signature": meta["signature"],
         }
 
     def get(self, artifact_id: str) -> dict[str, Any] | None:

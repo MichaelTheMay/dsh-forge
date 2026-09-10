@@ -79,8 +79,15 @@ def _parser() -> argparse.ArgumentParser:
     catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
     catalog_commands.add_parser("status", help="report the imported catalog store and its provenance")
     import_catalog = catalog_commands.add_parser("import", help="build the local store from a validated snapshot")
-    import_catalog.add_argument("snapshot", help="path to a catalog snapshot JSON file")
+    import_catalog.add_argument("snapshot", nargs="?", help="path to an unsigned catalog snapshot JSON file")
     import_catalog.add_argument("--package-feed", help="optional validated package catalog feed")
+    import_catalog.add_argument("--envelope", help="signed DSSE catalog snapshot to verify and import")
+    import_catalog.add_argument("--trust-root", dest="trust_root", help="trust root required to verify --envelope")
+    sign_catalog = catalog_commands.add_parser("sign", help="wrap a catalog snapshot in a signed DSSE envelope")
+    sign_catalog.add_argument("snapshot", help="path to the catalog snapshot JSON file")
+    sign_catalog.add_argument("--key", required=True, help="Ed25519 private key PEM")
+    sign_catalog.add_argument("--output", required=True, help="path to write the signed envelope")
+    sign_catalog.add_argument("--force", action="store_true", help="overwrite an existing envelope")
     search_catalog = catalog_commands.add_parser("search", help="search the imported catalog store")
     search_catalog.add_argument("query", nargs="?", default="", help="free-text query; omit to browse")
     search_catalog.add_argument("--type", action="append", default=[], choices=["package", "plugin", "fork"], dest="types")
@@ -518,10 +525,24 @@ def run(
             elif command == "catalog.status":
                 data = launcher.catalog_store.status()
             elif command == "catalog.import":
+                if bool(args.snapshot) == bool(args.envelope):
+                    raise LauncherError("Provide either a snapshot path or --envelope, not both")
                 data = launcher.import_catalog(
-                    read_json(args.snapshot),
+                    read_json(args.snapshot) if args.snapshot else None,
                     package_feed=read_json(args.package_feed) if args.package_feed else None,
+                    envelope=read_json(args.envelope) if args.envelope else None,
+                    trust_root=read_json(args.trust_root) if args.trust_root else None,
                 )
+            elif command == "catalog.sign":
+                from .catalog_store import sign_snapshot
+
+                envelope = sign_snapshot(read_json(args.snapshot), args.key)
+                write_json(args.output, envelope, force=args.force)
+                data = {
+                    "output": str(Path(args.output).expanduser()),
+                    "payload_type": envelope["payloadType"],
+                    "signers": [item["keyid"] for item in envelope["signatures"]],
+                }
             elif command == "catalog.search":
                 data = launcher.catalog_search(
                     query=args.query,

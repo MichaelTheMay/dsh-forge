@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
-from .catalog_store import CatalogStore, CatalogStoreError, build
+from .catalog_store import CatalogStore, CatalogStoreError, build, verify_snapshot
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError
@@ -917,18 +917,39 @@ class Launcher:
             })
         return versions
 
-    def import_catalog(self, snapshot: Mapping[str, Any], *, package_feed: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        """Build the local catalog store from an already-validated snapshot.
+    def import_catalog(
+        self,
+        snapshot: Mapping[str, Any] | None = None,
+        *,
+        package_feed: Mapping[str, Any] | None = None,
+        envelope: Mapping[str, Any] | None = None,
+        trust_root: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build the local catalog store from a snapshot.
 
         Import is inert: it indexes metadata and never fetches, unpacks, or
-        executes anything, and it never upgrades the snapshot's recorded trust.
+        executes anything. Verifying a signed envelope against an explicit trust
+        root is the only way an import records anything above 'unsigned'.
         """
+        signature: dict[str, Any] | None = None
+        if envelope is not None:
+            if trust_root is None:
+                raise LauncherError("Verifying a signed catalog snapshot requires an explicit trust root")
+            try:
+                verified = verify_snapshot(envelope, trust_root)
+            except CatalogStoreError as error:
+                raise LauncherError(str(error)) from error
+            snapshot, signature = verified["snapshot"], verified["signature"]
+        elif snapshot is None:
+            raise LauncherError("Provide a catalog snapshot or a signed envelope")
+        elif trust_root is not None:
+            raise LauncherError("A trust root only applies to a signed catalog envelope")
         payload = dict(snapshot)
         if package_feed is not None:
             payload["package_entries"] = list(package_feed.get("packages") or [])
         self.catalog_store.close()
         try:
-            result = build(self.catalog_store.path, payload)
+            result = build(self.catalog_store.path, payload, signature=signature)
         except (OSError, sqlite3.Error, ValueError) as error:
             raise LauncherError(f"Could not import the catalog snapshot: {error}") from error
         return {**result, "path": _display_path(self.catalog_store.path), **self.catalog_store.status()}
