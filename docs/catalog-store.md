@@ -67,6 +67,36 @@ API read.
   snapshot contained, so the browser applies one mapping for both the embedded
   and the imported path.
 
+## What the browser shows
+
+The Community browser picks its corpus the same way the launcher already picks
+between preview and live inventory:
+
+| Sidecar | Store imported | Corpus |
+| ------- | -------------- | ------ |
+| No | — | Embedded snapshot |
+| Yes | No | Embedded snapshot (labelled "no store imported") |
+| Yes | Yes | Imported catalog store |
+
+The result line names the corpus in use, so it is always visible which one
+answered. When the store is active the query, filters, and sort are applied by
+the store rather than in the page, the count reads `50 of 23,890`, and a **Load
+more results** button pages with the returned cursor.
+
+Store records keep their snapshot shape, so the browser applies the same
+`mapRepositoryArtifact` / `mapPackageArtifact` mapping to both corpora. A record
+renders identically whichever path delivered it.
+
+Two behaviors matter for a live search box:
+
+- Typing is coalesced into one request rather than one per keystroke.
+- A slow reply for a query the user has already moved on from is discarded
+  instead of overwriting the current results.
+
+A store error is shown in place. The browser does not silently fall back to the
+embedded snapshot, because quietly swapping corpora would misreport how much of
+the catalog was searched.
+
 ## Bounds
 
 Everything is bounded so a large corpus cannot turn into a large response:

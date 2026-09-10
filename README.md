@@ -179,7 +179,13 @@ Import is offline and inert, and it never upgrades trust: the snapshot's
 recorded provenance is stored verbatim and repeated in every search response,
 so an unsigned development seed stays visibly unsigned. Builds are atomic, so a
 failed import leaves the previous store intact. Page size, query length, and
-paging depth are all bounded. See [docs/catalog-store.md](docs/catalog-store.md).
+paging depth are all bounded.
+
+When a store is imported the Community browser searches it instead of the
+embedded snapshot, pages with a **Load more results** button, and names the
+corpus in use on the result line. Without a sidecar — or with no store imported
+— it reads the embedded snapshot exactly as before, so the portable preview is
+unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 
 ## Community browsers
 
