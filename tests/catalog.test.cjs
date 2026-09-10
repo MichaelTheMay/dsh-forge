@@ -424,6 +424,151 @@ test('curated strip surfaces featured non-fork gems in rank order without a secu
   assert(values.curatedPicks.every(pick => pick.verification.security_verified === false));
 });
 
+function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], package_installations: [],
+    trusted_package_recipes: [], configurations: [], profiles: [],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true },
+    catalog_store: store
+  });
+}
+
+test('without an imported store the browser still reads the embedded snapshot', () => {
+  const c = instance();
+  c.renderVals().goCatalog();
+  let values = c.renderVals();
+  assert.equal(values.storeActive, false);
+  assert.equal(values.catalogSourceLabel, 'Embedded snapshot');
+  assert.equal(values.canLoadMore, false);
+  assert(values.results.length > 0);
+
+  // A connected sidecar with nothing imported keeps using the embedded corpus.
+  c.api = async () => ({ artifacts: [], total: 0 });
+  connectedStore(c, { available: false, reason: 'No catalog store is imported yet' });
+  values = c.renderVals();
+  assert.equal(values.storeActive, false);
+  assert.match(values.catalogSourceLabel, /no store imported/);
+});
+
+test('an imported store replaces the embedded inventory and maps records identically', async () => {
+  const c = instance();
+  const fork = snapshot.entries[0];
+  const requests = [];
+  c.api = async url => {
+    requests.push(url);
+    return { artifacts: [fork], total: 23890, next_cursor: '77.50', generation: 77 };
+  };
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  connectedStore(c);
+  await c.refreshCatalog();
+
+  const values = c.renderVals();
+  assert.equal(values.storeActive, true);
+  assert.equal(values.catalogSourceLabel, 'Imported catalog store');
+  assert.equal(values.results.length, 1);
+  // The store hands back snapshot records; the browser applies its one mapping.
+  const embedded = CATALOG.find(item => item.id === fork.artifact_id);
+  assert.equal(values.results[0].slug, embedded.slug);
+  assert.equal(values.results[0].rankLabel, embedded.rankLabel);
+  assert.equal(values.results[0].commitUrl, embedded.commitUrl);
+  // The count reports the corpus size, not just the page.
+  assert.match(values.resultCount, /1 of 23,890 forks/);
+  assert.equal(values.canLoadMore, true);
+  assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
+});
+
+test('store queries carry the active filters and load more appends by cursor', async () => {
+  const c = instance();
+  const requests = [];
+  c.api = async url => {
+    requests.push(new URLSearchParams(url.split('?')[1]));
+    return {
+      artifacts: [snapshot.supplemental_entries[requests.length - 1] || snapshot.supplemental_entries[0]],
+      total: 40, next_cursor: '77.50', generation: 77
+    };
+  };
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  connectedStore(c);
+  c.setState({ query: 'agent teams', catalogSort: 'stars', catalogScope: 'featured', knownLicenseOnly: true });
+  await c.refreshCatalog();
+
+  const sent = requests.at(-1);
+  assert.equal(sent.get('q'), 'agent teams');
+  assert.equal(sent.get('type'), 'plugin');
+  assert.equal(sent.get('sort'), 'stars');
+  assert.equal(sent.get('featured'), '1');
+  assert.equal(sent.get('licensed'), '1');
+  assert.equal(sent.get('cursor'), null);
+
+  const before = c.renderVals().results.length;
+  await c.renderVals().loadMore();
+  assert.equal(requests.at(-1).get('cursor'), '77.50');
+  assert.equal(c.renderVals().results.length, before + 1, 'load more appends rather than replacing');
+});
+
+test('recommended sort asks for relevance only when there is a query', async () => {
+  const c = instance();
+  const requests = [];
+  c.api = async url => {
+    requests.push(new URLSearchParams(url.split('?')[1]));
+    return { artifacts: [], total: 0, generation: 1 };
+  };
+  connectedStore(c);
+  await c.refreshCatalog();
+  assert.equal(requests.at(-1).get('sort'), 'rank');
+  c.setState({ query: 'memory' });
+  await c.refreshCatalog();
+  assert.equal(requests.at(-1).get('sort'), 'relevance');
+});
+
+test('a slow reply for an abandoned query never overwrites the current results', async () => {
+  const c = instance();
+  const fork = snapshot.entries[0];
+  let release;
+  c.api = async url => {
+    if (new URLSearchParams(url.split('?')[1]).get('q') === 'stale') {
+      await new Promise(resolve => { release = resolve; });
+      return { artifacts: [fork], total: 999, generation: 1 };
+    }
+    return { artifacts: [], total: 0, generation: 1 };
+  };
+  connectedStore(c);
+  c.setState({ query: 'stale' });
+  const slow = c.refreshCatalog();
+  // The user retypes before the first reply lands.
+  c.setState({ query: 'current' });
+  await c.refreshCatalog();
+  release();
+  await slow;
+  assert.equal(c.state.storeTotal, 0, 'the abandoned query must not win the race');
+  assert.equal(c.state.storeArtifacts.length, 0);
+});
+
+test('a store failure is surfaced without falling back to a different corpus', async () => {
+  const c = instance();
+  c.api = async () => { throw new Error('The catalog was re-imported; restart the query from the first page'); };
+  connectedStore(c);
+  await c.refreshCatalog();
+  const values = c.renderVals();
+  assert.equal(values.hasStoreError, true);
+  assert.match(values.storeError, /re-imported/);
+  assert.equal(values.results.length, 0);
+  assert.equal(values.storeActive, true, 'an error must not silently swap corpora');
+});
+
+test('typing schedules one coalesced store query instead of one per keystroke', () => {
+  const c = instance();
+  let calls = 0;
+  c.api = async () => { calls += 1; return { artifacts: [], total: 0, generation: 1 }; };
+  connectedStore(c);
+  calls = 0;
+  const values = c.renderVals();
+  for (const value of ['a', 'ag', 'age', 'agen']) values.setQuery({ target: { value } });
+  assert.equal(calls, 0, 'keystrokes must not each issue a request');
+  assert(c._catalogTimer, 'a coalesced refresh should be pending');
+  clearTimeout(c._catalogTimer);
+});
+
 test('package page selects a saved version and posts only stable local identities', async () => {
   const c = instance({}, '#packages/agent-teams-builder');
   const saved = {

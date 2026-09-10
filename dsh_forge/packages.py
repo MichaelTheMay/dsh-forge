@@ -454,6 +454,25 @@ def _verify_ed25519(public_key: Path, signature: Path, payload: bytes) -> None:
     )
 
 
+def sign_payload(payload: bytes, private_key: str | Path, *, payload_type: str = PAYLOAD_TYPE) -> dict[str, Any]:
+    """Wrap already-canonical payload bytes in a signed DSSE envelope."""
+    key_path = Path(private_key).expanduser()
+    try:
+        mode = stat.S_IMODE(key_path.stat().st_mode)
+    except OSError as error:
+        raise PackageError(f"Could not stat private key {key_path}: {error}", "local_io_error") from error
+    if os.name == "posix" and mode & 0o077:
+        raise PackageError("Private key must not be readable or writable by group/other", "insecure_key_permissions")
+    _assert_ed25519(key_path, private=True)
+    der = _public_der(key_path, private=True)
+    signature = _sign_ed25519(key_path, _pae(payload))
+    return {
+        "payloadType": payload_type,
+        "payload": base64.b64encode(payload).decode("ascii"),
+        "signatures": [{"keyid": _key_id(der), "sig": base64.b64encode(signature).decode("ascii")}],
+    }
+
+
 def sign(manifest: dict[str, Any], private_key: str | Path) -> dict[str, Any]:
     normalized = validate_manifest(manifest)
     key_path = Path(private_key).expanduser()
@@ -531,17 +550,29 @@ def _trust_root(value: dict[str, Any], *, now: dt.datetime | None = None) -> tup
     return root["threshold"], keys
 
 
-def verify(envelope: dict[str, Any], trust_root: dict[str, Any], *, now: dt.datetime | None = None) -> dict[str, Any]:
+def verify_signed_payload(
+    envelope: dict[str, Any],
+    trust_root: dict[str, Any],
+    *,
+    payload_type: str = PAYLOAD_TYPE,
+    max_payload_bytes: int = MAX_JSON_BYTES,
+    now: dt.datetime | None = None,
+) -> dict[str, Any]:
+    """Verify a DSSE envelope against a trust root and return its raw payload.
+
+    This is the signature boundary only. Callers validate the decoded payload
+    against whatever schema their payload type promises.
+    """
     signed = _keys(envelope, {"payloadType", "payload", "signatures"}, "DSSE envelope")
-    if signed["payloadType"] != PAYLOAD_TYPE:
+    if signed["payloadType"] != payload_type:
         raise PackageError("Unexpected DSSE payload type", "unsupported_schema")
-    if not isinstance(signed["payload"], str) or len(signed["payload"]) > MAX_JSON_BYTES * 2:
+    if not isinstance(signed["payload"], str) or len(signed["payload"]) > max_payload_bytes * 2:
         raise PackageError("Invalid DSSE payload")
     try:
         payload = base64.b64decode(signed["payload"], validate=True)
     except binascii.Error as error:
         raise PackageError("DSSE payload is not valid base64", "invalid_json") from error
-    if len(payload) > MAX_JSON_BYTES:
+    if len(payload) > max_payload_bytes:
         raise PackageError("Decoded DSSE payload is too large", "input_too_large")
     if not isinstance(signed["signatures"], list) or not 1 <= len(signed["signatures"]) <= 32:
         raise PackageError("DSSE envelope must contain between 1 and 32 signatures", "signature_invalid")
@@ -576,6 +607,17 @@ def verify(envelope: dict[str, Any], trust_root: dict[str, Any], *, now: dt.date
         valid.add(keyid)
     if len(valid) < threshold:
         raise PackageError(f"Only {len(valid)} trusted signatures passed; threshold is {threshold}", "signature_threshold")
+    return {
+        "payload": payload,
+        "valid_signers": sorted(valid),
+        "threshold": threshold,
+        "payload_digest": "sha256:" + hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def verify(envelope: dict[str, Any], trust_root: dict[str, Any], *, now: dt.datetime | None = None) -> dict[str, Any]:
+    verified = verify_signed_payload(envelope, trust_root, payload_type=PAYLOAD_TYPE, now=now)
+    payload = verified["payload"]
     try:
         manifest = json.loads(payload.decode("utf-8"), object_pairs_hook=_pairs)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -587,7 +629,7 @@ def verify(envelope: dict[str, Any], trust_root: dict[str, Any], *, now: dt.date
         raise PackageError("Signed payload is not canonical", "noncanonical_manifest")
     return {
         "manifest": normalized,
-        "valid_signers": sorted(valid),
-        "threshold": threshold,
-        "payload_digest": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "valid_signers": verified["valid_signers"],
+        "threshold": verified["threshold"],
+        "payload_digest": verified["payload_digest"],
     }

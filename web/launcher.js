@@ -1321,10 +1321,10 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-const REPOSITORY_CATALOG = [
-  ...CATALOG_SNAPSHOT.entries,
-  ...(CATALOG_SNAPSHOT.supplemental_entries || [])
-].map(a => ({
+// One mapping serves both corpora: the embedded snapshot and the records the
+// catalog store hands back verbatim.
+function mapRepositoryArtifact(a) {
+  return ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
   url: a.repository_url, base: a.head_sha || 'Not captured',
@@ -1348,9 +1348,11 @@ const REPOSITORY_CATALOG = [
   featured: a.artifact_type === 'plugin'
     ? !!(a.curation && a.curation.rank <= 3)
     : Number(a.seed_rank || 999) <= 3,
-}));
+  });
+}
 
-const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(a => ({
+function mapPackageArtifact(a) {
+  return ({
   ...a,
   verification: {
     ...a.verification,
@@ -1390,8 +1392,19 @@ const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(a => ({
   commitUrl: a.provenance.authoritative_sources[0],
   pageRoute: a.page.route,
   catalogPackage: true
-}));
+  });
+}
 
+// A store record keeps its snapshot shape, so its type decides the mapping.
+function mapCatalogRecord(record) {
+  return record && record.artifact_type ? mapRepositoryArtifact(record) : mapPackageArtifact(record);
+}
+
+const REPOSITORY_CATALOG = [
+  ...CATALOG_SNAPSHOT.entries,
+  ...(CATALOG_SNAPSHOT.supplemental_entries || [])
+].map(mapRepositoryArtifact);
+const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(mapPackageArtifact);
 const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
 
 function catalogRoute(hash) {
@@ -1429,6 +1442,13 @@ class Component extends DCLogic {
       packageInstallBusy: false,
       configurationBusy: false,
       catalogScope: 'all',
+      catalogStore: { available: false },
+      storeArtifacts: [],
+      storeTotal: 0,
+      storeCursor: '',
+      storeLoading: false,
+      storeError: '',
+      storeGeneration: 0,
       assistantVersionId: '',
       assistantBusy: false,
       assistantCellId: null,
@@ -1748,6 +1768,61 @@ class Component extends DCLogic {
     return payload;
   }
 
+  usingCatalogStore(state = this.state) {
+    return !!(state.sidecarConnected && state.catalogStore && state.catalogStore.available);
+  }
+
+  catalogQueryKey(state = this.state) {
+    return JSON.stringify([
+      state.query.trim(), state.catalogType, state.catalogScope,
+      state.catalogSort, !!state.knownLicenseOnly
+    ]);
+  }
+
+  /** Fetch one page from the imported catalog store. */
+  async refreshCatalog({ append = false } = {}) {
+    if (!this.usingCatalogStore()) return;
+    const s = this.state;
+    const key = this.catalogQueryKey(s);
+    const sortMap = { recommended: s.query.trim() ? 'relevance' : 'rank', stars: 'stars', recent: 'recent', name: 'name' };
+    const parameters = new URLSearchParams();
+    if (s.query.trim()) parameters.set('q', s.query.trim());
+    parameters.set('type', s.catalogType);
+    parameters.set('sort', sortMap[s.catalogSort] || 'relevance');
+    parameters.set('limit', '50');
+    if (s.catalogScope === 'featured') parameters.set('featured', '1');
+    if (s.knownLicenseOnly) parameters.set('licensed', '1');
+    if (append && s.storeCursor) parameters.set('cursor', s.storeCursor);
+    this.setState({ storeLoading: true, storeError: '' });
+    try {
+      const page = await this.api('/api/v1/catalog/search?' + parameters.toString());
+      // A slower reply for an older query must not overwrite the current one.
+      if (this.catalogQueryKey() !== key) return;
+      const mapped = (page.artifacts || []).map(mapCatalogRecord);
+      this.setState({
+        storeArtifacts: append ? [...this.state.storeArtifacts, ...mapped] : mapped,
+        storeTotal: page.total || 0,
+        storeCursor: page.next_cursor || '',
+        storeGeneration: page.generation || 0,
+        storeLoading: false
+      });
+    } catch (error) {
+      if (this.catalogQueryKey() !== key) return;
+      this.setState({ storeLoading: false, storeError: error.message, storeArtifacts: append ? this.state.storeArtifacts : [] });
+    }
+  }
+
+  /** Coalesce typing into one request. */
+  scheduleCatalogRefresh() {
+    if (!this.usingCatalogStore()) return;
+    if (this._catalogTimer) clearTimeout(this._catalogTimer);
+    this._catalogTimer = setTimeout(() => {
+      this._catalogTimer = null;
+      this.setState({ storeCursor: '' });
+      this.refreshCatalog();
+    }, 180);
+  }
+
   applyStatus(status) {
     const trees = Array.isArray(status.trees) ? status.trees : [];
     const profiles = Array.isArray(status.profiles) ? status.profiles : [];
@@ -1769,8 +1844,14 @@ class Component extends DCLogic {
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
       credentials: Array.isArray(status.credentials) ? status.credentials : [],
-      sandbox: status.sandbox || this.state.sandbox
+      sandbox: status.sandbox || this.state.sandbox,
+      catalogStore: status.catalog_store || { available: false }
     });
+    // Once a store is imported it replaces the embedded preview inventory,
+    // matching how live trees and cells already replace theirs.
+    if (this.usingCatalogStore() && !this.state.storeArtifacts.length && !this.state.storeLoading) {
+      this.refreshCatalog();
+    }
   }
 
   async refreshStatus(silent = false) {
@@ -2221,8 +2302,11 @@ class Component extends DCLogic {
       select: () => activeCell ? this.inspectCell(activeCell, tab.id) : undefined
     }));
 
+    const storeActive = this.usingCatalogStore(s);
     const queryTerms = s.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const filtered = CATALOG.filter(a => {
+    // The store already applied the query, filters, and sort, so its page is
+    // used as-is. Without a store the embedded snapshot is filtered here.
+    const embeddedFiltered = CATALOG.filter(a => {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
         a.type === s.catalogType &&
@@ -2238,6 +2322,7 @@ class Component extends DCLogic {
       }
       return (b.github_stars ?? -1) - (a.github_stars ?? -1) || (a.seed_rank || 999) - (b.seed_rank || 999);
     });
+    const filtered = storeActive ? s.storeArtifacts : embeddedFiltered;
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
     const curatedPicks = CATALOG
@@ -2330,7 +2415,7 @@ class Component extends DCLogic {
           title: 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
           description: 'Try a name, author, capability, taxonomy term, or clear the current filters.',
           action: 'Clear filters',
-          run: () => this.setState({ query: '', knownLicenseOnly: false })
+          run: () => { this.setState({ query: '', knownLicenseOnly: false }); this.scheduleCatalogRefresh(); }
         };
 
     const livePreview = s.previewData;
@@ -2509,18 +2594,18 @@ class Component extends DCLogic {
       closeLogs: () => this.setState({ logCell: null, logLines: [] }),
 
       query: s.query,
-      setQuery: e => this.setState({ query: e.target.value }),
+      setQuery: e => { this.setState({ query: e.target.value }); this.scheduleCatalogRefresh(); },
       catalogSort: s.catalogSort,
-      setCatalogSort: e => this.setState({ catalogSort: e.target.value }),
+      setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,
-      toggleKnownLicense: e => this.setState({ knownLicenseOnly: !!e.target.checked }),
+      toggleKnownLicense: e => { this.setState({ knownLicenseOnly: !!e.target.checked }); this.scheduleCatalogRefresh(); },
       catalogScopes: [{ id: 'featured', label: 'Featured' }, { id: 'all', label: 'All in snapshot' }].map(item => ({
         ...item,
         selected: s.catalogScope === item.id,
         border: s.catalogScope === item.id ? 'oklch(0.43 0.05 235)' : 'transparent',
         bg: s.catalogScope === item.id ? 'oklch(0.29 0.035 235)' : 'transparent',
         color: s.catalogScope === item.id ? 'oklch(0.88 0.035 235)' : MUTED,
-        select: () => this.setState({ catalogScope: item.id })
+        select: () => { this.setState({ catalogScope: item.id }); this.scheduleCatalogRefresh(); }
       })),
       repoTypes: [{ id: 'package', label: 'Packages' }, { id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
         ...f, count: CATALOG.filter(a => a.type === f.id).length,
@@ -2528,14 +2613,27 @@ class Component extends DCLogic {
         border: s.catalogType === f.id ? 'oklch(0.43 0.05 235)' : 'transparent',
         bg: s.catalogType === f.id ? 'oklch(0.29 0.035 235)' : 'transparent',
         color: s.catalogType === f.id ? 'oklch(0.88 0.035 235)' : MUTED,
-        select: () => this.navigate('catalog', f.id)
+        select: () => { this.navigate('catalog', f.id); this.scheduleCatalogRefresh(); }
       })),
       seedCount: CATALOG_SNAPSHOT.entries.length,
       pluginCount,
       forkCount,
       packageCount,
       catalogCountLabel: pluginCount + ' plugins · ' + forkCount + ' forks · ' + packageCount + ' packages',
-      resultCount: results.length + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
+      resultCount: (storeActive && s.storeTotal > results.length
+        ? results.length + ' of ' + s.storeTotal.toLocaleString('en-US')
+        : String(results.length)
+      ) + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
+      catalogSourceLabel: storeActive
+        ? 'Imported catalog store'
+        : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot'),
+      storeActive,
+      storeLoading: s.storeLoading,
+      storeError: s.storeError,
+      hasStoreError: !!s.storeError,
+      canLoadMore: storeActive && !!s.storeCursor && !s.storeLoading,
+      loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more results',
+      loadMore: () => this.refreshCatalog({ append: true }),
       sortExplanation: s.catalogSort === 'recommended'
         ? (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order')
         : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
