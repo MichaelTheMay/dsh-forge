@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dsh-forge.dev/schemas/dsh-forge-catalog-feed-v1.schema.json",
+  "title": "DSH Forge package catalog feed v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "source_schema", "signature_status", "packages", "catalog_digest"],
+  "properties": {
+    "schema": {"const": "dsh-forge.catalog-feed/v1"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "source_schema": {"const": "dsh-forge.catalog-sources/v1"},
+    "signature_status": {"const": "unsigned_development_seed"},
+    "packages": {
+      "type": "array", "maxItems": 10000,
+      "items": {"$ref": "dsh-forge-catalog-package-v1.schema.json"}
+    },
+    "catalog_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

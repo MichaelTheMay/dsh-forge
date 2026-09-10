@@ -84,6 +84,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "data/public-repos.seed.json")
     args = parser.parse_args()
+    preserved = {}
+    if args.output.exists():
+        current = json.loads(args.output.read_text(encoding="utf-8"))
+        for key in ("supplemental_snapshot", "supplemental_entries", "package_entries", "package_browser"):
+            if key in current:
+                preserved[key] = current[key]
     fetched = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     repos, headers = get_json(ENDPOINT)
     if not isinstance(repos, list) or len(repos) != 10:
@@ -104,8 +110,13 @@ def main():
         "provenance": {"method": "one_shot_github_rest", "response_headers": headers,
                        "signature_status": "unsigned_development_seed",
                        "note": "Metadata calls are sequential snapshots, not one atomic view of GitHub."},
-        "entries": entries, "supplemental_entries": [],
+        "entries": entries,
+        **preserved,
     }
+    if "supplemental_entries" not in snapshot:
+        snapshot["supplemental_entries"] = []
+    if "package_entries" not in snapshot:
+        snapshot["package_entries"] = []
     # Only replace the seed after every entry and its immutable reference has been validated.
     atomic_json(args.output, snapshot)
     atomic_json(args.output.with_name("github-forks.response.json"), repos)

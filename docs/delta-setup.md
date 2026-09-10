@@ -88,6 +88,17 @@ Stop the server and tunnel with Ctrl+C in their respective terminals. No GPU
 or extra Conda environment is needed to serve and inspect the launcher; a cell
 may have its own runtime requirements.
 
+## Enable the Apptainer cell runner
+
+DeltaAI supplies Apptainer. Complete official/personal cells now require a
+pinned, read-only SIF, no inherited launcher secrets, a read-only source mount,
+unique writable state, a shared Slurm resource boundary, and a per-cell
+wall-time supervisor. DeltaAI does not currently provide the user cgroup
+delegation needed for Apptainer per-cell CPU/RAM/PID flags. A
+failure never falls back to a direct Harness host process. Community checkouts
+remain probe-only. Follow the complete setup and threat boundary in
+[Apptainer cell runner and community-code probe](apptainer-sandbox.md).
+
 ## Download instead of running a server
 
 On Delta, produce a standalone file:
@@ -99,7 +110,7 @@ python3 scripts/package_preview.py dist/DSH_Forge_Fleet_Sandbox_Preview.html
 Then on the Mac:
 
 ```bash
-scp ssourav@gh-login03.delta.ncsa.illinois.edu:~/dsh-forge/dist/DSH_Forge_Fleet_Sandbox_Preview.html ~/Downloads/
+scp ssourav@gh-login03.delta.ncsa.illinois.edu:~/dsh-forge/dist/DSH_Forge_Launcher_Preview.html ~/Downloads/
 open ~/Downloads/DSH_Forge_Fleet_Sandbox_Preview.html
 ```
 

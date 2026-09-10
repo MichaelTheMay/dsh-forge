@@ -16,6 +16,7 @@ spec = importlib.util.spec_from_file_location("serve", ROOT / "scripts/serve.py"
 serve = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(serve)
 import dsh_forge.launcher as launcher_module
+from tests.helpers import FakeCellSandbox
 
 
 FAKE_DSH = """#!/bin/sh
@@ -43,6 +44,12 @@ class LauncherFixture(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        self.versions_directory_environment = mock.patch.dict(
+            os.environ,
+            {"DSH_FORGE_VERSIONS_DIR": str(self.root / "managed-versions")},
+        )
+        self.versions_directory_environment.start()
+        self.addCleanup(self.versions_directory_environment.stop)
         self.tree_root = self.root / "deepseek-harness"
         self.tree_root.mkdir()
         (self.tree_root / "package.json").write_text(
@@ -52,7 +59,9 @@ class LauncherFixture(unittest.TestCase):
         executable = self.tree_root / "dsh"
         executable.write_text(FAKE_DSH, encoding="utf-8")
         executable.chmod(0o755)
-        self.launcher = serve.Launcher([self.tree_root], state_root=self.root / "state")
+        self.launcher = serve.Launcher(
+            [self.tree_root], state_root=self.root / "state", sandbox=FakeCellSandbox()
+        )
 
     def tearDown(self):
         self.launcher.shutdown()
@@ -63,6 +72,119 @@ class LauncherFixture(unittest.TestCase):
 
 
 class ScannerAndRunner(LauncherFixture):
+    def test_managed_versions_directory_is_discovered_and_saved_automatically(self):
+        managed = self.root / "dsh-versions"
+        managed_tree = managed / "dsh-v-test"
+        managed_tree.mkdir(parents=True)
+        (managed_tree / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/deepseek-harness", "version": "0.0-auto"}),
+            encoding="utf-8",
+        )
+        executable = managed_tree / "dsh"
+        executable.write_text(FAKE_DSH, encoding="utf-8")
+        executable.chmod(0o755)
+        with mock.patch.dict(os.environ, {"DSH_FORGE_VERSIONS_DIR": str(managed)}):
+            launcher = serve.Launcher(state_root=self.root / "auto-state", sandbox=FakeCellSandbox())
+            try:
+                status = launcher.status()
+                self.assertEqual(status["versions_directory"]["path"], str(managed))
+                self.assertEqual(len(status["saved_versions"]), 1)
+                saved = status["saved_versions"][0]
+                self.assertEqual(saved["source"], "auto")
+                self.assertEqual(saved["primary_tree"]["version"], "0.0-auto")
+                self.assertEqual(saved["launch"]["port"], "auto")
+                self.assertEqual(saved["launch"]["home_mode"], "fresh")
+            finally:
+                launcher.shutdown()
+
+    def test_saved_local_version_registry_survives_restart_and_forget_preserves_source(self):
+        saved_state = self.root / "saved-state"
+        first = serve.Launcher(state_root=saved_state, sandbox=FakeCellSandbox())
+        try:
+            status = first.add_scan_roots([str(self.tree_root)])
+            self.assertEqual(len(status["saved_versions"]), 1)
+            saved = status["saved_versions"][0]
+            self.assertEqual(saved["state"], "ready")
+            self.assertEqual(saved["primary_tree"]["version"], "0.0-test")
+            registry = json.loads((saved_state / "scan-roots.json").read_text(encoding="utf-8"))
+            self.assertEqual(registry["schema_version"], 1)
+            self.assertEqual(registry["roots"][0]["id"], saved["id"])
+            self.assertEqual(registry["roots"][0]["source"], "manual")
+            self.assertEqual(registry["roots"][0]["launch"]["resources"]["gpu"], "none")
+        finally:
+            first.shutdown()
+
+        recovered = serve.Launcher(state_root=saved_state, sandbox=FakeCellSandbox())
+        try:
+            self.assertEqual(recovered.status()["saved_versions"][0]["id"], saved["id"])
+            status = recovered.remove_saved_version(saved["id"])
+            self.assertEqual(status["saved_versions"], [])
+            self.assertTrue(self.tree_root.is_dir())
+            self.assertTrue((self.tree_root / "dsh").is_file())
+        finally:
+            recovered.shutdown()
+
+    def test_saved_launch_preferences_are_limited_and_persistent(self):
+        state = self.root / "settings-state"
+        launcher = serve.Launcher(state_root=state, sandbox=FakeCellSandbox())
+        try:
+            saved = launcher.add_scan_roots([str(self.tree_root)])["saved_versions"][0]
+            status = launcher.update_saved_version(saved["id"], {
+                "open_browser": True,
+                "gpu": "allocated",
+            })
+            launch = status["saved_versions"][0]["launch"]
+            self.assertTrue(launch["open_browser"])
+            self.assertEqual(launch["resources"]["gpu"], "allocated")
+            self.assertEqual(launch["port"], "auto")
+            self.assertEqual(launch["workspace"], "managed")
+            with self.assertRaisesRegex(launcher_module.LauncherError, "Only open-browser"):
+                launcher.update_saved_version(saved["id"], {"network": "none"})
+        finally:
+            launcher.shutdown()
+
+        recovered = serve.Launcher(state_root=state, sandbox=FakeCellSandbox())
+        try:
+            launch = recovered.status()["saved_versions"][0]["launch"]
+            self.assertTrue(launch["open_browser"])
+            self.assertEqual(launch["resources"]["gpu"], "allocated")
+        finally:
+            recovered.shutdown()
+
+    def test_legacy_string_scan_roots_are_loaded_and_migrated_on_save(self):
+        legacy_state = self.root / "legacy-state"
+        legacy_state.mkdir()
+        (legacy_state / "scan-roots.json").write_text(
+            json.dumps({"roots": [str(self.tree_root)]}), encoding="utf-8"
+        )
+        launcher = serve.Launcher(state_root=legacy_state, sandbox=FakeCellSandbox())
+        try:
+            saved = launcher.status()["saved_versions"]
+            self.assertEqual(len(saved), 1)
+            self.assertEqual(saved[0]["added_at"], 0)
+            launcher.add_scan_roots([str(self.tree_root)])
+            migrated = json.loads((legacy_state / "scan-roots.json").read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schema_version"], 1)
+            self.assertIsInstance(migrated["roots"][0], dict)
+        finally:
+            launcher.shutdown()
+
+    def test_two_launcher_processes_do_not_clobber_saved_versions(self):
+        shared_state = self.root / "shared-state"
+        other_root = self.root / "other-harness"
+        other_root.mkdir()
+        first = serve.Launcher(state_root=shared_state, sandbox=FakeCellSandbox())
+        second = serve.Launcher(state_root=shared_state, sandbox=FakeCellSandbox())
+        try:
+            first.add_scan_roots([str(self.tree_root)])
+            status = second.add_scan_roots([str(other_root)])
+            self.assertEqual(len(status["saved_versions"]), 2)
+            rescanned = first.scan()
+            self.assertEqual(len(rescanned["saved_versions"]), 2)
+        finally:
+            first.shutdown()
+            second.shutdown()
+
     def test_only_canonical_upstream_remotes_are_official(self):
         self.assertTrue(launcher_module._official_remote("https://github.com/deepseek-ai/deepseek-harness.git"))
         self.assertTrue(launcher_module._official_remote("git@github.com:deepseek-ai/deepseek-harness.git"))
@@ -104,7 +226,9 @@ class ScannerAndRunner(LauncherFixture):
             return str(fake_node) if command == "node" else real_which(command)
 
         with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
-            detected = serve.Launcher([upstream], state_root=self.root / "upstream-state")
+            detected = serve.Launcher(
+                [upstream], state_root=self.root / "upstream-state", sandbox=FakeCellSandbox()
+            )
         try:
             tree = detected.status()["trees"][0]
             preview = detected.preview({
@@ -117,6 +241,42 @@ class ScannerAndRunner(LauncherFixture):
             self.assertIn("--host", preview["argv"])
             self.assertIn("--no-open", preview["argv"])
             self.assertNotIn("--workspace", preview["argv"])
+        finally:
+            detected.shutdown()
+
+    def test_scanner_excludes_internal_monorepo_tools(self):
+        upstream = self.root / "upstream-monorepo"
+        cli = upstream / "apps" / "cli"
+        (cli / "lib").mkdir(parents=True)
+        (cli / "package.json").write_text(
+            json.dumps({"name": "@deepseek-ai/dsh", "version": "0.1.2-alpha.3"}), encoding="utf-8"
+        )
+        (cli / "lib" / "bin.js").write_text("#!/usr/bin/env node\n", encoding="utf-8")
+        internal_packages = (
+            ("packages/experimental/webworker-packer", "@deepseek-ai/dsh-experimental-webworker-packer", "lib/bin.js"),
+            ("packages/test-support/llm-mock-server", "@deepseek-ai/dsh-llm-mock-server", "src/bin.ts"),
+        )
+        for relative, name, executable in internal_packages:
+            package_root = upstream / relative
+            (package_root / Path(executable).parent).mkdir(parents=True)
+            (package_root / "package.json").write_text(
+                json.dumps({"name": name, "version": "0.1.2-alpha.3"}), encoding="utf-8"
+            )
+            (package_root / executable).write_text("#!/usr/bin/env node\n", encoding="utf-8")
+
+        real_which = launcher_module.shutil.which
+
+        def fixture_which(command):
+            return str(self.root / "node") if command == "node" else real_which(command)
+
+        with mock.patch("dsh_forge.launcher.shutil.which", side_effect=fixture_which):
+            detected = serve.Launcher(
+                [upstream], state_root=self.root / "monorepo-state", sandbox=FakeCellSandbox()
+            )
+        try:
+            trees = detected.status()["trees"]
+            self.assertEqual([tree["name"] for tree in trees], ["@deepseek-ai/dsh"])
+            self.assertEqual(trees[0]["path"], launcher_module._display_path(upstream))
         finally:
             detected.shutdown()
 
@@ -133,7 +293,7 @@ class ScannerAndRunner(LauncherFixture):
             else:
                 os.environ["DEEPSEEK_API_KEY"] = old
         rendered = json.dumps(preview)
-        self.assertIn("DEEPSEEK_API_KEY", rendered)
+        self.assertNotIn("DEEPSEEK_API_KEY", rendered)
         self.assertNotIn("never-return-this-secret", rendered)
         self.assertIn("not observed", rendered)
 
@@ -169,7 +329,9 @@ class ScannerAndRunner(LauncherFixture):
             self.assertNotEqual(first["home"], second["home"])
             self.assertNotEqual(first["workspace"], second["workspace"])
             self.assertEqual(first["workspace_isolation"], "managed empty")
-            self.assertFalse(first["resources"]["enforced"])
+            self.assertTrue(first["resources"]["enforced"])
+            self.assertTrue(first["sandboxed"])
+            self.assertEqual(first["execution_backend"], "apptainer-cell-v1")
             self.assertIn(first["agent_state"], {"working", "idle"})
             self.assertIsInstance(first["recent_logs"], list)
             self.launcher.stop(first["id"])
@@ -192,9 +354,9 @@ class ScannerAndRunner(LauncherFixture):
             cloned_private = self.launcher._cells[cloned["id"]]
             self.assertNotEqual(source["id"], cloned["id"])
             self.assertNotEqual(source["port"], cloned["port"])
-            self.assertEqual((Path(cloned_private["real_home"]) / "sessions" / "one.jsonl").read_text(), "session")
+            self.assertEqual((Path(cloned_private["real_home"]) / "sessions" / "one.jsonl").read_text(encoding="utf-8"), "session")
             self.assertFalse((Path(cloned_private["real_home"]) / ".env").exists())
-            self.assertEqual((Path(cloned_private["real_workspace"]) / "artifact.txt").read_text(), "artifact")
+            self.assertEqual((Path(cloned_private["real_workspace"]) / "artifact.txt").read_text(encoding="utf-8"), "artifact")
             self.assertEqual(self.launcher.artifacts(cloned["id"])[0]["path"], "artifact.txt")
             self.launcher.stop(source["id"])
             self.launcher.stop(cloned["id"])
@@ -204,7 +366,9 @@ class ScannerAndRunner(LauncherFixture):
             cell = self.launcher.launch({
                 "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"
             })
-            recovered = serve.Launcher([self.tree_root], state_root=self.root / "state")
+            recovered = serve.Launcher(
+                [self.tree_root], state_root=self.root / "state", sandbox=FakeCellSandbox()
+            )
             try:
                 restored = next(item for item in recovered.status()["cells"] if item["id"] == cell["id"])
                 self.assertEqual(restored["process"], "alive")
@@ -254,16 +418,17 @@ class ScannerAndRunner(LauncherFixture):
             self.assertIn("authenticated URL redacted", rendered_logs)
             self.launcher.stop(cell["id"])
 
-    def test_exclusive_home_has_one_writer(self):
-        with mock.patch("dsh_forge.launcher._process_birth", return_value="test-birth"):
-            first = self.launcher.launch({
-                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
+    def test_host_home_and_existing_workspace_are_rejected(self):
+        with self.assertRaisesRegex(serve.LauncherError, "host DSH home is never mounted"):
+            self.launcher.preview({
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task",
+                "home_mode": "exclusive", "workspace": "managed",
             })
-            with self.assertRaisesRegex(serve.LauncherError, "writable-home lease"):
-                self.launcher.launch({
-                    "tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "exclusive", "workspace": "none"
-                })
-            self.launcher.stop(first["id"])
+        with self.assertRaisesRegex(serve.LauncherError, "host workspaces are not mounted writable"):
+            self.launcher.preview({
+                "tree_id": self.tree()["id"], "surface": "headless", "task": "test task",
+                "home_mode": "fresh", "workspace": str(self.root),
+            })
 
     def test_safe_clone_excludes_secrets_sessions_and_symlinks(self):
         source = self.root / "home-template"
@@ -360,6 +525,61 @@ class LauncherServer(LauncherFixture):
             urllib.request.urlopen(bad_origin, timeout=3)
         self.assertEqual(context.exception.code, 403)
 
+    def test_save_and_forget_local_version_endpoints_require_session(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            added = json.load(response)
+        self.assertEqual(len(added["saved_versions"]), 1)
+        saved_id = added["saved_versions"][0]["id"]
+        with self.request("/api/v1/versions/remove", {"id": saved_id}, cookie=cookie) as response:
+            removed = json.load(response)
+        self.assertEqual(removed["saved_versions"], [])
+        self.assertTrue(self.tree_root.is_dir())
+
+    def test_saved_version_settings_endpoint_updates_safe_preferences(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with self.request(
+            "/api/v1/versions/settings",
+            {"id": saved_id, "launch": {"open_browser": True, "gpu": "allocated"}},
+            cookie=cookie,
+        ) as response:
+            updated = json.load(response)["saved_versions"][0]
+        self.assertTrue(updated["launch"]["open_browser"])
+        self.assertEqual(updated["launch"]["resources"]["gpu"], "allocated")
+
+    def test_configuration_endpoints_save_and_run_without_accepting_paths(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with self.request(
+            "/api/v1/configurations",
+            {"name": "Web configuration", "version_id": saved_id, "launch": {"profile": "web"}},
+            cookie=cookie,
+        ) as response:
+            configuration = json.load(response)
+        self.assertTrue(configuration["runtime"]["runnable"])
+        with mock.patch.object(self.launcher, "launch", return_value={"id": "cell_web"}) as launch:
+            with self.request(
+                "/api/v1/configurations/run", {"id": configuration["id"]}, cookie=cookie,
+            ) as response:
+                started = json.load(response)
+        self.assertEqual(started["id"], "cell_web")
+        self.assertNotIn("path", launch.call_args.args[0])
+
+    def test_assistant_endpoint_passes_only_saved_version_identity(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with mock.patch.object(self.launcher, "launch_assistant", return_value={"id": "cell_assistant"}) as start:
+            with self.request(
+                "/api/v1/assistant/start", {"version_id": saved_id}, cookie=cookie,
+            ) as response:
+                payload = json.load(response)
+        self.assertEqual(payload["id"], "cell_assistant")
+        start.assert_called_once_with(saved_id)
+
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()
         self.assertEqual(payload["mode"], "live-local-sidecar")
@@ -367,8 +587,34 @@ class LauncherServer(LauncherFixture):
             cookie = response.headers["Set-Cookie"]
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Strict", cookie)
-        self.assertEqual(payload["sandbox"]["mode"], "local-isolation-preview")
+        self.assertEqual(payload["sandbox"]["mode"], "fake-apptainer-cell-v1")
+        self.assertTrue(payload["sandbox"]["ready"])
         self.assertFalse(payload["sandbox"]["hostile_code_isolation"])
+
+    def test_sandbox_mutation_requires_session_and_uses_tree_endpoint(self):
+        tree = self.launcher._trees[self.tree()["id"]]
+        tree["trust"] = "foreign"
+        tree["launchability"] = "sandbox-testable"
+        self.launcher.sandbox = mock.Mock()
+        self.launcher.sandbox.status.return_value = {
+            "ready": True, "image_sha256": "b" * 64, "hostile_code_isolation": False
+        }
+        self.launcher.sandbox.test_tree.return_value = {
+            "status": "passed", "exit_code": 0, "duration_ms": 1, "output": "help",
+            "network": "none", "secrets_forwarded": False, "image_sha256": "b" * 64,
+            "command_summary": "captured CLI help probe",
+        }
+        path = "/api/v1/trees/" + tree["id"] + "/sandbox-test"
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            self.request(path, {})
+        self.assertEqual(context.exception.code, 403)
+        cookie, _ = self.establish_session()
+        with mock.patch.object(self.launcher, "scan", return_value=self.launcher.status()):
+            tree["git"] = {"sha": "abc123", "branch": "main", "dirty": False}
+            with self.request(path, {}, cookie=cookie) as response:
+                payload = json.load(response)
+        self.assertEqual(payload["status"], "passed")
+        self.launcher.sandbox.test_tree.assert_called_once()
 
     def test_api_does_not_accept_non_loopback_host(self):
         request = urllib.request.Request(self.url + "/api/v1/status", headers={"Host": "example.com"})

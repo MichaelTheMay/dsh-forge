@@ -7,18 +7,24 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
 const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
+const packageFeed = JSON.parse(fs.readFileSync(path.join(root, 'data/package-catalog.seed.json'), 'utf8'));
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
 }
-const windowStub = { location: { hash: '' }, __dcPrecompiledLogicFactories: {} };
+const windowStub = { location: { hash: '', href: 'http://127.0.0.1:3090/' }, __dcPrecompiledLogicFactories: {} };
 const clipboard = [];
 const navigatorStub = { clipboard: { writeText: async value => { clipboard.push(value); } } };
 new Function('window', 'navigator', script)(windowStub, navigatorStub);
 const Component = windowStub.__dcPrecompiledLogicFactories.$root(Logic);
 const CATALOG = Component.catalog;
 const CATALOG_SNAPSHOT = Component.catalogSnapshot;
-function instance(props = {}) { const c = new Component(props); c.flash = value => { c.lastMessage = value; }; return c; }
+function instance(props = {}, hash = '') {
+  windowStub.location.hash = hash;
+  const c = new Component(props);
+  c.flash = value => { c.lastMessage = value; };
+  return c;
+}
 
 test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   const inline = html.match(/<script type="text\/x-dc"[^>]*>([\s\S]*?)<\/script>/)[1];
@@ -28,21 +34,47 @@ test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   assert.equal(typeof Component, 'function');
 });
 
-test('embedded snapshot exactly matches the JSON and GitHub top-ten response', () => {
-  assert.deepEqual(CATALOG_SNAPSHOT, snapshot);
+test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
+  assert.deepEqual(CATALOG_SNAPSHOT, {
+    ...snapshot,
+    package_entries: packageFeed.packages,
+    package_catalog_digest: packageFeed.catalog_digest,
+  });
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
-  assert.equal(CATALOG.length, 10);
-  assert.deepEqual(CATALOG.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
-  assert.equal(new Set(CATALOG.map(r => r.github_id)).size, 10);
-  assert(CATALOG.every(r => /^[a-f0-9]{40}$/.test(r.head_sha)));
+  const forks = CATALOG.filter(r => r.type === 'fork');
+  const plugins = CATALOG.filter(r => r.type === 'plugin');
+  const packages = CATALOG.filter(r => r.type === 'package');
+  assert.equal(CATALOG.length, 20);
+  assert.equal(forks.length, 10);
+  assert.equal(plugins.length, 7);
+  assert.equal(packages.length, 3);
+  assert.equal(snapshot.package_browser.status, 'metadata_catalog_preview');
+  assert.equal(snapshot.package_browser.composition_enabled, true);
+  assert.equal(snapshot.package_browser.upload_enabled, false);
+  assert.equal(snapshot.package_browser.download_enabled, false);
+  assert.equal(snapshot.package_browser.execution_enabled, false);
+  assert.deepEqual(forks.map(r => [r.github_id, r.github_stars]), raw.map(r => [r.id, r.stargazers_count]));
+  assert.deepEqual(plugins.map(r => r.curation.rank), [1, 2, 3, 4, 5, 6, 7]);
+  assert(plugins.every(r => r.package.version && /^(?:sha512|sha256)-/.test(r.package.integrity)));
+  assert.equal(new Set([...forks, ...plugins].map(r => r.github_id)).size, 17);
+  assert([...forks, ...plugins].every(r => /^[a-f0-9]{40}$/.test(r.head_sha)));
+  assert.deepEqual(packages.map(r => r.rank), [1, 2, 3]);
+  assert(packages.every(r => r.page.route === '#packages/' + r.slug));
+  assert(packages.every(r => r.acquisition.enabled === false));
 });
-test('launcher remains the default and Public Repos is a separate view', () => {
+test('launcher remains default and Community has stable plugin, fork, and package routes', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
-  assert.equal(c.renderVals().modeLabel, 'portable preview');
+  assert.equal(c.renderVals().modeLabel, 'Preview');
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
-  assert.equal(windowStub.location.hash, 'public-repos');
+  assert.equal(windowStub.location.hash, 'packages');
+  c.renderVals().results[0].select();
+  assert.equal(windowStub.location.hash, 'packages/agent-teams-builder');
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  assert.equal(windowStub.location.hash, 'forks');
+  c.renderVals().repoTypes.find(f => f.id === 'package').select();
+  assert.equal(windowStub.location.hash, 'packages');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
 });
 test('preview contains no personal-name or private-home leakage', () => {
@@ -53,29 +85,91 @@ test('live status replaces preview inventory instead of merging it', () => {
   const c = instance();
   c.applyStatus({
     trees: [{ id: 'real', name: 'detected', short: 'detected', kind: 'source', version: '1', path: '~/dsh', exe: '~/dsh/dsh', node: 'bundled', git: null, trust: 'personal', launchability: 'ready' }],
+    saved_versions: [{ id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['real'], primary_tree: { id: 'real', name: 'detected', kind: 'source', version: '1', path: '~/dsh', git: null, trust: 'personal', launchability: 'ready' } }],
     cells: [], suggested_port: 3210, coverage_gaps: [], credentials: []
   });
   assert.equal(c.state.trees.length, 1);
   assert.equal(c.state.trees[0].id, 'real');
-  assert.equal(c.renderVals().modeLabel, 'fleet preview');
+  assert.equal(c.state.savedVersions.length, 1);
+  assert.equal(c.renderVals().modeLabel, 'Local');
   assert.equal(c.renderVals().suggested, 3210);
 });
-test('fleet preview has two immutable official pins and no fabricated cells', () => {
+test('portable preview has two immutable official pins and no fabricated cells', () => {
   const c = instance(); const values = c.renderVals();
   assert.equal(values.versions.length, 2);
   assert.deepEqual(values.versions.map(v => v.version), ['0.1.2-alpha.3', '0.1.2-alpha.2']);
   assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
   assert(values.versions.every(v => v.disabled));
   assert.equal(values.cells.length, 0);
-  assert.match(html, /Local isolation preview/);
-  assert.match(html, /CPU\/GPU\/RAM quotas[\s\S]*not enforced/);
+  assert.match(script, /Isolation ready/);
+  assert(!/Fail-closed cell fleet/.test(html));
+  assert(!/quota unenforced/.test(html));
+  assert.match(script, /sandbox test .*network none .*no launcher secrets/);
 });
-test('launcher keeps discovery controls out of the primary UI', () => {
-  assert(!/>\s*Rescan\s*</i.test(html));
+test('launcher auto-detects its versions directory and keeps manual add compact', async () => {
+  assert.match(html, />\s*\{\{ addVersionLabel \}\}\s*</i);
+  assert.match(html, /Versions in.*versionsDirectory.*appear automatically/s);
+  assert.match(html, />Add version</);
+  assert(!/Rescan saved versions/.test(html));
   assert(!/>\s*Scan roots\s*</i.test(html));
   assert(!/>\s*Add folder(?:…|\.\.\.)?\s*</i.test(html));
   assert(!/window\.prompt\s*\(/.test(script));
-  assert(!/\b(?:scanLabel|addFolder|rescanLauncher)\b/.test(script));
+  const c = instance(); let request;
+  c.api = async (url, options) => {
+    request = { url, method: options.method, body: JSON.parse(options.body) };
+    return {
+      trees: [], cells: [], saved_versions: [{
+        id: 'version_123456789abc', path: '~/dsh', state: 'no-harness-found', tree_ids: [], primary_tree: null
+      }], suggested_port: 3100, coverage_gaps: ['~/dsh · no strong DSH signature'], credentials: []
+    };
+  };
+  c.setState({ sidecarConnected: true, versionPath: '/tmp/dsh' });
+  await c.saveLocalVersion();
+  assert.deepEqual(request, {
+    url: '/api/v1/scan', method: 'POST', body: { roots: ['/tmp/dsh'] }
+  });
+  assert.equal(c.state.savedVersions.length, 1);
+  assert.equal(c.state.versionFormOpen, false);
+});
+test('saved-version rescan and forget use explicit non-destructive endpoints', async () => {
+  const c = instance(); const requests = [];
+  c.setState({
+    sidecarConnected: true,
+    savedVersions: [{ id: 'version_123456789abc', path: '~/dsh', state: 'missing', tree_ids: [], primary_tree: null }]
+  });
+  c.api = async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    return { trees: [], cells: [], saved_versions: [], suggested_port: 3100, coverage_gaps: [], credentials: [] };
+  };
+  await c.rescanVersions();
+  await c.forgetLocalVersion({ id: 'version_123456789abc' });
+  assert.deepEqual(requests, [
+    { url: '/api/v1/scan', body: {} },
+    { url: '/api/v1/versions/remove', body: { id: 'version_123456789abc' } }
+  ]);
+  assert.match(c.lastMessage, /source files were not changed/);
+});
+test('saved launch preferences use the limited settings endpoint', async () => {
+  const c = instance(); let request;
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', source: 'manual', state: 'ready', tree_ids: ['real'],
+    launch: { surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false, home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' } },
+    primary_tree: { id: 'real', name: 'detected', kind: 'source', version: '1', path: '~/dsh', git: null, trust: 'personal', launchability: 'ready' }
+  };
+  c.applyStatus({
+    trees: [saved.primary_tree], cells: [], saved_versions: [saved], suggested_port: 3100,
+    coverage_gaps: [], credentials: [], versions_directory: { path: '~/dsh-versions', available: true, auto_scan: true },
+    sandbox: { ready: true, reason: 'ready', resource_limits: {} }
+  });
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { trees: [saved.primary_tree], cells: [], saved_versions: [saved], coverage_gaps: [], credentials: [] };
+  };
+  await c.renderVals().versions[0].setGpuMode({ target: { value: 'allocated' } });
+  assert.deepEqual(request, {
+    url: '/api/v1/versions/settings',
+    body: { id: saved.id, launch: { open_browser: false, gpu: 'allocated' } }
+  });
 });
 test('one-click version launch requests automatic isolation', async () => {
   const c = instance(); let request;
@@ -83,7 +177,11 @@ test('one-click version launch requests automatic isolation', async () => {
     trees: [
       { id: 'a3', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.3', path: '~/a3', exe: '~/a3/dsh', node: 'node', git: { sha: 'dd6322dabc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' },
       { id: 'a2', name: 'official', short: 'official', kind: 'source', version: '0.1.2-alpha.2', path: '~/a2', exe: '~/a2/dsh', node: 'node', git: { sha: '0a53fb5abc', branch: 'tag', dirty: false }, trust: 'readonly', launchability: 'ready' }
-    ], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: []
+    ], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: {
+      mode: 'apptainer-cell-v1', ready: true, reason: 'capability probe passed',
+      resource_limits: { cpus: '4', memory: '8G' }
+    }
   });
   c.api = async (url, options) => {
     if (url === '/api/v1/cells') { request = JSON.parse(options.body); return { id: 'cell-one', name: 'cell', port: 3100 }; }
@@ -96,35 +194,84 @@ test('one-click version launch requests automatic isolation', async () => {
   assert.equal(request.port, 'auto');
   assert.equal(request.home_mode, 'fresh');
   assert.equal(request.workspace, 'managed');
+  assert.equal(request.network, 'host');
+  assert.equal(request.resources.gpu, 'none');
   assert.equal(request.tree_id, 'a3');
 });
-test('most-starred order retains GitHub order for ties', () => {
-  const rows = instance().renderVals().results;
+test('detected community trees use the probe endpoint and never become complete cells', async () => {
+  const c = instance(); let request;
+  const foreign = {
+    id: 'fork-1', name: 'community fork', short: 'fork', kind: 'source', version: '1.0.0',
+    path: '~/fork', exe: '~/fork/dsh.js', node: 'sandbox',
+    git: { sha: 'abc123', branch: 'main', dirty: false }, trust: 'foreign', launchability: 'sandbox-testable'
+  };
+  c.applyStatus({
+    trees: [foreign], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: {
+      mode: 'apptainer-cell-v1', ready: true, reason: 'capability probe passed',
+      hostile_code_isolation: false, resource_limits: { cpus: '4', memory: '8G' }
+    }
+  });
+  c.api = async (url, options) => {
+    request = { url, method: options.method, body: options.body };
+    return { status: 'passed' };
+  };
+  c.refreshStatus = async () => {};
+  const values = c.renderVals();
+  assert.equal(values.communityTrees.length, 1);
+  assert.equal(values.communityTrees[0].disabled, false);
+  assert.equal(values.launchDisabled, true);
+  assert.equal(values.primaryLabel, 'Sandbox test only');
+  await values.communityTrees[0].run();
+  assert.deepEqual(request, {
+    url: '/api/v1/trees/fork-1/sandbox-test', method: 'POST', body: '{}'
+  });
+  assert.match(c.lastMessage, /sandbox test passed/);
+});
+test('fork star sorting retains captured GitHub order for ties', () => {
+  const c = instance();
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().setCatalogSort({ target: { value: 'stars' } });
+  const rows = c.renderVals().results;
+  const forks = CATALOG.filter(r => r.type === 'fork');
   const stars = rows.map(r => r.github_stars);
   assert.deepEqual(stars, [...stars].sort((a,b) => b-a));
   for (const count of new Set(stars)) {
     assert.deepEqual(rows.filter(r => r.github_stars === count).map(r => r.id),
-      CATALOG.filter(r => r.github_stars === count).map(r => r.id));
+      forks.filter(r => r.github_stars === count).map(r => r.id));
   }
 });
 test('search handles case, whitespace, and multiple terms', () => {
-  const c = instance(); const target = CATALOG[1];
+  const c = instance(); const target = CATALOG.filter(r => r.type === 'plugin')[1];
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
   c.renderVals().setQuery({ target: { value: '  ' + target.owner.toUpperCase() + '   ' + target.name + '  ' } });
   assert.deepEqual(c.renderVals().results.map(r => r.id), [target.id]);
 });
 test('filtered-out selection never leaves stale detail content', () => {
-  const c = instance(); c.renderVals().results[3].select();
-  c.renderVals().setQuery({ target: { value: CATALOG[4].slug } });
-  assert.equal(c.renderVals().detail.id, CATALOG[4].id);
+  const c = instance(); const plugins = CATALOG.filter(r => r.type === 'plugin');
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  c.renderVals().results[3].select();
+  c.renderVals().setQuery({ target: { value: plugins[4].slug } });
+  assert.equal(c.renderVals().detail.id, plugins[4].id);
   c.renderVals().setQuery({ target: { value: 'no-such-repository-000' } });
   assert(c.renderVals().noResults); assert(!c.renderVals().hasDetail);
   assert.deepEqual(c.renderVals().detailRows, []);
 });
-test('Plugins has an honest empty state and reset recovers all ten forks', () => {
-  const c = instance(); c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
-  assert.equal(c.renderVals().results.length, 0);
-  assert.equal(c.renderVals().emptyTitle, 'No plugins imported yet');
-  c.renderVals().resetCatalogFilters(); assert.equal(c.renderVals().results.length, 10);
+test('package-first browser exposes generated packages, plugins, and captured forks', () => {
+  const c = instance();
+  c.renderVals().goCatalog();
+  assert.equal(c.renderVals().results.length, 3);
+  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['package', 3], ['plugin', 7], ['fork', 10]]);
+  const packageDetail = c.renderVals();
+  assert.equal(packageDetail.detail.schema, 'dsh-forge.catalog-package/v1');
+  assert.equal(packageDetail.acquireLabel, 'Acquire verified bytes');
+  assert.equal(packageDetail.isPackageDetail, true);
+  assert(packageDetail.packageComponents.length >= 1);
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  assert.equal(c.renderVals().results.length, 7);
+  assert.equal(windowStub.location.hash, 'plugins');
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  assert.equal(c.renderVals().results.length, 10);
 });
 test('recent and name sort change order without changing catalog membership', () => {
   const c = instance(); c.renderVals().setCatalogSort({ target: { value: 'recent' } });
@@ -140,20 +287,244 @@ test('license filter is based on reported metadata, not a verification claim', (
   assert(CATALOG.every(r => r.verification.security_verified === false));
 });
 test('copy pinned ref actually writes the captured commit URL', async () => {
-  const c = instance(); await c.renderVals().copyRef();
-  assert.equal(clipboard.at(-1), snapshot.entries[0].repository_url + '/tree/' + snapshot.entries[0].head_sha);
+  const c = instance(); const plugin = snapshot.supplemental_entries[0];
+  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  await c.renderVals().copyRef();
+  assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
   assert.equal(c.lastMessage, 'Copied repository reference');
 });
 test('catalog interactions cannot add, stop, or modify local cells', () => {
   const c = instance(); const before = JSON.stringify(c.state.cells);
-  c.renderVals().goCatalog(); c.renderVals().results[5].select();
+  c.renderVals().goCatalog(); c.renderVals().repoTypes.find(f => f.id === 'plugin').select(); c.renderVals().results[5].select();
   c.renderVals().setQuery({ target: { value: 'desktop' } });
   c.renderVals().goLaunch(); assert.equal(JSON.stringify(c.state.cells), before);
 });
-test('public code actions are disabled and the snapshot has no fabricated analysis', () => {
+test('repository actions stay disabled while signed package install is locally gated', () => {
   const section = html.slice(html.indexOf('<main class="public-browser"'), html.indexOf('<sc-if value="{{ previewOpen }}"'));
-  assert.equal((section.match(/<button disabled title=/g) || []).length, 3);
-  assert(!/onClick="{{.*(?:install|clone|run|sandbox)/i.test(section));
+  // Composition and upload remain the only disabled affordance: one-click install stays
+  // package-only, while plugins and forks now hand over an explicit command instead.
+  const disabled = section.match(/<button disabled(?: title="([^"]*)")?/g) || [];
+  assert.equal(disabled.length, 1);
+  assert.match(disabled[0], /Package composition and upload are a separate boundary\./);
+  assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
-  assert(CATALOG.every(r => r.analysis_status === 'not_analyzed'));
+  assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
+  assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
+  assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
+  assert(CATALOG.filter(r => r.type === 'package').every(r => !r.verification.installed && !r.verification.sandbox_verified && !r.acquisition.enabled));
+});
+
+test('installed-profile rail one-clicks web and headless and copies the rest', async () => {
+  const c = instance();
+  const status = {
+    trees: [], cells: [], saved_versions: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true },
+    profiles: [
+      { id: 'profile_' + 'a'.repeat(16), name: 'web', home: '~/.dsh', surface: 'web', bundles: ['@deepseek-ai/dsh-web-app'], dependencies: ['dsh-vet'], launchability: 'one-click', command: 'run-web' },
+      { id: 'profile_' + 'b'.repeat(16), name: 'coding', home: '~/.dsh', surface: 'terminal', bundles: ['@deepseek-ai/dsh-tui-app'], dependencies: [], launchability: 'terminal-only', command: 'run-coding' }
+    ]
+  };
+  c.applyStatus(status);
+  let values = c.renderVals();
+  assert.equal(values.profileCountLabel, '2 profiles found');
+  assert.equal(values.localProfiles[0].bundleLabel, '1 bundle');
+  assert.equal(values.localProfiles[0].dependencyLabel, '1 plugin');
+  // Without a launch-ready tree, one-click is refused but the CLI path stays open.
+  assert.equal(values.localProfiles[0].disabled, true);
+  assert.equal(values.localProfiles[1].buttonLabel, 'Copy terminal command');
+  assert.equal(values.localProfiles[1].disabled, false);
+  await values.localProfiles[1].run();
+  assert.equal(clipboard.at(-1), 'run-coding');
+
+  const tree = { id: 'tree_123456789abc', trust: 'trusted', launchability: 'ready', version: '0.1.2-rc.1', short: 'dsh' };
+  c.applyStatus({ ...status, trees: [tree] });
+  values = c.renderVals();
+  assert.equal(values.localProfiles[0].disabled, false);
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return {
+      profile: status.profiles[0], tree: { ...tree, path: '~/dsh' },
+      argv: ['/usr/bin/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '3100', '--no-open'],
+      command: "DSH_HOME=~/.dsh /usr/bin/dsh --profile web", cwd: '~/dsh-forge', home: '~/.dsh',
+      environment_keys: ['PATH'], credential_keys: [],
+      notes: ['This is an existing local profile, so it runs directly on the host rather than inside Apptainer.']
+    };
+  };
+  await values.localProfiles[0].run();
+  // One-click always previews first; it never posts straight to the run endpoint.
+  assert.equal(request.url, '/api/v1/profiles/preview');
+  assert.deepEqual(request.body, {
+    profile_id: status.profiles[0].id, tree_id: tree.id, task: '', port: 'auto', open_browser: true
+  });
+  assert.equal(c.renderVals().previewTitle, 'Confirm local profile — direct host process');
+  assert.equal(c.renderVals().previewConfirmLabel, 'Run local profile');
+});
+
+test('plugin detail hands over an exact-version command targeting a detected profile', async () => {
+  const c = instance();
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true },
+    profiles: [
+      { id: 'profile_' + 'a'.repeat(16), name: 'web', home: '~/.dsh', surface: 'web', bundles: [], dependencies: [], launchability: 'one-click' },
+      { id: 'profile_' + 'b'.repeat(16), name: 'coding', home: '~/.dsh', surface: 'terminal', bundles: [], dependencies: [], launchability: 'terminal-only' }
+    ]
+  });
+  const plugin = snapshot.supplemental_entries.find(entry => entry.package.registry === 'npm');
+  c.selectCatalogArtifact({ id: plugin.artifact_id, type: 'plugin' });
+  let values = c.renderVals();
+  assert.equal(values.isPluginDetail, true);
+  // The default target is the detected web profile, and the version is pinned exactly.
+  assert.equal(values.pluginInstallCommand,
+    'dsh plugin --profile web add ' + plugin.package.name + '@' + plugin.package.version);
+  assert.match(values.pluginInstallCommand, /@\d+\.\d+\.\d+/);
+  values.setCatalogProfile({ target: { value: 'profile_' + 'b'.repeat(16) } });
+  values = c.renderVals();
+  assert.match(values.pluginInstallCommand, /--profile coding /);
+  // Copying is the only action: the browser never runs the plugin manager itself.
+  await values.copyPluginInstall();
+  assert.equal(clipboard.at(-1), values.pluginInstallCommand);
+  assert(!/\/api\/v1\/plugins\/install/.test(script));
+});
+
+test('non-npm plugins get no invented command and forks download a pinned archive', () => {
+  const c = instance();
+  const mcpb = snapshot.supplemental_entries.find(entry => entry.package.registry !== 'npm');
+  c.selectCatalogArtifact({ id: mcpb.artifact_id, type: 'plugin' });
+  let values = c.renderVals();
+  assert.equal(values.pluginInstallable, false);
+  assert.equal(values.pluginCommandUnavailable, true);
+  assert.equal(values.pluginInstallCommand, '');
+
+  const fork = snapshot.entries[0];
+  c.selectCatalogArtifact({ id: fork.artifact_id, type: 'fork' });
+  values = c.renderVals();
+  assert.equal(values.isForkDetail, true);
+  assert.equal(values.forkDownloadUrl,
+    'https://codeload.github.com/' + fork.full_name + '/tar.gz/' + fork.head_sha);
+  assert.match(values.forkDownloadCommand, /^curl --fail --location --output /);
+  assert(values.forkDownloadCommand.includes(fork.head_sha));
+});
+
+test('curated strip surfaces featured non-fork gems in rank order without a security claim', () => {
+  const c = instance();
+  const values = c.renderVals();
+  assert(values.hasCuratedPicks);
+  assert(values.curatedPicks.length > 0 && values.curatedPicks.length <= 8);
+  assert(values.curatedPicks.every(pick => pick.type !== 'fork'));
+  assert(values.curatedPicks.every(pick => pick.featured));
+  assert(values.curatedPicks.every(pick => ['Curated package', 'Hidden-gem plugin'].includes(pick.kindLabel)));
+  const ranks = values.curatedPicks.map(pick => (pick.rank || (pick.curation && pick.curation.rank)) || 999);
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+  // Curation is editorial only; it must never imply the artifact was verified.
+  assert.match(html, /Editorial curation, not a security verdict/);
+  assert(values.curatedPicks.every(pick => pick.verification.security_verified === false));
+});
+
+test('package page selects a saved version and posts only stable local identities', async () => {
+  const c = instance({}, '#packages/agent-teams-builder');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], package_installations: [],
+    trusted_package_recipes: [{ slug: 'agent-teams-builder', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { state: 'ready' };
+  };
+  c.refreshStatus = async () => {};
+  const values = c.renderVals();
+  assert.equal(values.installDisabled, false);
+  assert.equal(values.packageVersions.length, 1);
+  await values.installPackage();
+  assert.deepEqual(request, {
+    url: '/api/v1/packages/install',
+    body: { package_slug: 'agent-teams-builder', version_id: saved.id, profile: 'web' }
+  });
+});
+
+test('dedicated package route selects the requested metadata page and remains non-executable', async () => {
+  const c = instance({}, '#packages/code-review-lab');
+  const values = c.renderVals();
+  assert(values.showCatalog);
+  assert.equal(c.state.catalogType, 'package');
+  assert.equal(values.detail.slug, 'code-review-lab');
+  assert.equal(values.detail.components.length, 2);
+  await values.sharePackagePage();
+  assert.equal(clipboard.at(-1), 'http://127.0.0.1:3090/#packages/code-review-lab');
+  assert.equal(c.lastMessage, 'Copied package page');
+});
+
+test('featured scope is explicit and All in snapshot preserves full inventory', () => {
+  const c = instance();
+  c.renderVals().goCatalog();
+  assert.equal(c.renderVals().results.length, 3);
+  c.renderVals().catalogScopes.find(scope => scope.id === 'featured').select();
+  assert.deepEqual(c.renderVals().results.map(row => row.slug), ['agent-teams-builder', 'code-review-lab']);
+  c.renderVals().repoTypes.find(type => type.id === 'plugin').select();
+  assert.equal(c.renderVals().results.length, 3);
+  c.renderVals().catalogScopes.find(scope => scope.id === 'all').select();
+  assert.equal(c.renderVals().results.length, 7);
+  assert.match(script, /All in snapshot/);
+});
+
+test('catalog page saves stable selections and signed package identity only when configured', async () => {
+  const c = instance({}, '#packages/agent-teams-builder');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [{ slug: 'agent-teams-builder', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { id: 'config_1234567890abcdef1234' };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().saveConfiguration();
+  assert.equal(request.url, '/api/v1/configurations');
+  assert.equal(request.body.version_id, saved.id);
+  assert.equal(request.body.package_slug, 'agent-teams-builder');
+  assert.deepEqual(request.body.selections, [{ type: 'package', id: 'catalog-package:agent-teams-builder' }]);
+  assert.equal(request.body.draft, false);
+  assert(!('path' in request.body));
+});
+
+test('Assistant tab starts a saved Harness through its dedicated endpoint', async () => {
+  const c = instance({}, '#assistant');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [],
+    suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true, reason: 'ready' }
+  });
+  c.refreshStatus = async () => {};
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { id: 'cell_assistant' };
+  };
+  const values = c.renderVals();
+  assert(values.showAssistant);
+  assert.equal(values.assistantStartDisabled, false);
+  await values.startAssistant();
+  assert.deepEqual(request, {
+    url: '/api/v1/assistant/start', body: { version_id: saved.id }
+  });
+  assert.match(html, /Isolated DeepSeek Harness Forge Assistant/);
 });

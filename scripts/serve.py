@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import secrets
 import sys
@@ -21,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from dsh_forge.launcher import Launcher, LauncherError  # noqa: E402
+from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError  # noqa: E402
 
 
 class LauncherHTTPServer(ThreadingHTTPServer):
@@ -46,7 +48,7 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'")
         super().end_headers()
 
     def _loopback_host(self) -> bool:
@@ -186,11 +188,87 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     raise LauncherError("roots must be a JSON array")
                 self._json(payload)
                 return
+            if path == "/api/v1/versions/remove":
+                version_id = body.get("id")
+                if not isinstance(version_id, str):
+                    raise LauncherError("id must be a saved local-version ID")
+                self._json(self.server.launcher.remove_saved_version(version_id))
+                return
+            if path == "/api/v1/versions/settings":
+                version_id = body.get("id")
+                settings = body.get("launch")
+                if not isinstance(version_id, str):
+                    raise LauncherError("id must be a saved local-version ID")
+                if not isinstance(settings, dict):
+                    raise LauncherError("launch must be a JSON object")
+                self._json(self.server.launcher.update_saved_version(version_id, settings))
+                return
             if path == "/api/v1/launches/preview":
                 self._json(self.server.launcher.preview(body))
                 return
+            if path == "/api/v1/profiles/preview":
+                self._json(self.server.launcher.preview_profile(body))
+                return
+            if path == "/api/v1/profiles/run":
+                self._json(self.server.launcher.launch_profile(body), HTTPStatus.CREATED)
+                return
+            if path == "/api/v1/packages/install":
+                package_slug = body.get("package_slug")
+                version_id = body.get("version_id")
+                profile = body.get("profile", "web")
+                if not isinstance(package_slug, str) or not isinstance(version_id, str) or not isinstance(profile, str):
+                    raise LauncherError("package_slug, version_id, and profile must be strings")
+                self._json(
+                    self.server.launcher.install_trusted_catalog_package(
+                        package_slug=package_slug,
+                        version_id=version_id,
+                        profile=profile,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
+            if path == "/api/v1/configurations":
+                self._json(
+                    self.server.launcher.save_configuration(
+                        name=body.get("name"),
+                        description=body.get("description", ""),
+                        version_id=body.get("version_id"),
+                        package_slug=body.get("package_slug"),
+                        selections=body.get("selections"),
+                        launch=body.get("launch"),
+                        draft=body.get("draft") is True,
+                        source="user",
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
+            if path == "/api/v1/configurations/approve":
+                self._json(self.server.launcher.approve_configuration(body.get("id")))
+                return
+            if path == "/api/v1/configurations/remove":
+                self._json({"configurations": self.server.launcher.remove_configuration(body.get("id"))})
+                return
+            if path == "/api/v1/configurations/run":
+                task = body.get("task")
+                if task is not None and not isinstance(task, str):
+                    raise LauncherError("task must be a string")
+                self._json(
+                    self.server.launcher.run_configuration(body.get("id"), task=task),
+                    HTTPStatus.CREATED,
+                )
+                return
+            if path == "/api/v1/assistant/start":
+                version_id = body.get("version_id")
+                if not isinstance(version_id, str):
+                    raise LauncherError("version_id must be a saved local-version ID")
+                self._json(self.server.launcher.launch_assistant(version_id), HTTPStatus.CREATED)
+                return
             if path == "/api/v1/cells":
                 self._json(self.server.launcher.launch(body), HTTPStatus.CREATED)
+                return
+            match = re.fullmatch(r"/api/v1/trees/([^/]+)/sandbox-test", path)
+            if match:
+                self._json(self.server.launcher.sandbox_test(match.group(1)))
                 return
             match = re.fullmatch(r"/api/v1/cells/([^/]+)/(stop|restart|clone)", path)
             if match:
@@ -216,11 +294,36 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=3090)
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
+    parser.add_argument("--dsh-home", action="append", default=[], help="Scan this DSH home for installed profiles; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
+    parser.add_argument("--sandbox-image", type=Path, help="Pinned Apptainer SIF required for probes and complete local cells")
+    parser.add_argument("--sandbox-image-sha256", help="Expected SHA-256 for --sandbox-image")
+    parser.add_argument("--sandbox-binary", help="Apptainer executable name or absolute path")
+    parser.add_argument("--sandbox-cpus", help="CPU limit required by the sandbox capability probe")
+    parser.add_argument("--sandbox-memory", help="Memory limit required by the sandbox capability probe, for example 8G")
+    parser.add_argument("--sandbox-pids-limit", type=int, help="PID limit required by the sandbox capability probe")
+    parser.add_argument("--sandbox-timeout", type=int, help="Maximum sandbox test duration in seconds")
+    parser.add_argument("--cell-timeout", type=int, help="Maximum complete-cell lifetime in seconds")
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("Choose an unprivileged port between 1024 and 65535")
-    launcher = Launcher(args.scan_root, state_root=args.state_dir)
+    configured_state = args.state_dir or os.environ.get("DSH_FORGE_STATE_DIR")
+    state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
+    try:
+        sandbox_config = SandboxConfig.from_values(
+            image=args.sandbox_image or os.environ.get("DSH_FORGE_SANDBOX_IMAGE"),
+            image_sha256=args.sandbox_image_sha256 or os.environ.get("DSH_FORGE_SANDBOX_IMAGE_SHA256"),
+            binary=args.sandbox_binary or os.environ.get("DSH_FORGE_SANDBOX_BINARY", "apptainer"),
+            cpus=args.sandbox_cpus or os.environ.get("DSH_FORGE_SANDBOX_CPUS", "4"),
+            memory=args.sandbox_memory or os.environ.get("DSH_FORGE_SANDBOX_MEMORY", "8G"),
+            pids_limit=args.sandbox_pids_limit if args.sandbox_pids_limit is not None else int(os.environ.get("DSH_FORGE_SANDBOX_PIDS_LIMIT", "256")),
+            timeout_seconds=args.sandbox_timeout if args.sandbox_timeout is not None else int(os.environ.get("DSH_FORGE_SANDBOX_TIMEOUT", "30")),
+            cell_timeout_seconds=args.cell_timeout if args.cell_timeout is not None else int(os.environ.get("DSH_FORGE_CELL_TIMEOUT", "14400")),
+        )
+    except (SandboxError, ValueError) as error:
+        parser.error(str(error))
+    sandbox = ApptainerSandbox(sandbox_config, state_root / "sandbox")
+    launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox, dsh_homes=args.dsh_home)
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
         server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)
@@ -228,9 +331,15 @@ def main():
         parser.exit(1, f"Could not bind loopback port {args.port}: {error}. Try --port {args.port + 1}.\n")
     print(f"DSH Forge launcher: http://127.0.0.1:{args.port}/#launch", flush=True)
     status = launcher.status()
-    print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Public Repos remains metadata-only.", flush=True)
+    print(
+        f"Detected {len(status['trees'])} trusted/view-only DSH tree(s) and "
+        f"{len(status['profiles'])} local profile(s).",
+        flush=True,
+    )
     if not status["trees"]:
         print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness.", flush=True)
+    sandbox_status = status["sandbox"]
+    print(f"Cell runner: {sandbox_status['mode']} · {'ready' if sandbox_status['ready'] else sandbox_status['reason']}", flush=True)
     print("The sidecar is loopback-only. Press Ctrl+C to stop it and its owned cells.", flush=True)
     with server:
         try:

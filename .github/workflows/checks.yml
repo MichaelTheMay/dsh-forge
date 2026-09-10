@@ -2,8 +2,13 @@ name: Launcher and catalog checks
 
 on:
   pull_request:
+    branches: [development, main]
   push:
-    branches: [main]
+    branches: [development, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,8 +22,13 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - name: Check whitespace and Python syntax
+        run: |
+          git diff --check
+          python3 -m compileall -q dsh_forge scripts tests
       - name: Validate the embedded metadata
         run: |
+          python3 scripts/ingest_package_catalog.py --check
           python3 scripts/embed_catalog.py
           git diff --exit-code -- web/launcher.js
       - name: Test catalog behavior

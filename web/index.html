@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>DSH Forge — Launcher & Public Repositories</title>
-<meta name="description" content="DSH Forge local launcher design with a cached browser for community DeepSeek Harness forks.">
+<title>DSH Forge — Launcher, Community & Assistant</title>
+<meta name="description" content="Browse DeepSeek Harness packages, plugins, and forks; save configurations; and run isolated local Harness cells.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
@@ -56,6 +56,14 @@
   .repo-snapshot-summary .mono { font-size: 10px; }
   .repo-seed-badge { display: inline-flex; align-items: center; gap: 6px; color: oklch(0.78 0.11 235); font: 9px 'IBM Plex Mono', monospace; letter-spacing: .08em; margin-bottom: 2px; }
   .repo-seed-badge span { width: 5px; height: 5px; background: currentColor; border-radius: 50%; }
+  .curated-strip { flex:0 0 auto; padding:12px 24px 14px; border-bottom:1px solid oklch(0.3 0.012 255); background:linear-gradient(90deg,oklch(0.22 0.025 280),oklch(0.205 0.018 235)); }
+  .curated-strip-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:oklch(0.72 0.08 285); font:9px 'IBM Plex Mono',monospace; letter-spacing:.1em; text-transform:uppercase; }
+  .curated-scroll { display:flex; gap:9px; overflow-x:auto; padding:1px 1px 7px; scrollbar-width:thin; }
+  .curated-card { flex:0 0 250px; min-width:0; padding:10px 11px; border:1px solid oklch(0.41 0.055 265); border-radius:7px; background:oklch(0.245 0.027 265); color:inherit; text-align:left; cursor:pointer; }
+  .curated-card:hover { border-color:oklch(0.59 0.09 265); }
+  .curated-card span { display:block; color:oklch(0.7 0.075 275); font:8.5px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.06em; }
+  .curated-card strong { display:block; margin:4px 0; font-size:11.5px; font-weight:600; overflow-wrap:anywhere; }
+  .curated-card p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; margin:0; color:oklch(0.68 0.012 255); font-size:9.5px; line-height:1.45; }
   .repo-workspace { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0,1fr) 390px; min-height: 0; }
   .repo-browse { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid oklch(0.3 0.012 255); }
   .repo-controls { padding: 18px 24px 12px; border-bottom: 1px solid oklch(0.29 0.012 255); }
@@ -112,17 +120,33 @@
   .repo-detail-table dd { margin: 0; font: 10px/1.55 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
   .repo-commit-link { display: inline-block; font-size: 10px; margin-top: 4px; }
   .repo-muted { color: oklch(0.65 0.014 255); font-size: 10.5px; line-height: 1.7; margin: 10px 0 0; }
+  .repo-package-components { display: flex; flex-direction: column; gap: 8px; }
+  .repo-package-component { padding: 10px; border: 1px solid oklch(0.32 0.016 255); border-radius: 6px; background: oklch(0.19 0.008 255); }
+  .repo-package-component > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; }
+  .repo-package-component strong { font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+  .repo-package-component span { color: oklch(0.62 0.016 255); font-size: 9px; }
+  .repo-package-component p { color: oklch(0.67 0.014 255); font-size: 10px; line-height: 1.55; margin: 7px 0; }
+  .repo-component-links { display: flex; flex-wrap: wrap; gap: 10px; font: 9px 'IBM Plex Mono', monospace; }
   .repo-planned-actions { display: flex; flex-direction: column; gap: 6px; }
   .repo-planned-actions button { border: 1px dashed oklch(0.34 0.012 255); background: transparent; color: oklch(0.55 0.012 255); padding: 8px 10px; border-radius: 4px; text-align: left; font-size: 10.5px; cursor: not-allowed; }
   .repo-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 10px 24px; border-top: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255); font: 9px 'IBM Plex Mono', monospace; color: oklch(0.63 0.012 255); }
   .repo-status-dot { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; background: oklch(0.73 0.11 235); }
   .repo-list-footnote { padding: 12px 5px 0; font-size: 10px; color: oklch(0.57 0.014 255); line-height: 1.7; }
+  .assistant-shell { min-height:0; flex:1 1 auto; display:grid; grid-template-columns:320px minmax(0,1fr); background:oklch(0.185 0.008 255); }
+  .assistant-sidebar { overflow-y:auto; padding:22px; border-right:1px solid oklch(0.3 0.012 255); background:oklch(0.205 0.01 255); }
+  .assistant-sidebar h1 { margin:4px 0 8px; font-size:22px; font-weight:550; letter-spacing:-.02em; }
+  .assistant-sidebar p { color:oklch(0.68 0.012 255); font-size:11px; line-height:1.65; }
+  .assistant-frame { min-width:0; min-height:0; display:flex; flex-direction:column; }
+  .assistant-frame iframe { width:100%; height:100%; border:0; background:white; }
+  .config-card { margin-top:9px; padding:11px; border:1px solid oklch(0.31 0.012 255); border-radius:7px; background:oklch(0.19 0.008 255); }
+  .config-card strong { display:block; font-size:11px; font-weight:600; overflow-wrap:anywhere; }
+  .config-meta { margin:5px 0 8px; color:oklch(0.6 0.012 255); font:9px/1.5 'IBM Plex Mono',monospace; }
   .repo-empty, .repo-detail-empty { padding: 46px 12px; text-align: center; }
   .repo-empty-icon { font-size: 30px; color: oklch(0.7 0.04 235); }
   .repo-empty h2, .repo-detail-empty h2 { font-size: 16px; font-weight: 500; }
   .repo-empty p, .repo-detail-empty p { color: oklch(0.67 0.016 255); font-size: 12px; line-height: 1.7; max-width: 380px; margin: 12px auto 20px; }
   @media (max-width: 1150px) { .header-snapshot { display: none !important; } .repo-workspace { grid-template-columns: minmax(0,1fr) 340px; } .repo-controls, .repo-results { padding-left: 16px; padding-right: 16px; } .repo-ranking-note { display: none; } .repo-inspector { padding: 18px; } }
-  @media (max-width: 800px) { .app-header { height: auto !important; min-height: 52px; padding: 10px 14px !important; gap: 10px !important; flex-wrap: wrap; } .header-loopback { display: none !important; } .public-browser { overflow-y: auto; } .repo-workspace { display: block; flex: 0 0 auto; } .repo-browse { border-right: 0; } .repo-results { max-height: 58vh; min-height: 190px; } .repo-inspector { overflow: visible; border-top: 1px solid oklch(0.3 0.012 255); padding: 22px; } .repo-masthead { padding: 20px; } .repo-snapshot-summary { display: none; } .repo-masthead h1 { font-size: 23px; } .repo-footer { padding: 12px 20px; } }
+  @media (max-width: 800px) { .app-header { height: auto !important; min-height: 52px; padding: 10px 14px !important; gap: 10px !important; flex-wrap: wrap; } .header-loopback { display: none !important; } .public-browser { overflow-y: auto; } .repo-workspace { display: block; flex: 0 0 auto; } .repo-browse { border-right: 0; } .repo-results { max-height: 58vh; min-height: 190px; } .repo-inspector { overflow: visible; border-top: 1px solid oklch(0.3 0.012 255); padding: 22px; } .repo-masthead { padding: 20px; } .repo-snapshot-summary { display: none; } .repo-masthead h1 { font-size: 23px; } .repo-footer { padding: 12px 20px; } .assistant-shell { display:flex; flex-direction:column; overflow-y:auto; } .assistant-sidebar { flex:0 0 auto; border-right:0; border-bottom:1px solid oklch(0.3 0.012 255); } .assistant-frame { min-height:620px; } }
   @media (max-width: 440px) { .repo-search-row { flex-wrap: wrap; } .repo-search { flex-basis: 100%; } .repo-sort select { padding: 7px 10px; } .repo-rank { display: none; } .repo-card { gap: 6px; padding: 12px; } .repo-masthead h1 { font-size: 21px; } .repo-upstream { font-size: 10px; } }
 
 </style>
@@ -132,62 +156,118 @@
   <header class="app-header" style="flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 0 16px; height: 52px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255);">
     <div style="display: flex; align-items: baseline; gap: 8px;">
       <span style="font-weight: 600; font-size: 15px; letter-spacing: -0.01em;">DSH Forge</span>
-      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">local fleet · dsh</span><span class="repo-label">{{ modeLabel }}</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.63 0.01 255);">Launch local Harness versions</span><span class="repo-label">{{ modeLabel }}</span>
     </div>
     <div class="header-loopback" title="{{ sidecarTitle }}" style="display: flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.72 0.01 255);">
       <span style="width: 6px; height: 6px; border-radius: 999px; background: {{ sidecarDot }};"></span>
-      {{ sidecarAddress }}
       <span style="color: oklch(0.55 0.01 255);">{{ sidecarState }}</span>
     </div>
     <nav style="display: flex; gap: 4px; margin-left: 8px;">
       <button onClick="{{ goLaunch }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ launchTabBorder }}; background: {{ launchTabBg }}; color: {{ launchTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Launch</button>
       <sc-if value="{{ catalogEnabled }}" hint-placeholder-val="{{ true }}">
-        <button onClick="{{ goCatalog }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ catalogTabBorder }}; background: {{ catalogTabBg }}; color: {{ catalogTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Public Repos</button>
+        <button onClick="{{ goCatalog }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ catalogTabBorder }}; background: {{ catalogTabBg }}; color: {{ catalogTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Community</button>
       </sc-if>
+      <button onClick="{{ goAssistant }}" style="padding: 6px 12px; border-radius: 6px; border: 1px solid {{ assistantTabBorder }}; background: {{ assistantTabBg }}; color: {{ assistantTabFg }}; font-size: 12px; font-weight: 500; cursor: pointer;">Assistant</button>
     </nav>
     <div style="flex: 1 1 auto;"></div>
     <div class="header-snapshot" style="display: flex; align-items: center; gap: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.62 0.01 255);">
       <span>{{ cellsSummary }}</span>
-      <span style="color: oklch(0.5 0.01 255);">|</span>
-      <span>seed {{ snapshotAt }}</span>
-      <span style="padding: 3px 7px; border-radius: 4px; border: 1px solid oklch(0.4 0.06 85); color: oklch(0.8 0.13 85);">cached</span>
     </div>
   </header>
 
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
   <main class="fleet-shell" aria-label="Harness fleet launcher">
 
-    <section class="versions-rail" aria-label="Pinned Harness versions">
+    <section class="versions-rail" aria-label="Local Harness versions">
 
       <div>
-        <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;">
-          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Versions</span>
-          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: oklch(0.56 0.01 255);">{{ pinnedCount }}</span>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+          <span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.76 0.01 255);">Installed profiles</span>
+          <span style="flex:1 1 auto;"></span><span class="repo-label">Auto-detected</span>
         </div>
-        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Two immutable official release pins. Launch repeatedly; Forge assigns each cell a fresh port, home, and managed workspace.</p>
+        <div style="margin:0 0 9px; font:9px 'IBM Plex Mono',monospace; color:oklch(0.56 0.01 255);">{{ profileCountLabel }}</div>
+        <p style="margin:0 0 10px; color:oklch(0.63 0.012 255); font-size:10.5px; line-height:1.55;">Profiles under <span class="mono">$DSH_HOME/profiles</span> appear without running their code. Web and headless profiles can launch here; terminal services expose their CLI.</p>
+        <sc-if value="{{ noLocalProfiles }}" hint-placeholder-val="true"><div style="padding:11px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:10px/1.55 'IBM Plex Mono',monospace;">No installed profile manifests found.</div></sc-if>
+        <sc-if value="{{ hasLocalProfiles }}" hint-placeholder-val="false">
+          <div style="display:flex; flex-direction:column; gap:7px;">
+            <sc-for list="{{ localProfiles }}" as="p" hint-placeholder-count="2">
+              <article style="padding:10px; border:1px solid oklch(0.34 0.016 255); border-radius:8px; background:oklch(0.215 0.012 255);">
+                <div style="display:flex; align-items:center; gap:7px;"><strong style="font-size:11.5px; overflow-wrap:anywhere;">{{ p.name }}</strong><span style="flex:1 1 auto;"></span><span class="repo-label">{{ p.surface }}</span></div>
+                <div style="margin-top:5px; color:oklch(0.6 0.012 255); font:9px/1.5 'IBM Plex Mono',monospace;">{{ p.bundleLabel }} · {{ p.dependencyLabel }}<br />{{ p.home }}</div>
+                <sc-if value="{{ p.headless }}" hint-placeholder-val="false"><textarea value="{{ p.task }}" onChange="{{ p.setTask }}" placeholder="Task for this headless profile…" rows="2" style="width:100%; margin-top:7px; resize:vertical; padding:6px 7px; border:1px solid oklch(0.34 0.012 255); border-radius:5px; background:oklch(0.18 0.008 255); color:oklch(0.9 0.01 255); font:9.5px 'IBM Plex Mono',monospace;"></textarea></sc-if>
+                <button onClick="{{ p.run }}" disabled="{{ p.disabled }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid {{ p.buttonBorder }}; background:{{ p.buttonBg }}; color:oklch(0.91 0.03 155); font-size:10.5px; font-weight:600; cursor:pointer;">{{ p.buttonLabel }}</button>
+                <div style="margin-top:6px; overflow-wrap:anywhere; color:oklch(0.54 0.012 255); font:8.5px/1.45 'IBM Plex Mono',monospace;">{{ p.command }}</div>
+              </article>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="margin-top:9px; color:oklch(0.68 0.09 85); font:9px/1.5 'IBM Plex Mono',monospace;">Existing profiles run on the host with their normal access. The confirmation screen names this boundary.</div>
+      </div>
+
+      <div style="height:1px; margin:12px 0; background:oklch(0.28 0.012 255);"></div>
+
+      <div>
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.76 0.01 255);">Local versions</span>
+          <span style="flex:1 1 auto;"></span>
+          <button onClick="{{ toggleVersionForm }}" disabled="{{ versionControlsDisabled }}" style="padding:5px 7px; border-radius:5px; border:1px solid oklch(0.4 0.06 235); background:oklch(0.27 0.035 235); color:oklch(0.86 0.04 235); font-size:10px; font-weight:600; cursor:pointer;">{{ addVersionLabel }}</button>
+        </div>
+        <div style="margin:0 0 10px; font:9px 'IBM Plex Mono',monospace; color:oklch(0.56 0.01 255);">{{ versionCountLabel }}</div>
+        <sc-if value="{{ versionFormOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-bottom:10px; padding:9px; border:1px solid oklch(0.4 0.06 235); border-radius:8px; background:oklch(0.225 0.02 235);">
+            <label style="display:block; margin-bottom:5px; color:oklch(0.76 0.02 255); font-size:10px;">Directory on this machine</label>
+            <input value="{{ versionPath }}" onChange="{{ setVersionPath }}" placeholder="/path/to/deepseek-harness" autocomplete="off" spellcheck="false" style="width:100%; padding:7px 8px; border-radius:5px; border:1px solid oklch(0.36 0.02 255); background:oklch(0.19 0.01 255); color:oklch(0.9 0.01 255); font:10px 'IBM Plex Mono',monospace;" />
+            <button onClick="{{ saveVersion }}" disabled="{{ versionBusy }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid oklch(0.52 0.1 155); background:oklch(0.32 0.07 155); color:oklch(0.92 0.03 155); font-size:10.5px; font-weight:600; cursor:pointer;">Add version</button>
+            <div style="margin-top:6px; color:oklch(0.58 0.01 255); font:9px/1.5 'IBM Plex Mono',monospace;">The original folder stays untouched.</div>
+          </div>
+        </sc-if>
+        <p style="margin: 0 0 12px; color: oklch(0.63 0.012 255); font-size: 11px; line-height: 1.55;">Versions in <span class="mono">{{ versionsDirectory }}</span> appear automatically. You can also add any other folder.</p>
+        <sc-if value="{{ noVersions }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:12px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.64 0.012 255); font:10.5px/1.6 'IBM Plex Mono',monospace;">No local versions found yet.</div>
+        </sc-if>
+        <sc-if value="{{ hasVersions }}" hint-placeholder-val="{{ true }}">
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <sc-for list="{{ versions }}" as="t" hint-placeholder-count="2">
             <div style="padding: 12px; border-radius: 9px; border: 1px solid oklch(0.32 0.014 255); background: oklch(0.22 0.012 255); display: flex; flex-direction: column; gap: 7px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-weight: 600; font-size: 12.5px;">{{ t.name }}</span>
+                <span style="font-weight: 600; font-size: 12.5px;">{{ t.version }}</span>
                 <span style="flex: 1 1 auto;"></span>
                 <span style="width: 6px; height: 6px; border-radius: 50%; background: {{ t.statusColor }};"></span>
               </div>
-              <div style="font: 10px/1.55 'IBM Plex Mono', monospace; color: oklch(0.72 0.012 255);">
-                <div>{{ t.tag }}</div><div>commit {{ t.commit }}</div><div style="color: oklch(0.57 0.012 255); overflow-wrap: anywhere;">{{ t.installPath }}</div>
-              </div>
-              <div style="display:flex; align-items:center; justify-content:space-between; font: 9.5px 'IBM Plex Mono', monospace; color: {{ t.statusColor }};"><span>{{ t.status }}</span><span>official</span></div>
+              <div style="font: 10px/1.55 'IBM Plex Mono', monospace; color: oklch(0.72 0.012 255);">{{ t.name }}</div>
+              <div style="display:flex; align-items:center; gap:6px; font: 9.5px 'IBM Plex Mono', monospace; color: {{ t.statusColor }};"><span>{{ t.status }}</span><span style="flex:1 1 auto;"></span><span style="color:oklch(0.58 0.01 255);">{{ t.originLabel }}</span></div>
+              <div style="display:flex; align-items:center; gap:6px; color:oklch(0.58 0.01 255); font:9px 'IBM Plex Mono',monospace;"><span>{{ t.launchSummary }}</span><span style="flex:1 1 auto;"></span><sc-if value="{{ t.showSettings }}" hint-placeholder-val="{{ true }}"><button onClick="{{ t.toggleSettings }}" style="padding:0; border:0; background:transparent; color:oklch(0.67 0.07 235); font:9.5px 'IBM Plex Mono',monospace; cursor:pointer;">Settings</button></sc-if><sc-if value="{{ t.showForget }}" hint-placeholder-val="{{ false }}"><button onClick="{{ t.forget }}" title="Forget this path; source files stay untouched" style="padding:0; border:0; background:transparent; color:oklch(0.59 0.01 255); font:9.5px 'IBM Plex Mono',monospace; cursor:pointer;">Forget</button></sc-if></div>
+              <sc-if value="{{ t.settingsOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:9px; border:1px solid oklch(0.32 0.014 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.68 0.012 255); font-size:10px;">
+                  <div style="margin-bottom:7px; overflow-wrap:anywhere; font:9px 'IBM Plex Mono',monospace;">{{ t.installPath }}</div>
+                  <label style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px;"><span>GPU access</span><select value="{{ t.gpuMode }}" onChange="{{ t.setGpuMode }}" disabled="{{ versionBusy }}" style="padding:4px 6px; border:1px solid oklch(0.34 0.012 255); border-radius:4px; color:oklch(0.82 0.012 255); background:oklch(0.235 0.01 255); font-size:9.5px;"><option value="none">Off</option><option value="allocated">Use allocation</option></select></label>
+                  <label style="display:flex; align-items:center; gap:7px;"><input type="checkbox" checked="{{ t.openBrowser }}" onChange="{{ t.toggleOpenBrowserSetting }}" disabled="{{ versionBusy }}" /> Open automatically</label>
+                </div>
+              </sc-if>
               <button onClick="{{ t.launch }}" disabled="{{ t.disabled }}" style="padding: 8px; border-radius: 6px; border: 1px solid {{ t.buttonBorder }}; background: {{ t.buttonBg }}; color: oklch(0.9 0.02 155); font-size: 11px; font-weight: 600; cursor: {{ t.buttonCursor }};">{{ t.buttonLabel }}</button>
             </div>
           </sc-for>
         </div>
+        </sc-if>
         <div style="margin-top: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.68 0.09 85);">{{ coverageGap }}</div>
       </div>
 
-      <div style="margin-top: 14px; padding: 11px; border: 1px solid oklch(0.42 0.07 85); background: oklch(0.245 0.025 85); border-radius: 8px; font-size: 10.5px; line-height: 1.6; color: oklch(0.79 0.06 85);">
-        <strong style="display:block; color: oklch(0.88 0.09 85); margin-bottom:3px;">Local isolation preview</strong>
-        Ports, process groups, writable homes, and managed workspaces are real. CPU/GPU/RAM quotas, network policy, and hostile-code containment are not enforced in this preview.
-      </div>
+      <div title="{{ sandboxReason }}" style="margin-top:12px; display:flex; align-items:center; gap:7px; padding:8px 9px; border:1px solid {{ sandboxBorder }}; background:{{ sandboxBg }}; border-radius:7px; color:oklch(0.76 0.02 255); font-size:10.5px;"><span style="width:6px; height:6px; border-radius:50%; background:{{ sandboxColor }};"></span><span>{{ sandboxTitle }}</span></div>
+
+      <sc-if value="{{ hasCommunityTrees }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:12px;">
+          <div style="font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.66 0.01 255); margin-bottom:6px;">Detected community trees</div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <sc-for list="{{ communityTrees }}" as="f" hint-placeholder-count="1">
+              <div style="padding:9px; border:1px solid oklch(0.32 0.014 255); border-radius:7px; background:oklch(0.215 0.01 255);">
+                <div style="display:flex; gap:6px; align-items:center;"><span style="font-size:11px; font-weight:600; overflow-wrap:anywhere;">{{ f.name }}</span><span style="flex:1 1 auto;"></span><span style="width:5px; height:5px; border-radius:50%; background:{{ f.stateColor }};"></span></div>
+                <div style="margin-top:4px; font:9.5px/1.5 'IBM Plex Mono',monospace; color:oklch(0.58 0.012 255);">{{ f.revision }} · {{ f.testState }}</div>
+                <button onClick="{{ f.run }}" disabled="{{ f.disabled }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid {{ f.buttonBorder }}; background:{{ f.buttonBg }}; color:oklch(0.86 0.03 235); font-size:10.5px; font-weight:600; cursor:{{ f.buttonCursor }};">{{ f.buttonLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
 
       <div style="display:none">
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>
@@ -256,20 +336,9 @@
             </label>
           </div>
         </sc-if>
-        <sc-if value="{{ leaseWarning }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top: 7px; padding: 8px 9px; border-radius: 6px; border: 1px solid oklch(0.42 0.09 85); background: oklch(0.26 0.04 85); font-size: 11px; color: oklch(0.87 0.1 85); line-height: 1.5;">{{ leaseWarningText }}</div>
-        </sc-if>
       </div>
 
       <div style="height: 1px; background: oklch(0.28 0.012 255);"></div>
-
-      <div>
-        <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(0.66 0.01 255); margin-bottom: 8px;">Workspace</div>
-        <div style="display: flex; gap: 6px;">
-          <input value="{{ workspace }}" onChange="{{ setWorkspace }}" style="flex: 1 1 auto; padding: 7px 9px; border-radius: 6px; border: 1px solid oklch(0.32 0.012 255); background: oklch(0.23 0.01 255); color: oklch(0.9 0.01 255); font-family: 'IBM Plex Mono', monospace; font-size: 11px;" />
-          <button onClick="{{ clearWorkspace }}" style="padding: 7px 10px; border-radius: 6px; border: 1px solid oklch(0.34 0.012 255); background: oklch(0.25 0.01 255); color: oklch(0.8 0.01 255); font-size: 11px; cursor: pointer;">none</button>
-        </div>
-      </div>
 
       <div style="border: 1px solid oklch(0.3 0.012 255); border-radius: 8px; background: oklch(0.215 0.009 255);">
         <button onClick="{{ toggleAdvanced }}" style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 11px; border: none; background: transparent; color: oklch(0.85 0.01 255); font-size: 12px; font-weight: 500; cursor: pointer; text-align: left;">
@@ -318,9 +387,7 @@
     <section class="fleet-center" aria-label="Running Harness cells">
       <div style="flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid oklch(0.3 0.012 255);">
         <span style="font-size: 12px; font-weight: 600;">Fleet</span>
-        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.6 0.01 255);">every cell · independent port + writable state</span>
-        <span style="flex: 1 1 auto;"></span>
-        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 3px 7px; border-radius: 4px; border: 1px solid oklch(0.34 0.012 255); color: oklch(0.66 0.01 255);">container-isolated · Phase 2</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: oklch(0.6 0.01 255);">Run versions side by side</span>
       </div>
 
       <div style="display:none; flex: 1 1 auto; overflow: auto; min-height: 0;">
@@ -394,38 +461,27 @@
               <span style="width:8px; height:8px; margin-top:5px; border-radius:50%; background:{{ c.stateColor }}; animation:{{ c.stateAnim }};"></span>
               <div style="min-width:0; flex:1 1 auto;">
                 <div style="font:600 12.5px 'IBM Plex Mono',monospace; overflow-wrap:anywhere;">{{ c.name }}</div>
-                <div style="margin-top:3px; color:{{ c.stateColor }}; font:10px 'IBM Plex Mono',monospace;">{{ c.agent_state }} · {{ c.state_source }}</div>
+                <div style="margin-top:3px; color:{{ c.stateColor }}; font:10px 'IBM Plex Mono',monospace;">{{ c.agent_state }}</div>
               </div>
-              <span style="padding:2px 6px; border:1px solid {{ c.trustBorder }}; border-radius:4px; color:{{ c.trustColor }}; font:9px 'IBM Plex Mono',monospace;">{{ c.trust }}</span>
             </div>
             <div class="fleet-kv" style="margin-top:12px;">
               <span>version</span><span>{{ c.treeIdentity }}</span>
-              <span>endpoint</span><span>{{ c.url }} · {{ c.uptime }}</span>
-              <span>home</span><span>{{ c.home }} · {{ c.isolation }}</span>
-              <span>workspace</span><span>{{ c.workspace }} · {{ c.workspace_isolation }}</span>
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:11px;">
-              <sc-for list="{{ c.resourcesList }}" as="r" hint-placeholder-count="3">
-                <span style="padding:3px 6px; border:1px solid oklch(0.33 0.014 255); border-radius:4px; color:oklch(0.68 0.012 255); font:9px 'IBM Plex Mono',monospace;">{{ r.label }} · {{ r.value }}</span>
-              </sc-for>
-              <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">quota unenforced</span>
-            </div>
-            <div style="margin-top:11px; padding:8px; min-height:48px; background:oklch(0.175 0.008 255); border-radius:6px; font:9.5px/1.55 'IBM Plex Mono',monospace; color:oklch(0.64 0.012 255); overflow:hidden;">
-              <sc-for list="{{ c.recentLogLines }}" as="l" hint-placeholder-count="2"><div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.msg }}</div></sc-for>
+              <span>port</span><span>{{ c.url }}</span>
+              <span>runtime</span><span>{{ c.uptime }}</span>
             </div>
             <div class="fleet-actions">
               <button onClick="{{ c.open }}" disabled="{{ c.openDisabled }}">Open</button>
               <button onClick="{{ c.stop }}" disabled="{{ c.stopDisabled }}">Stop</button>
               <button onClick="{{ c.restart }}">Restart</button>
-              <button onClick="{{ c.clone }}">Clone Session</button>
+              <button onClick="{{ c.clone }}" disabled="{{ c.cloneDisabled }}">Clone Session</button>
               <button onClick="{{ c.inspect }}">Inspect</button>
             </div>
           </article>
         </sc-for>
         <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}">
           <div style="grid-column:1/-1; align-self:start; margin:18px; padding:42px 24px; border:1px dashed oklch(0.35 0.018 255); border-radius:10px; text-align:center;">
-            <div style="font-size:15px; font-weight:600;">Fleet is ready for its first cell</div>
-            <p style="max-width:470px; margin:9px auto 0; color:oklch(0.63 0.012 255); font:10.5px/1.7 'IBM Plex Mono',monospace;">Install either exact official pin and start Forge with its location configured. The version becomes launchable automatically. Every launch gets a loopback port plus a separate managed home and workspace.</p>
+            <div style="font-size:15px; font-weight:600;">Nothing running yet</div>
+            <p style="max-width:470px; margin:9px auto 0; color:oklch(0.63 0.012 255); font:10.5px/1.7 'IBM Plex Mono',monospace;">Choose a local version and click Launch.</p>
           </div>
         </sc-if>
       </div>
@@ -454,7 +510,6 @@
     <aside class="fleet-inspector" aria-label="Cell inspector">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
         <div><div style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.72 0.012 255);">Inspector</div><div style="margin-top:5px; font:10px 'IBM Plex Mono',monospace; color:oklch(0.58 0.012 255);">{{ activeCell.name }}</div></div>
-        <span style="padding:3px 6px; border:1px solid oklch(0.4 0.07 85); border-radius:4px; color:oklch(0.76 0.08 85); font:9px 'IBM Plex Mono',monospace;">sandbox preview</span>
       </div>
       <div class="inspector-tabs" style="margin-top:14px;">
         <sc-for list="{{ inspectorTabs }}" as="tab" hint-placeholder-count="3"><button onClick="{{ tab.select }}" style="background:{{ tab.bg }}; color:{{ tab.color }};">{{ tab.label }}</button></sc-for>
@@ -469,7 +524,7 @@
           </div>
         </sc-if>
         <sc-if value="{{ showInspectorPrompts }}" hint-placeholder-val="{{ false }}">
-          <div style="padding:14px; border:1px dashed oklch(0.35 0.014 255); border-radius:7px; color:oklch(0.64 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Prompt streaming is not observed by the current Harness adapter. No prompt data is fabricated. This tab is the integration seam for the session-log adapter.</div>
+          <div style="padding:14px; border:1px dashed oklch(0.35 0.014 255); border-radius:7px; color:oklch(0.64 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Prompt delivery is not available for this Harness version yet.</div>
         </sc-if>
         <sc-if value="{{ showInspectorArtifacts }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; flex-direction:column; gap:6px; margin-top:12px;">
@@ -478,42 +533,53 @@
           </div>
         </sc-if>
       </sc-if>
-      <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}"><div style="margin-top:18px; padding:18px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Launch or select a real cell to inspect its logs and managed-workspace artifacts.</div></sc-if>
+      <sc-if value="{{ noCells }}" hint-placeholder-val="{{ true }}"><div style="margin-top:18px; padding:18px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:10.5px/1.65 'IBM Plex Mono',monospace;">Select a running cell to see its logs and files.</div></sc-if>
     </aside>
   </main>
   </sc-if>
 
   <sc-if value="{{ showCatalog }}" hint-placeholder-val="{{ false }}">
-  <main class="public-browser" id="public-repos" aria-label="Public repositories">
+  <main class="public-browser" id="community" aria-label="Community plugin, fork, and package browser">
     <div class="repo-masthead">
       <div>
         <div class="repo-eyebrow">COMMUNITY / DEEPSEEK HARNESS</div>
-        <h1>Public repositories <span class="repo-label">Preview</span></h1>
-        <p>Discover community forks. Inspect the source before bringing anything into your workspace.</p>
+        <h1>Package browser <span class="repo-label">Metadata preview</span></h1>
+        <p>Start with curated plugin packages, then inspect individual plugins and upstream forks. Every package has a stable page and schema-defined provenance.</p>
         <a class="repo-upstream mono" href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><path d="M6 7.5v9M18 7.5v1a4 4 0 0 1-4 4H6"/></svg>
           deepseek-ai/deepseek-harness <span>↗</span>
         </a>
       </div>
       <div class="repo-snapshot-summary">
-        <span class="repo-seed-badge"><span></span>ONE-TIME SEED</span>
-        <strong>{{ seedCount }} forks</strong>
-        <span>Selected by GitHub stars</span>
-        <span class="mono">{{ snapshotAt }} UTC</span>
+        <span class="repo-seed-badge"><span></span>BOUNDED STATIC SEEDS</span>
+        <strong>{{ catalogCountLabel }}</strong>
+        <span>Plugins ranked by evidence, not stars</span>
+        <span class="mono">fork snapshot {{ snapshotAt }} UTC</span>
       </div>
     </div>
 
+    <sc-if value="{{ hasCuratedPicks }}" hint-placeholder-val="true">
+      <section class="curated-strip" aria-label="Administrator curated hidden gems">
+        <div class="curated-strip-head"><span>Forge picks · hidden gems</span><span>Editorial curation, not a security verdict</span></div>
+        <div class="curated-scroll">
+          <sc-for list="{{ curatedPicks }}" as="pick" hint-placeholder-count="4">
+            <button class="curated-card" onClick="{{ pick.select }}"><span>{{ pick.kindLabel }}</span><strong>{{ pick.name }}</strong><p>{{ pick.summary }}</p></button>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
+
     <div class="repo-workspace">
-      <section class="repo-browse" aria-label="Repository list">
+      <section class="repo-browse" aria-label="Community artifact list">
         <div class="repo-controls">
           <div class="repo-search-row">
             <label class="repo-search">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
-              <input aria-label="Search public repositories" value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search repositories, authors, or topics…" />
+              <input aria-label="Search community artifacts" value="{{ query }}" onChange="{{ setQuery }}" placeholder="Search names, authors, capabilities, or taxonomy…" />
             </label>
-            <label class="repo-sort"><span class="sr-only">Sort public repositories</span>
-              <select aria-label="Sort public repositories" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
-                <option value="stars">Most stars</option><option value="recent">Recently pushed</option><option value="name">Name A–Z</option>
+            <label class="repo-sort"><span class="sr-only">Sort community artifacts</span>
+              <select aria-label="Sort community artifacts" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
+                <option value="recommended">Recommended</option><option value="stars">Most stars</option><option value="recent">Recently pushed</option><option value="name">Name A–Z</option>
               </select>
             </label>
           </div>
@@ -522,6 +588,9 @@
               <sc-for list="{{ repoTypes }}" as="f" hint-placeholder-count="3">
                 <button class="repo-type" onClick="{{ f.select }}" aria-pressed="{{ f.selected }}" style="background: {{ f.bg }}; color: {{ f.color }}; border-color: {{ f.border }};">{{ f.label }} <span>{{ f.count }}</span></button>
               </sc-for>
+            </div>
+            <div class="repo-types" role="group" aria-label="Catalog scope">
+              <sc-for list="{{ catalogScopes }}" as="scope" hint-placeholder-count="2"><button class="repo-type" onClick="{{ scope.select }}" aria-pressed="{{ scope.selected }}" style="background:{{ scope.bg }}; color:{{ scope.color }}; border-color:{{ scope.border }};">{{ scope.label }}</button></sc-for>
             </div>
             <label class="repo-license-filter"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
           </div>
@@ -534,9 +603,9 @@
               <span class="repo-rank mono">{{ r.rankLabel }}</span>
               <span class="repo-card-body">
                 <span class="repo-card-heading"><span class="repo-owner mono">{{ r.owner }} /</span><span class="repo-stars mono"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ r.starsLabel }}</span></span>
-                <strong class="repo-name">{{ r.name }}</strong>
+                <strong class="repo-name">{{ r.name }} <sc-if value="{{ r.featured }}" hint-placeholder-val="{{ false }}"><span class="repo-label">{{ r.featuredLabel }}</span></sc-if></strong>
                 <span class="repo-description">{{ r.description }}</span>
-                <span class="repo-card-meta"><span class="repo-kind">{{ r.type }}</span><span class="repo-language"><i></i>{{ r.language }}</span><span>{{ r.licenseLabel }}</span><span>{{ r.activity }}</span><span>{{ r.archivedLabel }}</span></span>
+                <span class="repo-card-meta"><span class="repo-kind">{{ r.type }}</span><span>{{ r.versionLabel }}</span><span class="repo-language"><i></i>{{ r.language }}</span><span>{{ r.licenseLabel }}</span><span>{{ r.riskLabel }}</span><span>{{ r.activity }}</span><span>{{ r.archivedLabel }}</span></span>
               </span>
               <span class="repo-chevron" aria-hidden="true">›</span>
             </button>
@@ -545,21 +614,24 @@
             <div class="repo-empty">
               <div class="repo-empty-icon" aria-hidden="true">⌕</div>
               <h2>{{ emptyTitle }}</h2><p>{{ emptyDescription }}</p>
-              <button class="repo-button" onClick="{{ resetCatalogFilters }}">Show all repositories</button>
+              <button class="repo-button" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button>
             </div>
           </sc-if>
-          <div class="repo-list-footnote">GitHub stars indicate popularity, not compatibility or security. Repository descriptions are supplied by their authors.</div>
+          <div class="repo-list-footnote">Packages and plugins use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. Directory inclusion and GitHub stars are discovery metadata only.</div>
         </div>
       </section>
 
-      <aside class="repo-inspector" aria-label="Repository details">
+      <aside class="repo-inspector" aria-label="Community artifact details">
         <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ true }}">
-          <div class="repo-inspector-eyebrow"><span class="repo-eyebrow">REPOSITORY DETAILS</span><span class="repo-label">Metadata only</span></div>
+          <div class="repo-inspector-eyebrow"><span class="repo-eyebrow">ARTIFACT DETAILS</span><span class="repo-label">Metadata only</span></div>
           <div class="repo-detail-title"><span class="mono">{{ detail.owner }} /</span><h2>{{ detail.name }}</h2></div>
-          <div class="repo-detail-stats"><span class="repo-stars">☆ {{ detail.starsLabel }} GitHub stars</span><span>{{ detail.type }}</span></div>
+          <div class="repo-detail-stats"><span class="repo-stars">☆ {{ detailPopularityLabel }}</span><span>{{ detail.type }}</span></div>
           <p class="repo-detail-description">{{ detail.description }}</p>
           <div class="repo-topic-list"><sc-for list="{{ detailTopics }}" as="topic" hint-placeholder-count="3"><span>{{ topic }}</span></sc-for></div>
-          <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open on GitHub ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div>
+          <sc-if value="{{ isRepositoryDetail }}" hint-placeholder-val="{{ true }}"><div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Open source ↗</a><button class="repo-button" onClick="{{ copyRef }}">Copy pinned ref</button></div></sc-if>
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-actions"><button class="repo-button repo-button-primary" onClick="{{ sharePackagePage }}">Copy package page</button></div></sc-if>
+          <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
+          <sc-if value="{{ hasDiscussionLink }}" hint-placeholder-val="{{ true }}"><a class="repo-commit-link mono" href="{{ detailDiscussionUrl }}" target="_blank" rel="noopener noreferrer">Official community discussion ↗</a></sc-if>
 
           <div class="repo-notice"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 3 7v5c0 4 4 7 9 9 5-2 9-5 9-9V7Z"/><path d="M12 8v5m0 3v.1"/></svg><span><strong>Not executed or security verified.</strong><br />Browsing this snapshot does not download or run repository code.</span></div>
 
@@ -567,16 +639,70 @@
             <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="7"><div><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
           </dl><a class="repo-commit-link mono" href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a></div>
 
-          <div class="repo-detail-section"><h3>Compatibility & changes <span class="repo-label">Not analyzed</span></h3><p class="repo-muted">No fork differences, plugin inventory, or compatibility tests have been computed. The indexer will supply this evidence later.</p></div>
-          <div class="repo-detail-section"><h3>Bring into your workspace <span class="repo-label">Planned</span></h3>
-            <div class="repo-planned-actions"><button disabled title="Requires the local acquisition and sandbox backend.">Download & open locally</button><button disabled title="Requires the integration skill, disposable clone, and compatibility checks.">Integrate into existing version</button><button disabled title="Requires a verified container execution boundary.">Test in sandbox</button></div>
-            <p class="repo-muted">These actions are not connected. Future integration must preserve your current installation and pass sandbox checks before promotion.</p>
-          </div>
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-section"><h3>Pinned components <span class="repo-label">Exact metadata</span></h3>
+            <div class="repo-package-components"><sc-for list="{{ packageComponents }}" as="component" hint-placeholder-count="2"><article class="repo-package-component">
+              <div><strong>{{ component.name }}</strong><span class="mono">{{ component.registry }} · {{ component.version }}</span></div>
+              <p>{{ component.role }}</p>
+              <div class="repo-component-links"><a href="{{ component.repositoryUrl }}" target="_blank" rel="noopener noreferrer">source @ {{ component.shortCommit }} ↗</a><a href="{{ component.packageUrl }}" target="_blank" rel="noopener noreferrer">package metadata ↗</a></div>
+            </article></sc-for></div>
+          </div></sc-if>
+
+          <div class="repo-detail-section"><h3>Taxonomy & evidence <span class="repo-label">Static review</span></h3><p class="repo-muted"><strong>{{ detailTaxonomy }}</strong><br />{{ detailEvidenceText }}</p></div>
+          <div class="repo-detail-section"><h3>Compatibility & risk <span class="repo-label">{{ detailRisk }}</span></h3><p class="repo-muted">{{ detailCompatibilityText }}</p></div>
+          <div class="repo-detail-section"><h3>Save configuration</h3><button class="repo-button repo-button-primary" onClick="{{ saveConfiguration }}" disabled="{{ saveConfigurationDisabled }}">{{ saveConfigurationLabel }}</button><p class="repo-muted">Signed, installed packages can become runnable configurations. Raw plugin and fork selections are saved as inert drafts until composed and signed.</p></div>
+          <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Install package <span class="repo-label">Fail closed</span></h3>
+            <label class="repo-muted" for="package-version">Harness version</label>
+            <select id="package-version" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
+              <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+            </select>
+            <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="false"><p class="repo-muted">Save a launch-ready local Harness version from the Launcher first.</p></sc-if>
+            <div class="repo-planned-actions"><button onClick="{{ installPackage }}" disabled="{{ installDisabled }}">{{ installLabel }}</button><button disabled title="Package composition and upload are a separate boundary.">Add to package</button></div>
+            <p class="repo-muted">{{ installStatus }}. Installation verifies trust, acquires exact bytes, rejects unsafe archives, uses an offline disposable profile, boots it in Apptainer, and promotes only after both smoke checks pass.</p>
+          </div></sc-if>
+          <sc-if value="{{ isPluginDetail }}" hint-placeholder-val="true"><div class="repo-detail-section"><h3>Install command <span class="repo-label">Explicit local action</span></h3>
+            <sc-if value="{{ pluginInstallable }}" hint-placeholder-val="true">
+              <label class="repo-muted" for="plugin-profile">Target installed profile</label>
+              <select id="plugin-profile" value="{{ selectedCatalogProfileId }}" onChange="{{ setCatalogProfile }}" disabled="{{ noCatalogProfiles }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;"><sc-for list="{{ catalogProfiles }}" as="profile" hint-placeholder-count="1"><option value="{{ profile.id }}">{{ profile.name }} · {{ profile.home }}</option></sc-for></select>
+              <div class="mono" style="padding:9px; border:1px solid oklch(0.32 0.012 255); border-radius:5px; background:oklch(0.17 0.008 255); color:oklch(0.82 0.06 155); font-size:9.5px; overflow-wrap:anywhere;">{{ pluginInstallCommand }}</div>
+              <button class="repo-button repo-button-primary" onClick="{{ copyPluginInstall }}" style="width:100%; margin-top:8px;">Copy exact-version install command</button>
+              <p class="repo-muted">This invokes DSH’s native plugin manager and mutates the selected host profile. Review the package, integrity, permissions, and lifecycle scripts before running it.</p>
+            </sc-if>
+            <sc-if value="{{ pluginCommandUnavailable }}" hint-placeholder-val="false"><p class="repo-muted">This entry is an MCP-sidecar package, not a native npm DSH bundle. Forge will not invent an incompatible install command; use the publisher’s pinned package metadata.</p></sc-if>
+          </div></sc-if>
+          <sc-if value="{{ isForkDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Download fork <span class="repo-label">Pinned source archive</span></h3>
+            <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ forkDownloadUrl }}" target="_blank" rel="noopener noreferrer" download>Download .tar.gz</a><button class="repo-button" onClick="{{ copyForkDownload }}">Copy command</button></div>
+            <div class="mono" style="padding:9px; border:1px solid oklch(0.32 0.012 255); border-radius:5px; background:oklch(0.17 0.008 255); color:oklch(0.82 0.06 155); font-size:9.5px; overflow-wrap:anywhere;">{{ forkDownloadCommand }}</div>
+            <p class="repo-muted">The archive is pinned to the captured commit and is never extracted or executed by Forge. It is unsigned community source.</p>
+          </div></sc-if>
         </sc-if>
-        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No repository selected</h2><p>Adjust the filters to inspect a repository from this snapshot.</p></div></sc-if>
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>
       </aside>
     </div>
-    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Cached metadata · works without GitHub access</span><span>Unsigned development seed · ingester not connected</span></footer>
+    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Install requires a local signed recipe, saved Harness version, and passing Apptainer checks</span></footer>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ showAssistant }}" hint-placeholder-val="{{ false }}">
+  <main class="assistant-shell" aria-label="DSH Forge discovery assistant">
+    <aside class="assistant-sidebar">
+      <div class="repo-eyebrow">LOCAL / ISOLATED</div>
+      <h1>Forge Assistant</h1>
+      <p>Open a disposable DeepSeek Harness with read-only catalog tools for finding complementary plugins, packages, and forks. It can save drafts for review; it cannot install or run community code.</p>
+      <label class="repo-muted" for="assistant-version">Harness version</label>
+      <select id="assistant-version" value="{{ selectedAssistantVersion }}" onChange="{{ setAssistantVersion }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
+        <sc-for list="{{ assistantVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+      </select>
+      <button class="repo-button repo-button-primary" onClick="{{ startAssistant }}" disabled="{{ assistantStartDisabled }}" style="width:100%;">{{ assistantStartLabel }}</button>
+      <p class="repo-muted">Requires a saved local Harness, the MCP client plugin in that Harness, and a passing pinned Apptainer capability probe. There is no host fallback.</p>
+      <div class="repo-detail-section"><h3>Saved configurations</h3>
+        <sc-if value="{{ noConfigurations }}" hint-placeholder-val="{{ true }}"><p class="repo-muted">Save a package or catalog selection to see it here and run it later from the CLI.</p></sc-if>
+        <sc-for list="{{ configurations }}" as="configuration" hint-placeholder-count="2"><article class="config-card"><strong>{{ configuration.name }}</strong><div class="config-meta">{{ configuration.versionLabel }} · {{ configuration.selectionLabel }} · <span style="color:{{ configuration.statusColor }};">{{ configuration.statusLabel }}</span></div><button class="repo-button" onClick="{{ configuration.run }}" disabled="{{ configuration.runDisabled }}">{{ configuration.runLabel }}</button><p class="repo-muted">{{ configuration.runtime.reason }}</p></article></sc-for>
+      </div>
+    </aside>
+    <section class="assistant-frame">
+      <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe src="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
+      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="repo-empty" style="margin:auto;"><div class="repo-empty-icon" aria-hidden="true">◇</div><h2>Start the isolated assistant</h2><p>The embedded Harness will appear here after its authenticated loopback URL is ready.</p></div></sc-if>
+    </section>
   </main>
   </sc-if>
 

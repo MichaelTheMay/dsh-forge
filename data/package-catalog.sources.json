@@ -1,0 +1,133 @@
+{
+  "schema": "dsh-forge.catalog-sources/v1",
+  "captured_at": "2026-09-05T21:30:00Z",
+  "directories": [
+    {
+      "id": "dsh-get",
+      "name": "DSH Get public catalog",
+      "url": "https://github.com/bobby-sheng/dshget-data/blob/cf15b1e9d0acb488b6790b17568a5ff718e136af/catalog.json",
+      "kind": "normalized_json",
+      "revision": "cf15b1e9d0acb488b6790b17568a5ff718e136af",
+      "trust": "lead_only",
+      "coverage": "Pinned snapshot reports 2,460 aggregated entries; only matching candidate identities are used as leads."
+    },
+    {
+      "id": "awesome-dsh",
+      "name": "Awesome DeepSeek Harness",
+      "url": "https://github.com/0xsline/awesome-deepseek-harness/blob/de3b4ca9b70aabd5147f409416daaa97a4d206c7/README.md",
+      "kind": "curated_repository",
+      "revision": "de3b4ca9b70aabd5147f409416daaa97a4d206c7",
+      "trust": "lead_only",
+      "coverage": "Pinned curated list; inclusion and descriptions are discovery evidence, not safety or compatibility verification."
+    },
+    {
+      "id": "show-your-plugins",
+      "name": "Official Show Your Plugins discussions",
+      "url": "https://github.com/deepseek-ai/deepseek-harness/discussions/categories/show-your-plugins",
+      "kind": "official_discussions",
+      "revision": null,
+      "trust": "lead_only",
+      "coverage": "Bounded discussion sweep; author announcements are claims until matched to immutable repository and package metadata."
+    },
+    {
+      "id": "npm",
+      "name": "npm public registry metadata",
+      "url": "https://registry.npmjs.org/",
+      "kind": "registry",
+      "revision": null,
+      "trust": "authoritative_metadata",
+      "coverage": "Exact package versions and registry integrity only; package behavior and compatibility are not inferred from publication."
+    },
+    {
+      "id": "github",
+      "name": "GitHub repository metadata",
+      "url": "https://api.github.com/",
+      "kind": "registry",
+      "revision": null,
+      "trust": "authoritative_metadata",
+      "coverage": "Exact repository identities and commits only; stars and topics are display metadata, not ranking authority."
+    }
+  ],
+  "recipes": [
+    {
+      "slug": "agent-teams-builder",
+      "name": "AgentTeams Builder",
+      "summary": "A pinned AgentTeams package candidate for using persistent, dependency-aware DeepSeek Harness teams to help build and review DSH Forge.",
+      "kind": "single_plugin",
+      "rank": 1,
+      "featured": true,
+      "publisher": {"id": "dsh-forge-curation", "name": "DSH Forge curation", "kind": "curator"},
+      "components": [
+        {"artifact_id": "github:1332073142", "role": "Captain-led persistent agent teams, task DAGs, direct messaging, quality gates, and live Web inspection."}
+      ],
+      "taxonomy": ["multi-agent orchestration", "collaboration", "persistent tasks", "quality gates"],
+      "compatibility": {
+        "status": "declared",
+        "harness_versions": ["0.1.2-rc.1", "0.1.2-alpha.5", "0.1.2-alpha.2"],
+        "node": "^22.19.0 || >=24",
+        "surfaces": ["web", "headless"],
+        "summary": "The publisher declares these exact host versions. Forge has not yet reproduced the matrix; alpha.3 is deliberately excluded."
+      },
+      "risk": {
+        "level": "high",
+        "permissions": ["subagent creation", "workspace writes", "persistent state", "model calls"],
+        "notes": "Parallel delegated agents amplify filesystem, model-cost, and prompt-injection risk. Test only in a disposable Apptainer profile before promotion."
+      },
+      "directory_ids": ["dsh-get", "awesome-dsh", "npm", "github"]
+    },
+    {
+      "slug": "code-review-lab",
+      "name": "Code Review Lab",
+      "summary": "A static-review candidate combining pre-install plugin auditing with a repository symbol index and bounded code maps.",
+      "kind": "plugin_stack",
+      "rank": 2,
+      "featured": true,
+      "publisher": {"id": "dsh-forge-curation", "name": "DSH Forge curation", "kind": "curator"},
+      "components": [
+        {"artifact_id": "github:1350484605", "role": "Audit plugin metadata and supply-chain indicators before any install boundary."},
+        {"artifact_id": "github:1341363840", "role": "Build a symbol index and bounded repository map for code review context."}
+      ],
+      "taxonomy": ["code intelligence", "static audit", "supply-chain review", "repository mapping"],
+      "compatibility": {
+        "status": "unknown",
+        "harness_versions": [],
+        "node": ">=22",
+        "surfaces": ["web", "headless"],
+        "summary": "The components have not been tested together. dsh-code-index declares a broad pre-0.2 tools range; dsh-vet declares no exact Harness range."
+      },
+      "risk": {
+        "level": "medium-high",
+        "permissions": ["repository reads", "recursive indexing", "archive parsing"],
+        "notes": "Review path confinement, symlink handling, malicious archive behavior, prompt injection through source text, and resource exhaustion."
+      },
+      "directory_ids": ["awesome-dsh", "show-your-plugins", "npm", "github"]
+    },
+    {
+      "slug": "auditable-memory-lab",
+      "name": "Auditable Memory Lab",
+      "summary": "A local-first memory candidate pairing an append-only session evidence ledger with reviewed long-term rules and preferences.",
+      "kind": "plugin_stack",
+      "rank": 3,
+      "featured": false,
+      "publisher": {"id": "dsh-forge-curation", "name": "DSH Forge curation", "kind": "curator"},
+      "components": [
+        {"artifact_id": "github:1295914860", "role": "Retain immutable, queryable evidence from prior sessions."},
+        {"artifact_id": "github:1289127532", "role": "Propose, review, and approve durable memory policy entries."}
+      ],
+      "taxonomy": ["memory", "session evidence", "human approval", "local-first"],
+      "compatibility": {
+        "status": "unknown",
+        "harness_versions": [],
+        "node": null,
+        "surfaces": ["mcp"],
+        "summary": "Both are Python MCP sidecars with DSH examples, not native Cordis bundles. Their combined lifecycle has not been reproduced."
+      },
+      "risk": {
+        "level": "medium-high",
+        "permissions": ["session-log reads", "persistent memory writes", "local filesystem"],
+        "notes": "Review path confinement, retention, redaction, untrusted-record rendering, memory poisoning, and approval bypass before any session data is exposed."
+      },
+      "directory_ids": ["show-your-plugins", "github"]
+    }
+  ]
+}
