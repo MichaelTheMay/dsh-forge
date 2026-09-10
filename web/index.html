@@ -83,6 +83,8 @@
   .repo-result-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; margin-top: 14px; font: 10px 'IBM Plex Mono', monospace; color: oklch(0.63 0.013 255); }
   .repo-ranking-note { color: oklch(0.58 0.013 255); }
   .repo-results { overflow-y: auto; min-height: 0; padding: 12px 24px 20px; }
+  .repo-load-more { display: block; width: 100%; margin: 10px 0 4px; }
+  .repo-store-note { margin: 10px 0 4px; padding: 9px 11px; border: 1px solid oklch(0.42 0.09 65); border-radius: 6px; color: oklch(0.78 0.09 65); font: 10px/1.5 'IBM Plex Mono', monospace; }
   .repo-card { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit; border: 1px solid; border-radius: 7px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: border-color .15s, background .15s; }
   .repo-card:hover { border-color: oklch(0.53 0.055 235) !important; }
   .repo-rank { flex: 0 0 24px; padding-top: 1px; color: oklch(0.57 0.02 255); font-size: 10px; }
@@ -594,7 +596,7 @@
             </div>
             <label class="repo-license-filter"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
           </div>
-          <div class="repo-result-line"><span aria-live="polite">{{ resultCount }}</span><span class="repo-ranking-note">{{ sortExplanation }}</span></div>
+          <div class="repo-result-line"><span aria-live="polite">{{ resultCount }}</span><span class="repo-ranking-note">{{ catalogSourceLabel }} · {{ sortExplanation }}</span></div>
         </div>
 
         <div class="repo-results">
@@ -616,6 +618,12 @@
               <h2>{{ emptyTitle }}</h2><p>{{ emptyDescription }}</p>
               <button class="repo-button" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button>
             </div>
+          </sc-if>
+          <sc-if value="{{ hasStoreError }}" hint-placeholder-val="{{ false }}">
+            <div class="repo-store-note" role="status">{{ storeError }}</div>
+          </sc-if>
+          <sc-if value="{{ canLoadMore }}" hint-placeholder-val="{{ false }}">
+            <button class="repo-button repo-load-more" onClick="{{ loadMore }}">{{ loadMoreLabel }}</button>
           </sc-if>
           <div class="repo-list-footnote">Packages and plugins use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. Directory inclusion and GitHub stars are discovery metadata only.</div>
         </div>

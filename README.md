@@ -161,6 +161,36 @@ This is intentionally a weaker boundary than the signed-package path, and
 `capabilities.local_profiles` reports `sandboxed: false` rather than implying
 otherwise. See [docs/local-profiles.md](docs/local-profiles.md).
 
+## Catalog store and scale
+
+The embedded snapshot in `web/launcher.js` stays the corpus for the
+disconnected preview, which must remain a single self-contained file. A
+connected sidecar reads from an imported FTS5-indexed SQLite store instead —
+the only path that scales to the real fork network. The upstream fork endpoint
+captured in the seed reports roughly 24,000 forks; ten are embedded today.
+
+```bash
+python3 -m dsh_forge catalog import data/public-repos.seed.json   --package-feed data/package-catalog.seed.json
+python3 -m dsh_forge catalog search "agent teams" --limit 10
+python3 -m dsh_forge catalog search --type fork --sort stars
+```
+
+Import is offline and inert. A snapshot produced by a registry Forge does not
+run can be signed and verified against an explicit local trust root, reusing the
+same DSSE/Ed25519 boundary as signed packages with a catalog-specific payload
+type. Verification is the only thing that raises recorded trust: the snapshot's
+own provenance is still stored verbatim and repeated in every search response,
+so a verified envelope around an unsigned development seed reports both facts
+rather than collapsing them. Builds are atomic, so a
+failed import leaves the previous store intact. Page size, query length, and
+paging depth are all bounded.
+
+When a store is imported the Community browser searches it instead of the
+embedded snapshot, pages with a **Load more results** button, and names the
+corpus in use on the result line. Without a sidecar — or with no store imported
+— it reads the embedded snapshot exactly as before, so the portable preview is
+unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
+
 ## Community browsers
 
 - A curated "Forge picks" strip highlights administrator-selected hidden gems —
