@@ -301,13 +301,127 @@ test('catalog interactions cannot add, stop, or modify local cells', () => {
 });
 test('repository actions stay disabled while signed package install is locally gated', () => {
   const section = html.slice(html.indexOf('<main class="public-browser"'), html.indexOf('<sc-if value="{{ previewOpen }}"'));
-  assert.equal((section.match(/<button disabled(?: title=)?/g) || []).length, 3);
+  // Composition and upload remain the only disabled affordance: one-click install stays
+  // package-only, while plugins and forks now hand over an explicit command instead.
+  const disabled = section.match(/<button disabled(?: title="([^"]*)")?/g) || [];
+  assert.equal(disabled.length, 1);
+  assert.match(disabled[0], /Package composition and upload are a separate boundary\./);
   assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
   assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
   assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
   assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
   assert(CATALOG.filter(r => r.type === 'package').every(r => !r.verification.installed && !r.verification.sandbox_verified && !r.acquisition.enabled));
+});
+
+test('installed-profile rail one-clicks web and headless and copies the rest', async () => {
+  const c = instance();
+  const status = {
+    trees: [], cells: [], saved_versions: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true },
+    profiles: [
+      { id: 'profile_' + 'a'.repeat(16), name: 'web', home: '~/.dsh', surface: 'web', bundles: ['@deepseek-ai/dsh-web-app'], dependencies: ['dsh-vet'], launchability: 'one-click', command: 'run-web' },
+      { id: 'profile_' + 'b'.repeat(16), name: 'coding', home: '~/.dsh', surface: 'terminal', bundles: ['@deepseek-ai/dsh-tui-app'], dependencies: [], launchability: 'terminal-only', command: 'run-coding' }
+    ]
+  };
+  c.applyStatus(status);
+  let values = c.renderVals();
+  assert.equal(values.profileCountLabel, '2 profiles found');
+  assert.equal(values.localProfiles[0].bundleLabel, '1 bundle');
+  assert.equal(values.localProfiles[0].dependencyLabel, '1 plugin');
+  // Without a launch-ready tree, one-click is refused but the CLI path stays open.
+  assert.equal(values.localProfiles[0].disabled, true);
+  assert.equal(values.localProfiles[1].buttonLabel, 'Copy terminal command');
+  assert.equal(values.localProfiles[1].disabled, false);
+  await values.localProfiles[1].run();
+  assert.equal(clipboard.at(-1), 'run-coding');
+
+  const tree = { id: 'tree_123456789abc', trust: 'trusted', launchability: 'ready', version: '0.1.2-rc.1', short: 'dsh' };
+  c.applyStatus({ ...status, trees: [tree] });
+  values = c.renderVals();
+  assert.equal(values.localProfiles[0].disabled, false);
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return {
+      profile: status.profiles[0], tree: { ...tree, path: '~/dsh' },
+      argv: ['/usr/bin/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '3100', '--no-open'],
+      command: "DSH_HOME=~/.dsh /usr/bin/dsh --profile web", cwd: '~/dsh-forge', home: '~/.dsh',
+      environment_keys: ['PATH'], credential_keys: [],
+      notes: ['This is an existing local profile, so it runs directly on the host rather than inside Apptainer.']
+    };
+  };
+  await values.localProfiles[0].run();
+  // One-click always previews first; it never posts straight to the run endpoint.
+  assert.equal(request.url, '/api/v1/profiles/preview');
+  assert.deepEqual(request.body, {
+    profile_id: status.profiles[0].id, tree_id: tree.id, task: '', port: 'auto', open_browser: true
+  });
+  assert.equal(c.renderVals().previewTitle, 'Confirm local profile — direct host process');
+  assert.equal(c.renderVals().previewConfirmLabel, 'Run local profile');
+});
+
+test('plugin detail hands over an exact-version command targeting a detected profile', async () => {
+  const c = instance();
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true },
+    profiles: [
+      { id: 'profile_' + 'a'.repeat(16), name: 'web', home: '~/.dsh', surface: 'web', bundles: [], dependencies: [], launchability: 'one-click' },
+      { id: 'profile_' + 'b'.repeat(16), name: 'coding', home: '~/.dsh', surface: 'terminal', bundles: [], dependencies: [], launchability: 'terminal-only' }
+    ]
+  });
+  const plugin = snapshot.supplemental_entries.find(entry => entry.package.registry === 'npm');
+  c.selectCatalogArtifact({ id: plugin.artifact_id, type: 'plugin' });
+  let values = c.renderVals();
+  assert.equal(values.isPluginDetail, true);
+  // The default target is the detected web profile, and the version is pinned exactly.
+  assert.equal(values.pluginInstallCommand,
+    'dsh plugin --profile web add ' + plugin.package.name + '@' + plugin.package.version);
+  assert.match(values.pluginInstallCommand, /@\d+\.\d+\.\d+/);
+  values.setCatalogProfile({ target: { value: 'profile_' + 'b'.repeat(16) } });
+  values = c.renderVals();
+  assert.match(values.pluginInstallCommand, /--profile coding /);
+  // Copying is the only action: the browser never runs the plugin manager itself.
+  await values.copyPluginInstall();
+  assert.equal(clipboard.at(-1), values.pluginInstallCommand);
+  assert(!/\/api\/v1\/plugins\/install/.test(script));
+});
+
+test('non-npm plugins get no invented command and forks download a pinned archive', () => {
+  const c = instance();
+  const mcpb = snapshot.supplemental_entries.find(entry => entry.package.registry !== 'npm');
+  c.selectCatalogArtifact({ id: mcpb.artifact_id, type: 'plugin' });
+  let values = c.renderVals();
+  assert.equal(values.pluginInstallable, false);
+  assert.equal(values.pluginCommandUnavailable, true);
+  assert.equal(values.pluginInstallCommand, '');
+
+  const fork = snapshot.entries[0];
+  c.selectCatalogArtifact({ id: fork.artifact_id, type: 'fork' });
+  values = c.renderVals();
+  assert.equal(values.isForkDetail, true);
+  assert.equal(values.forkDownloadUrl,
+    'https://codeload.github.com/' + fork.full_name + '/tar.gz/' + fork.head_sha);
+  assert.match(values.forkDownloadCommand, /^curl --fail --location --output /);
+  assert(values.forkDownloadCommand.includes(fork.head_sha));
+});
+
+test('curated strip surfaces featured non-fork gems in rank order without a security claim', () => {
+  const c = instance();
+  const values = c.renderVals();
+  assert(values.hasCuratedPicks);
+  assert(values.curatedPicks.length > 0 && values.curatedPicks.length <= 8);
+  assert(values.curatedPicks.every(pick => pick.type !== 'fork'));
+  assert(values.curatedPicks.every(pick => pick.featured));
+  assert(values.curatedPicks.every(pick => ['Curated package', 'Hidden-gem plugin'].includes(pick.kindLabel)));
+  const ranks = values.curatedPicks.map(pick => (pick.rank || (pick.curation && pick.curation.rank)) || 999);
+  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
+  // Curation is editorial only; it must never imply the artifact was verified.
+  assert.match(html, /Editorial curation, not a security verdict/);
+  assert(values.curatedPicks.every(pick => pick.verification.security_verified === false));
 });
 
 test('package page selects a saved version and posts only stable local identities', async () => {

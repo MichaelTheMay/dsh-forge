@@ -151,7 +151,7 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse(artifact["lifecycle_scripts_allowed"])
 
     def test_receipt_or_content_address_tampering_fails_closed(self):
-        receipt = json.loads(Path(self.receipt).read_text())
+        receipt = json.loads(Path(self.receipt).read_text(encoding="utf-8"))
         receipt["payload_digest"] = "sha256:" + "0" * 64
         tampered_receipt = self.root / "tampered-receipt.json"
         tampered_receipt.write_text(json.dumps(receipt), encoding="utf-8")
@@ -257,7 +257,7 @@ class InstallationTests(unittest.TestCase):
         self.assertIn("--network none", " ".join(calls[1][0]))
         self.assertTrue(Path(result["receipt"]).is_file())
         current_path = self.root / "installs" / "profiles" / ("tree_" + "a" * 12) / "web" / "current.json"
-        current = json.loads(current_path.read_text())
+        current = json.loads(current_path.read_text(encoding="utf-8"))
         self.assertEqual(current["install_id"], result["install_id"])
 
     def test_failed_replacement_preserves_current_profile_and_retains_evidence(self):

@@ -13,7 +13,6 @@ import base64
 import binascii
 import contextlib
 import datetime as dt
-import fcntl
 import hashlib
 import hmac
 import json
@@ -33,6 +32,8 @@ from urllib.request import (
     Request,
     build_opener,
 )
+
+from .file_lock import lock as lock_file, unlock as unlock_file
 
 from .packages import PackageError, verify
 
@@ -222,12 +223,15 @@ def _exclusive_lock(root: Path):
     except OSError as error:
         raise AcquisitionError(f"Could not open quarantine lock: {error}", "quarantine_io_error") from error
     try:
-        os.fchmod(descriptor, 0o600)
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
+        else:
+            os.chmod(lock_path, 0o600)
+        lock_file(descriptor)
         yield
     finally:
         with contextlib.suppress(OSError):
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            unlock_file(descriptor)
         os.close(descriptor)
 
 
@@ -449,7 +453,10 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".receipt-", delete=False) as handle:
             temporary = Path(handle.name)
-            os.fchmod(handle.fileno(), 0o600)
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), 0o600)
+            else:
+                os.chmod(temporary, 0o600)
             handle.write(rendered)
             handle.flush()
             os.fsync(handle.fileno())
@@ -520,7 +527,10 @@ def acquire(
                 _source_policy(plugin)
                 descriptor, name = tempfile.mkstemp(prefix="artifact-", dir=layout["incoming"])
                 temporary = Path(name)
-                os.fchmod(descriptor, 0o600)
+                if hasattr(os, "fchmod"):
+                    os.fchmod(descriptor, 0o600)
+                else:
+                    os.chmod(temporary, 0o600)
                 with os.fdopen(descriptor, "w+b") as handle:
                     remaining_time = float(total_timeout_seconds) - (time.monotonic() - package_started)
                     if remaining_time <= 0:

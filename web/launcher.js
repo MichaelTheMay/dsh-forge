@@ -1420,6 +1420,11 @@ class Component extends DCLogic {
       trustedPackageRecipes: [],
       packageInstallations: [],
       configurations: [],
+      profiles: [],
+      profileTask: '',
+      profileBusy: false,
+      pendingProfile: null,
+      catalogProfileId: '',
       packageVersionId: '',
       packageInstallBusy: false,
       configurationBusy: false,
@@ -1515,9 +1520,11 @@ class Component extends DCLogic {
   }
 
   selectCatalogArtifact(artifact) {
-    this.setState({ artifactId: artifact.id });
-    if (typeof window !== 'undefined' && artifact.type === 'package') {
-      window.location.hash = artifact.pageRoute.slice(1);
+    this.setState({ artifactId: artifact.id, catalogType: artifact.type, catalogScope: 'all' });
+    if (typeof window !== 'undefined') {
+      window.location.hash = artifact.type === 'package'
+        ? artifact.pageRoute.slice(1)
+        : (artifact.type === 'fork' ? 'forks' : 'plugins');
     }
   }
 
@@ -1630,6 +1637,63 @@ class Component extends DCLogic {
     }
   }
 
+  async copyText(value, success = 'Copied command') {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(value);
+      this.flash(success);
+    } catch {
+      this.flash('Clipboard unavailable. Copy the displayed command manually.');
+    }
+  }
+
+  async previewLocalProfile(profile) {
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    const tree = this.tree(this.state.treeId);
+    if (!tree.id || tree.trust === 'foreign' || tree.launchability !== 'ready') {
+      return this.flash('Select a launch-ready local DSH version');
+    }
+    const spec = {
+      profile_id: profile.id,
+      tree_id: tree.id,
+      task: profile.surface === 'headless' ? this.state.profileTask : '',
+      port: 'auto',
+      open_browser: profile.surface === 'web'
+    };
+    this.setState({ profileBusy: true });
+    try {
+      const previewData = await this.api('/api/v1/profiles/preview', {
+        method: 'POST', body: JSON.stringify(spec)
+      });
+      this.setState({ preview: 'profile', previewData, pendingProfile: spec });
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ profileBusy: false });
+    }
+  }
+
+  async startLocalProfile() {
+    const spec = this.state.pendingProfile;
+    if (!spec) return this.flash('Choose a detected profile first');
+    const pendingWindow = spec.open_browser ? window.open('about:blank', '_blank') : null;
+    this.setState({ profileBusy: true });
+    try {
+      const cell = await this.api('/api/v1/profiles/run', {
+        method: 'POST', body: JSON.stringify(spec)
+      });
+      this.setState({ preview: null, previewData: null, pendingProfile: null, selectedCell: cell.id });
+      await this.refreshStatus(true);
+      this.flash('Started local profile ' + cell.profile + ' on the host');
+      if (pendingWindow) this.openCell(cell, pendingWindow);
+    } catch (error) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash(error.message);
+    } finally {
+      this.setState({ profileBusy: false });
+    }
+  }
+
   async refreshAssistantUrl(cells = this.state.cells) {
     const assistant = [...cells].reverse().find(cell => cell.purpose === 'forge-assistant' && cell.open_ready);
     if (!assistant || assistant.id === this.state.assistantCellId && this.state.assistantUrl) return;
@@ -1686,6 +1750,7 @@ class Component extends DCLogic {
 
   applyStatus(status) {
     const trees = Array.isArray(status.trees) ? status.trees : [];
+    const profiles = Array.isArray(status.profiles) ? status.profiles : [];
     const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
     const cells = Array.isArray(status.cells) ? status.cells : [];
     const selectedCell = cells.some(c => c.id === this.state.selectedCell) ? this.state.selectedCell : (cells[0] ? cells[0].id : null);
@@ -1696,6 +1761,10 @@ class Component extends DCLogic {
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
       configurations: Array.isArray(status.configurations) ? status.configurations : [],
+      profiles,
+      catalogProfileId: profiles.some(profile => profile.id === this.state.catalogProfileId)
+        ? this.state.catalogProfileId
+        : ((profiles.find(profile => profile.name === 'web') || profiles[0] || {}).id || ''),
       versionsDirectory: status.versions_directory || this.state.versionsDirectory,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
@@ -2026,6 +2095,29 @@ class Component extends DCLogic {
       forget: () => {}
     }));
     const versions = s.sidecarConnected ? [...savedCards, ...sessionCards] : previewCards;
+    const selectedProfileTree = this.tree(s.treeId);
+    const profileTreeReady = !!selectedProfileTree.id && selectedProfileTree.trust !== 'foreign' && selectedProfileTree.launchability === 'ready';
+    const localProfiles = s.profiles.map(profile => {
+      const oneClick = profile.launchability === 'one-click';
+      const runnable = s.sidecarConnected && profileTreeReady && !s.profileBusy;
+      const headless = profile.surface === 'headless';
+      return {
+        ...profile,
+        oneClick,
+        headless,
+        dependencyLabel: profile.dependencies.length
+          ? profile.dependencies.length + (profile.dependencies.length === 1 ? ' plugin' : ' plugins')
+          : 'base bundles only',
+        bundleLabel: profile.bundles.length + (profile.bundles.length === 1 ? ' bundle' : ' bundles'),
+        task: s.profileTask,
+        setTask: event => this.setState({ profileTask: event.target.value.slice(0, 20000) }),
+        disabled: oneClick ? !runnable || (headless && !s.profileTask.trim()) : false,
+        buttonLabel: oneClick ? (s.profileBusy ? 'Preparing…' : (headless ? 'Review task run' : 'Review & run')) : 'Copy terminal command',
+        buttonBorder: oneClick ? 'oklch(0.52 0.13 155)' : 'oklch(0.42 0.07 235)',
+        buttonBg: oneClick ? 'oklch(0.32 0.07 155)' : 'oklch(0.27 0.035 235)',
+        run: () => oneClick ? this.previewLocalProfile(profile) : this.copyText(profile.command, 'Copied profile command')
+      };
+    });
     const communityTrees = s.trees.filter(tr => tr.trust === 'foreign').map(tr => {
       const result = tr.sandbox_test || {};
       const canTest = s.sidecarConnected && !!sandbox.ready && !['needs-build', 'not-executable'].includes(tr.launchability);
@@ -2105,6 +2197,7 @@ class Component extends DCLogic {
         stop: () => this.cellAction(c, 'stop'),
         restart: () => this.cellAction(c, 'restart'),
         clone: () => this.cellAction(c, 'clone'),
+        cloneDisabled: !!c.profile_id,
         inspect: () => this.inspectCell(c),
         openDisabled: !c.port || !running,
         stopDisabled: !processAlive,
@@ -2147,12 +2240,34 @@ class Component extends DCLogic {
     });
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
+    const curatedPicks = CATALOG
+      .filter(artifact => artifact.featured && artifact.type !== 'fork')
+      .sort((a, b) => ((a.rank || (a.curation && a.curation.rank)) || 999) - ((b.rank || (b.curation && b.curation.rank)) || 999))
+      .slice(0, 8)
+      .map(artifact => ({
+        ...artifact,
+        kindLabel: artifact.type === 'package' ? 'Curated package' : 'Hidden-gem plugin',
+        summary: artifact.description,
+        select: () => this.selectCatalogArtifact(artifact)
+      }));
     const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
       id: item.id,
       label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
       selected: item.id === (s.packageVersionId || ((s.savedVersions.find(candidate => candidate.state === 'ready') || {}).id)),
     }));
     const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
+    const selectedCatalogProfile = s.profiles.find(profile => profile.id === s.catalogProfileId) || s.profiles[0] || null;
+    const pluginInstallable = detail.type === 'plugin' && detail.package && detail.package.registry === 'npm';
+    const pluginInstallCommand = pluginInstallable
+      ? 'dsh plugin --profile ' + (selectedCatalogProfile ? selectedCatalogProfile.name : '<profile>') +
+        ' add ' + detail.package.name + '@' + detail.package.version
+      : '';
+    const forkDownloadUrl = detail.type === 'fork' && detail.head_sha
+      ? 'https://codeload.github.com/' + detail.slug + '/tar.gz/' + detail.head_sha
+      : '';
+    const forkDownloadCommand = forkDownloadUrl
+      ? 'curl --fail --location --output ' + detail.name + '-' + detail.head_sha.slice(0, 12) + '.tar.gz ' + forkDownloadUrl
+      : '';
     const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
       item => item.slug === detail.slug && item.configured
     );
@@ -2255,6 +2370,10 @@ class Component extends DCLogic {
       cellsSummary: s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       versions,
+      localProfiles,
+      hasLocalProfiles: localProfiles.length > 0,
+      noLocalProfiles: localProfiles.length === 0,
+      profileCountLabel: localProfiles.length + (localProfiles.length === 1 ? ' profile found' : ' profiles found'),
       hasVersions: versions.length > 0,
       noVersions: versions.length === 0,
       versionCountLabel: versions.length + (versions.length === 1 ? ' version found' : ' versions found'),
@@ -2421,6 +2540,8 @@ class Component extends DCLogic {
         ? (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order')
         : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
       results,
+      curatedPicks,
+      hasCuratedPicks: curatedPicks.length > 0,
       noResults: results.length === 0,
       hasDetail: !!detail.id,
       detail,
@@ -2435,6 +2556,8 @@ class Component extends DCLogic {
         : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed'),
       isPackageDetail: !!detail.catalogPackage,
       isRepositoryDetail: !!detail.id && !detail.catalogPackage,
+      isPluginDetail: detail.type === 'plugin',
+      isForkDetail: detail.type === 'fork',
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
         ...component,
         name: component.package.name,
@@ -2463,6 +2586,26 @@ class Component extends DCLogic {
       hasPackageLink: !!(detail.package && detail.package.url),
       detailPackageUrl: detail.package ? detail.package.url : '',
       detailPackageLabel: detail.package ? 'View ' + detail.package.registry + ' package ↗' : '',
+      catalogProfiles: s.profiles.map(profile => ({
+        ...profile,
+        selected: profile.id === (selectedCatalogProfile && selectedCatalogProfile.id)
+      })),
+      selectedCatalogProfileId: selectedCatalogProfile ? selectedCatalogProfile.id : '',
+      setCatalogProfile: event => this.setState({ catalogProfileId: event.target.value }),
+      hasCatalogProfiles: s.profiles.length > 0,
+      noCatalogProfiles: s.profiles.length === 0,
+      pluginInstallable,
+      pluginCommandUnavailable: detail.type === 'plugin' && !pluginInstallable,
+      pluginInstallCommand,
+      copyPluginInstall: () => pluginInstallCommand
+        ? this.copyText(pluginInstallCommand, 'Copied exact plugin install command')
+        : undefined,
+      forkDownloadUrl,
+      forkDownloadCommand,
+      copyForkDownload: () => forkDownloadCommand
+        ? this.copyText(forkDownloadCommand, 'Copied pinned download command')
+        : undefined,
+      hasForkDownload: !!forkDownloadUrl,
       hasDiscussionLink: !!detail.discussion_url,
       detailDiscussionUrl: detail.discussion_url || '',
       emptyTitle: emptyCopy.title,
@@ -2496,13 +2639,15 @@ class Component extends DCLogic {
       noConfigurations: s.configurations.length === 0,
 
       previewOpen: !!s.preview,
-      previewTitle: 'Confirm launch — exact argv and environment keys',
-      previewConfirmLabel: 'Start cell',
+      previewTitle: s.preview === 'profile'
+        ? 'Confirm local profile — direct host process'
+        : 'Confirm launch — exact argv and environment keys',
+      previewConfirmLabel: s.preview === 'profile' ? 'Run local profile' : 'Start cell',
       idemKey: 'preview-' + (s.treeId || 'no-tree') + '-' + (s.port || 'headless'),
       previewLines,
       previewNotes,
-      closePreview: () => this.setState({ preview: null, previewData: null }),
-      confirmPreview: () => this.startCell(),
+      closePreview: () => this.setState({ preview: null, previewData: null, pendingProfile: null }),
+      confirmPreview: () => s.preview === 'profile' ? this.startLocalProfile() : this.startCell(),
 
       toast: s.toast
     };

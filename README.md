@@ -134,8 +134,41 @@ python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
   explicit SHA-256 pin. The source is mounted read-only; home and workspace are
   disposable; launcher secrets and network access are excluded.
 
+## Installed local profiles
+
+Forge auto-detects the DSH profiles already installed on this machine by
+reading `$DSH_HOME/profiles/*/package.json`. Detection never runs profile code,
+lifecycle scripts, or installed plugins, and it skips symlinked entries instead
+of following them.
+
+- `web` and `headless` profiles get a one-click run; `terminal` and `service`
+  profiles show their exact command instead of a button that cannot work.
+- One-click runs are confirmed on the standard preview screen, which states
+  plainly that an existing profile runs **directly on the host rather than
+  inside Apptainer** and lists the credential key names it will inherit.
+- Web profiles bind loopback only and refuse protected, managed, or occupied
+  ports. Headless profiles require an explicit task.
+- Profile cells can be stopped and restarted but never cloned, because their
+  home is the user's real profile directory rather than a disposable copy.
+
+```bash
+python3 -m dsh_forge profiles list
+python3 -m dsh_forge profiles run profile_REPLACE_ME
+```
+
+This is intentionally a weaker boundary than the signed-package path, and
+`capabilities.local_profiles` reports `sandboxed: false` rather than implying
+otherwise. See [docs/local-profiles.md](docs/local-profiles.md).
+
 ## Community browsers
 
+- A curated "Forge picks" strip highlights administrator-selected hidden gems —
+  featured packages and top-ranked plugins — labeled as editorial curation, not
+  a security verdict.
+- Signed packages install in one click through the sandboxed path. Raw plugins
+  hand over an exact-version `dsh plugin add` command targeting a detected local
+  profile, and forks offer a source archive pinned to the captured commit.
+  Forge copies or downloads; it never extracts or executes community code.
 - Browse Packages, Plugins, and Forks through stable, shareable routes.
 - Search names, authors, descriptions, capabilities, and taxonomy labels.
 - Sort by static-review recommendation, GitHub stars, most recent push, or name.

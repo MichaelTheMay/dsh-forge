@@ -50,6 +50,7 @@ def _parser() -> argparse.ArgumentParser:
         description="Discover Harness versions, control local cells, and manage signed package artifacts.",
     )
     parser.add_argument("--scan-root", action="append", default=[], metavar="PATH", help="add a bounded Harness scan root")
+    parser.add_argument("--dsh-home", action="append", default=[], metavar="PATH", help="scan a DSH home for installed profiles")
     parser.add_argument("--state-dir", metavar="PATH", help="override the persistent DSH Forge state directory")
     parser.add_argument("--json", action="store_true", help="emit the stable compact JSON envelope")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -73,6 +74,15 @@ def _parser() -> argparse.ArgumentParser:
         help="open DSH Web automatically after launch",
     )
     version_commands.add_parser("rescan", help="rescan all configured and saved directories")
+
+    profiles = commands.add_parser("profiles", help="inspect and run installed DSH profiles")
+    profile_commands = profiles.add_subparsers(dest="profiles_command", required=True)
+    profile_commands.add_parser("list", help="list profiles found under configured DSH homes")
+    run_profile = profile_commands.add_parser("run", help="run one detected profile in the current terminal")
+    run_profile.add_argument("profile_id")
+    run_profile.add_argument("--tree", dest="tree_id", help="use a specific detected DSH tree")
+    run_profile.add_argument("--task", default="", help="task text required by a headless profile")
+    run_profile.add_argument("args", nargs="*", metavar="ARG", help="arguments forwarded after --")
 
     configurations = commands.add_parser("configurations", aliases=["configs"], help="save and run reviewed Harness configurations")
     configuration_commands = configurations.add_subparsers(dest="configurations_command", required=True)
@@ -247,6 +257,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"cells.{args.cells_command}"
     if args.command == "versions":
         return f"versions.{args.versions_command}"
+    if args.command == "profiles":
+        return f"profiles.{args.profiles_command}"
     if args.command in {"configurations", "configs"}:
         return f"configurations.{args.configurations_command}"
     if args.command == "packages":
@@ -404,7 +416,7 @@ def run(
                 write_json(args.output, data, force=args.force)
                 data = {**data, "output": str(Path(args.output).expanduser())}
         elif command == "packages.install-sandbox":
-            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir, dsh_homes=args.dsh_home)
             data = launcher.install_acquired_package(
                 tree_id=args.tree_id,
                 envelope=read_json(args.bundle),
@@ -415,7 +427,7 @@ def run(
                 timeout_seconds=args.timeout,
             )
         elif command == "packages.install":
-            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir, dsh_homes=args.dsh_home)
             data = launcher.install_package(
                 version_id=args.version_id,
                 envelope=read_json(args.bundle),
@@ -424,7 +436,7 @@ def run(
                 timeout_seconds=args.timeout,
             )
         else:
-            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir, dsh_homes=args.dsh_home)
             if command == "doctor":
                 status = launcher.status()
                 data = {
@@ -485,6 +497,20 @@ def run(
                     "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
+            elif command == "profiles.list":
+                status = launcher.status()
+                data = {"profiles": status["profiles"], "dsh_homes": status["dsh_homes"]}
+            elif command == "profiles.run":
+                extra_args = list(args.args)
+                if extra_args[:1] == ["--"]:
+                    extra_args = extra_args[1:]
+                exit_code = launcher.run_profile_foreground(
+                    args.profile_id,
+                    tree_id=args.tree_id,
+                    task=args.task,
+                    extra_args=extra_args,
+                )
+                data = {"profile_id": args.profile_id, "exit_code": exit_code}
             elif command == "configurations.list":
                 data = {"configurations": launcher.configurations()}
             elif command == "configurations.save":
