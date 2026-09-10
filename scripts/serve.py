@@ -206,6 +206,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             if path == "/api/v1/launches/preview":
                 self._json(self.server.launcher.preview(body))
                 return
+            if path == "/api/v1/profiles/preview":
+                self._json(self.server.launcher.preview_profile(body))
+                return
+            if path == "/api/v1/profiles/run":
+                self._json(self.server.launcher.launch_profile(body), HTTPStatus.CREATED)
+                return
             if path == "/api/v1/packages/install":
                 package_slug = body.get("package_slug")
                 version_id = body.get("version_id")
@@ -288,6 +294,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=3090)
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
+    parser.add_argument("--dsh-home", action="append", default=[], help="Scan this DSH home for installed profiles; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
     parser.add_argument("--sandbox-image", type=Path, help="Pinned Apptainer SIF required for probes and complete local cells")
     parser.add_argument("--sandbox-image-sha256", help="Expected SHA-256 for --sandbox-image")
@@ -316,7 +323,7 @@ def main():
     except (SandboxError, ValueError) as error:
         parser.error(str(error))
     sandbox = ApptainerSandbox(sandbox_config, state_root / "sandbox")
-    launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox)
+    launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox, dsh_homes=args.dsh_home)
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
         server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)
@@ -324,7 +331,11 @@ def main():
         parser.exit(1, f"Could not bind loopback port {args.port}: {error}. Try --port {args.port + 1}.\n")
     print(f"DSH Forge launcher: http://127.0.0.1:{args.port}/#launch", flush=True)
     status = launcher.status()
-    print(f"Detected {len(status['trees'])} trusted/view-only DSH tree(s). Community browsers remain metadata-only.", flush=True)
+    print(
+        f"Detected {len(status['trees'])} trusted/view-only DSH tree(s) and "
+        f"{len(status['profiles'])} local profile(s).",
+        flush=True,
+    )
     if not status["trees"]:
         print("No DSH tree detected. Restart with --scan-root /path/to/deepseek-harness.", flush=True)
     sandbox_status = status["sandbox"]

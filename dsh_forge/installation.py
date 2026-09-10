@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import datetime as dt
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -25,6 +24,7 @@ import time
 from typing import Any, Callable, Mapping, Sequence
 
 from .acquisition import RECEIPT_SCHEMA
+from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError, read_json, verify, write_json
 from .sandbox import ApptainerSandbox
 
@@ -321,10 +321,10 @@ def _install_lock(root: Path):
     lock = root / ".install.lock"
     descriptor = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        lock_file(descriptor)
         yield
     finally:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        unlock_file(descriptor)
         os.close(descriptor)
 
 

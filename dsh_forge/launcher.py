@@ -8,6 +8,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import signal
 import socket
@@ -21,9 +22,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
-import fcntl
 
 from .configurations import ConfigurationError, ConfigurationRegistry
+from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
@@ -34,6 +35,7 @@ CELL_REGISTRY_EVENT_LIMIT = 64
 VERSION_REGISTRY_SCHEMA_VERSION = 1
 PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION = 1
 DEFAULT_VERSIONS_DIRECTORY = "dsh-versions"
+PROFILE_SCAN_LIMIT = 500
 DEFAULT_VERSION_LAUNCH = {
     "surface": "web",
     "profile": "tui-min",
@@ -55,7 +57,8 @@ SAFE_ENV_NAMES = (
     "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "SHELL", "USER",
     "TERM", "COLORTERM", "NO_COLOR", "NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE",
     "REQUESTS_CA_BUNDLE", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
-    "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+    "http_proxy", "https_proxy", "no_proxy", "all_proxy", "SYSTEMROOT", "WINDIR",
+    "COMSPEC", "PATHEXT", "TEMP", "TMP",
 )
 SKIP_DIRS = {
     ".git",
@@ -157,6 +160,33 @@ def _git_metadata(root: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 def _process_birth(pid: int) -> str | None:
     """Return a stable process-start identity where the platform exposes one."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            process = ctypes.windll.kernel32.OpenProcess(0x0400, False, pid)
+            if not process:
+                return None
+            creation = wintypes.FILETIME()
+            exit_time = wintypes.FILETIME()
+            kernel = wintypes.FILETIME()
+            user = wintypes.FILETIME()
+            try:
+                if not ctypes.windll.kernel32.GetProcessTimes(
+                    process,
+                    ctypes.byref(creation),
+                    ctypes.byref(exit_time),
+                    ctypes.byref(kernel),
+                    ctypes.byref(user),
+                ):
+                    return None
+                ticks = (creation.dwHighDateTime << 32) | creation.dwLowDateTime
+                return f"windows-filetime:{ticks}"
+            finally:
+                ctypes.windll.kernel32.CloseHandle(process)
+        except (AttributeError, OSError):
+            return None
     try:
         fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()
         if len(fields) > 21:
@@ -196,6 +226,36 @@ def _tree_id(path: Path) -> str:
 
 def _version_id(path: Path) -> str:
     return "version_" + hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:12]
+
+
+def _profile_id(home: Path, name: str) -> str:
+    material = f"{home.resolve()}\0{name}".encode()
+    return "profile_" + hashlib.sha256(material).hexdigest()[:16]
+
+
+def _render_command(argv: Iterable[str], home: Path | None = None) -> str:
+    values = [str(item) for item in argv]
+    if os.name == "nt":
+        command = subprocess.list2cmdline(values)
+        if home:
+            escaped = str(home).replace("'", "''")
+            return f"$env:DSH_HOME = '{escaped}'; {command}"
+        return command
+    command = shlex.join(values)
+    return f"DSH_HOME={shlex.quote(str(home))} {command}" if home else command
+
+
+def _kill_windows_process_tree(pid: int) -> None:
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise OSError(str(error)) from error
 
 
 def _candidate_dirs(root: Path, max_depth: int = 3, max_nodes: int = 500) -> Iterable[Path]:
@@ -279,6 +339,7 @@ class Launcher:
         scan_roots: Iterable[str | Path] = (),
         state_root: str | Path | None = None,
         sandbox: ApptainerSandbox | None = None,
+        dsh_homes: Iterable[str | Path] = (),
     ):
         configured_state = state_root or os.environ.get("DSH_FORGE_STATE_DIR")
         self.state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
@@ -305,6 +366,7 @@ class Launcher:
         self._registry_generation = 0
         self._cells: dict[str, dict[str, Any]] = self._load_cells()
         self._trees: dict[str, dict[str, Any]] = {}
+        self._profiles: dict[str, dict[str, Any]] = {}
         self._coverage_gaps: list[str] = []
         self.sandbox = sandbox or ApptainerSandbox(SandboxConfig.from_environment(), self.state_root / "sandbox")
         self._sandbox_results = self._load_sandbox_results()
@@ -326,6 +388,15 @@ class Launcher:
             *self._configured_scan_roots,
             *(record["path"] for record in self._saved_roots.values()),
         ])
+        configured_home = os.environ.get("DSH_HOME")
+        home_candidates = [Path(value).expanduser() for value in dsh_homes]
+        home_candidates.extend(
+            Path(value).expanduser()
+            for value in os.environ.get("DSH_FORGE_DSH_HOMES", "").split(os.pathsep)
+            if value
+        )
+        home_candidates.append(Path(configured_home).expanduser() if configured_home else Path.home() / ".dsh")
+        self._dsh_homes = self._dedupe_paths(home_candidates)
         self.scan()
 
     def _load_roots(self) -> dict[str, dict[str, Any]]:
@@ -418,10 +489,10 @@ class Launcher:
         """Serialize registry mutations across the sidecar and CLI processes."""
         descriptor = os.open(self.cells_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            lock_file(descriptor)
             yield
         finally:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            unlock_file(descriptor)
             os.close(descriptor)
 
     @contextmanager
@@ -429,20 +500,20 @@ class Launcher:
         """Serialize saved local-version mutations across UI and CLI processes."""
         descriptor = os.open(self.roots_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            lock_file(descriptor)
             yield
         finally:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            unlock_file(descriptor)
             os.close(descriptor)
 
     @contextmanager
     def _package_installs_file_lock(self):
         descriptor = os.open(self.package_installs_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            lock_file(descriptor)
             yield
         finally:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            unlock_file(descriptor)
             os.close(descriptor)
 
     def _load_cells(self) -> dict[str, dict[str, Any]]:
@@ -658,6 +729,69 @@ class Launcher:
                 record["launchability"] = "sandbox-tested" if previous.get("status") == "passed" else "sandbox-test-failed"
         return record
 
+    @staticmethod
+    def _profile_surface(name: str, bundles: list[str]) -> str:
+        evidence = " ".join([name, *bundles]).lower()
+        if name == "web" or "dsh-web-app" in evidence:
+            return "web"
+        if name == "headless" or "dsh-headless" in evidence:
+            return "headless"
+        if name in {"sdk", "sdk-minimal", "acp"} or any(
+            marker in evidence for marker in ("dsh-sdk-app", "dsh-sdk-minimal", "dsh-acp-app")
+        ):
+            return "service"
+        return "terminal"
+
+    def _discover_profiles(self) -> dict[str, dict[str, Any]]:
+        profiles: dict[str, dict[str, Any]] = {}
+        for home in self._dsh_homes:
+            root = home / "profiles"
+            if root.is_symlink() or not root.is_dir():
+                continue
+            try:
+                candidates = sorted(root.iterdir(), key=lambda path: path.name.casefold())[:PROFILE_SCAN_LIMIT]
+            except OSError:
+                continue
+            for directory in candidates:
+                manifest_path = directory / "package.json"
+                if directory.is_symlink() or manifest_path.is_symlink() or not directory.is_dir() or not manifest_path.is_file():
+                    continue
+                manifest = _read_json(manifest_path)
+                dsh = manifest.get("dsh") if isinstance(manifest.get("dsh"), dict) else {}
+                profile = dsh.get("profile") if isinstance(dsh.get("profile"), dict) else None
+                bundles = profile.get("bundles") if profile else None
+                if not isinstance(bundles, list) or any(not isinstance(item, str) or not item for item in bundles):
+                    continue
+                if not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", directory.name):
+                    continue
+                dependencies = manifest.get("dependencies") if isinstance(manifest.get("dependencies"), dict) else {}
+                dependency_names = sorted(
+                    name for name in dependencies
+                    if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9@/_.-]{1,214}", name)
+                )
+                surface = self._profile_surface(directory.name, bundles)
+                identity = _profile_id(home, directory.name)
+                try:
+                    modified = int(manifest_path.stat().st_mtime * 1000)
+                except OSError:
+                    modified = 0
+                profiles[identity] = {
+                    "id": identity,
+                    "name": directory.name,
+                    "manifest_name": str(manifest.get("name") or directory.name)[:214],
+                    "home": _display_path(home),
+                    "path": _display_path(directory),
+                    "real_home": str(home.resolve()),
+                    "real_path": str(directory.resolve()),
+                    "bundles": list(bundles),
+                    "dependencies": dependency_names,
+                    "surface": surface,
+                    "launchability": "one-click" if surface in {"web", "headless"} else "terminal-only",
+                    "modified": modified,
+                    "command": f"python3 -m dsh_forge profiles run {identity}",
+                }
+        return profiles
+
     def scan(self) -> dict[str, Any]:
         with self._roots_file_lock():
             self._saved_roots = self._load_roots()
@@ -730,11 +864,16 @@ class Launcher:
                     self._save_roots()
         with self._lock:
             self._trees = trees
+            self._profiles = self._discover_profiles()
             self._coverage_gaps = gaps
         return self.status()
 
     def _public_tree(self, tree: dict[str, Any]) -> dict[str, Any]:
         return {k: v for k, v in tree.items() if not k.startswith("real_")}
+
+    @staticmethod
+    def _public_profile(profile: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in profile.items() if not key.startswith("real_")}
 
     def _public_saved_versions(self) -> list[dict[str, Any]]:
         versions: list[dict[str, Any]] = []
@@ -879,12 +1018,15 @@ class Launcher:
             with self._lock:
                 cells = [self._public_cell(cell) for cell in self._cells.values()]
                 trees = [self._public_tree(tree) for tree in self._trees.values()]
+                profiles = [self._public_profile(profile) for profile in self._profiles.values()]
         return {
             "api_version": "v1",
             "mode": "live-local-sidecar",
             "trees": trees,
+            "profiles": profiles,
             "cells": cells,
             "scan_roots": [_display_path(p) for p in self._scan_roots],
+            "dsh_homes": [_display_path(path) for path in self._dsh_homes],
             "saved_versions": self._public_saved_versions(),
             "package_installations": list(self._package_installations.values())[-25:],
             "trusted_package_recipes": self.trusted_package_recipes(),
@@ -931,6 +1073,14 @@ class Launcher:
                 "cross_process_lock": True,
                 "mcp_drafts_require_approval": True,
                 "community_code_executed_on_load": False,
+            },
+            "local_profiles": {
+                "available": True,
+                "discovery_executes_code": False,
+                "one_click_surfaces": ["web", "headless"],
+                "terminal_cli_available": True,
+                "one_click_backend": "managed-host-process",
+                "sandboxed": False,
             },
             "mcp_catalog": {
                 "available": True,
@@ -1033,6 +1183,147 @@ class Launcher:
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
+
+    def _profile(self, profile_id: str) -> dict[str, Any]:
+        with self._lock:
+            profile = self._profiles.get(profile_id)
+        if not profile:
+            raise LauncherError("Select a detected local DSH profile")
+        return profile
+
+    def _profile_tree(self, tree_id: str | None = None) -> dict[str, Any]:
+        if tree_id:
+            return self._tree(tree_id)
+        with self._lock:
+            candidate = next(
+                (
+                    tree for tree in self._trees.values()
+                    if tree.get("trust") != "foreign" and tree.get("launchability") == "ready"
+                ),
+                None,
+            )
+        if not candidate:
+            raise LauncherError("No launch-ready DSH executable was detected")
+        return candidate
+
+    @staticmethod
+    def _tree_argv(tree: dict[str, Any]) -> list[str]:
+        argv = [tree["real_exe"]]
+        if tree.get("real_node"):
+            argv.insert(0, tree["real_node"])
+        return argv
+
+    @staticmethod
+    def _profile_environment(home: Path) -> dict[str, str]:
+        environment = {name: value for name in SAFE_ENV_NAMES if (value := os.environ.get(name))}
+        environment.update({name: value for name in SECRET_NAMES if (value := os.environ.get(name))})
+        environment.update({
+            name: value for name, value in os.environ.items()
+            if name.startswith("DSH_") and not name.startswith("DSH_FORGE_")
+        })
+        environment["DSH_HOME"] = str(home)
+        return environment
+
+    def _profile_plan(self, raw: dict[str, Any], *, foreground: bool = False) -> dict[str, Any]:
+        profile = self._profile(str(raw.get("profile_id") or ""))
+        tree = self._profile_tree(str(raw.get("tree_id") or "") or None)
+        surface = profile["surface"]
+        task = str(raw.get("task") or "").strip()
+        if len(task) > 20_000:
+            raise LauncherError("Headless task exceeds the 20,000-character launcher limit")
+        if surface == "headless" and not task:
+            raise LauncherError("Enter a task for this headless profile")
+        if not foreground and surface not in {"web", "headless"}:
+            raise LauncherError("This profile needs an interactive terminal; use its displayed CLI command")
+        port = None
+        if surface == "web":
+            requested = raw.get("port")
+            if requested in {None, "", "auto"}:
+                port = self.suggested_port()
+            else:
+                try:
+                    port = int(requested)
+                except (TypeError, ValueError):
+                    raise LauncherError("Choose a numeric port or use automatic assignment") from None
+            if port in self.protected_ports:
+                raise LauncherError(f"Port {port} is protected and cannot be used by a profile")
+            with self._lock:
+                managed = next(
+                    (
+                        cell for cell in self._cells.values()
+                        if cell.get("port") == port and cell.get("state") not in {"stopped", "exited"}
+                    ),
+                    None,
+                )
+            if managed:
+                raise LauncherError(f"Port {port} belongs to managed cell {managed['name']}")
+            if not _port_available(port):
+                raise LauncherError(f"Port {port} is occupied by an unmanaged process; DSH Forge will not stop it")
+        argv = [*self._tree_argv(tree), "--profile", profile["name"]]
+        if surface == "web" and not foreground:
+            argv.extend(["--host", "127.0.0.1", "--port", str(port), "--no-open"])
+        elif surface == "headless":
+            argv.append(task)
+        extra_args = raw.get("extra_args") or []
+        if not isinstance(extra_args, list) or any(not isinstance(item, str) or "\0" in item for item in extra_args):
+            raise LauncherError("Profile arguments must be a list of strings")
+        argv.extend(extra_args)
+        return {
+            "profile": profile,
+            "tree": tree,
+            "surface": surface,
+            "task": task,
+            "port": port,
+            "argv": argv,
+            "home": Path(profile["real_home"]),
+            "open_browser": raw.get("open_browser") is not False,
+        }
+
+    def preview_profile(self, raw: dict[str, Any]) -> dict[str, Any]:
+        plan = self._profile_plan(raw)
+        environment = self._profile_environment(plan["home"])
+        return {
+            "profile": self._public_profile(plan["profile"]),
+            "tree": self._public_tree(plan["tree"]),
+            "argv": plan["argv"],
+            "command": _render_command(plan["argv"], plan["home"]),
+            "cwd": _display_path(self.launch_cwd),
+            "home": _display_path(plan["home"]),
+            "environment_keys": sorted(environment),
+            "credential_keys": [name for name in SECRET_NAMES if environment.get(name)],
+            "notes": [
+                "This is an existing local profile, so it runs directly on the host rather than inside Apptainer.",
+                "The selected profile and its installed plugins can read the user account and inherited credential keys.",
+                "Forge passes an exact argv without a shell and records the process identity before managing it.",
+            ],
+        }
+
+    def run_profile_foreground(
+        self,
+        profile_id: str,
+        *,
+        tree_id: str | None = None,
+        task: str = "",
+        extra_args: Iterable[str] = (),
+    ) -> int:
+        plan = self._profile_plan(
+            {
+                "profile_id": profile_id,
+                "tree_id": tree_id,
+                "task": task,
+                "extra_args": list(extra_args),
+            },
+            foreground=True,
+        )
+        try:
+            return subprocess.run(
+                plan["argv"],
+                cwd=self.launch_cwd,
+                env=self._profile_environment(plan["home"]),
+                check=False,
+            ).returncode
+        except OSError as error:
+            raise LauncherError(f"Could not run the selected profile: {error}") from error
 
     def _tree_for_saved_version(self, version_id: str) -> dict[str, Any]:
         if not re.fullmatch(r"version_[a-f0-9]{12}", str(version_id or "")):
@@ -1583,6 +1874,128 @@ class Launcher:
             self._sync_cells()
             return self._launch(raw)
 
+    def launch_profile(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Run an already-installed local profile as an identity-managed host process."""
+
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
+            return self._launch_profile(raw)
+
+    def _launch_profile(self, raw: dict[str, Any]) -> dict[str, Any]:
+        plan = self._profile_plan(raw)
+        with self._lock:
+            conflict = next(
+                (
+                    cell for cell in self._cells.values()
+                    if cell.get("profile_id") == plan["profile"]["id"]
+                    and cell.get("state") not in {"stopped", "exited", "identity-mismatch"}
+                ),
+                None,
+            )
+        if conflict:
+            raise LauncherError(f"Stop local profile cell {conflict['name']} before starting it again")
+
+        cell_id = "cell_" + uuid.uuid4().hex[:10]
+        log_path = self.logs_root / f"{cell_id}.log"
+        environment = self._profile_environment(plan["home"])
+        log_handle = log_path.open("ab", buffering=0)
+        try:
+            process = subprocess.Popen(
+                plan["argv"],
+                cwd=self.launch_cwd,
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as error:
+            raise LauncherError(f"Could not start the selected local profile: {error}") from error
+        finally:
+            log_handle.close()
+
+        birth = None
+        for _ in range(10):
+            birth = _process_birth(process.pid)
+            if birth or process.poll() is not None:
+                break
+            time.sleep(0.02)
+        if not birth:
+            try:
+                if os.name == "nt":
+                    _kill_windows_process_tree(process.pid)
+                else:
+                    process.terminate()
+                process.wait(timeout=1)
+            except (OSError, subprocess.TimeoutExpired):
+                process.kill()
+                process.wait(timeout=1)
+            raise LauncherError("The local profile started, but its process identity could not be recorded safely")
+
+        profile = plan["profile"]
+        tree = plan["tree"]
+        now = int(time.time() * 1000)
+        cell = {
+            "id": cell_id,
+            "name": f"{tree['short']}-{profile['name']}" + (f"-{plan['port']}" if plan["port"] else ""),
+            "state": "starting",
+            "treeId": tree["id"],
+            "version": tree["version"],
+            "commit": (tree.get("git") or {}).get("sha") or "package pin",
+            "surface": plan["surface"],
+            "profile": profile["name"],
+            "profile_id": profile["id"],
+            "port": plan["port"],
+            "pid": process.pid,
+            "procStart": birth,
+            "process_birth": birth,
+            "started": now,
+            "home": _display_path(plan["home"]),
+            "real_home": str(plan["home"]),
+            "isolation": "existing local profile home",
+            "workspace": _display_path(self.launch_cwd),
+            "real_workspace": "",
+            "workspace_isolation": "host working directory",
+            "resources": {
+                "cpu": "host shared",
+                "gpu": "host policy",
+                "ram": "host shared",
+                "pids": None,
+                "wall_seconds": None,
+                "enforced": False,
+                "note": "Existing local profiles run with ordinary host resources.",
+            },
+            "http": "pending" if plan["port"] else "n/a",
+            "loader": "not observed",
+            "process": "alive",
+            "execution_backend": "host-profile-v1",
+            "sandboxed": False,
+            "network": "host",
+            "secrets_forwarded": bool([name for name in SECRET_NAMES if environment.get(name)]),
+            "container_identity": None,
+            "parent_cell_id": str(raw.get("parent_cell_id") or "") or None,
+            "lineage_action": str(raw.get("lineage_action") or "local-profile-start"),
+            "configuration_id": None,
+            "purpose": "local-profile",
+            "created_at": now,
+            "updated_at": now,
+            "lifecycle": [],
+            "log_path": str(log_path),
+            "launch_spec": {
+                "profile_id": profile["id"],
+                "tree_id": tree["id"],
+                "task": plan["task"],
+                "port": "auto" if plan["port"] else None,
+                "open_browser": plan["open_browser"],
+            },
+        }
+        self._record_lifecycle(cell, "started", "existing local DSH profile started directly on the host")
+        with self._lock:
+            self._processes[cell_id] = process
+            self._cells[cell_id] = cell
+            self._save_cells()
+        return self._public_cell(cell)
+
     def launch_assistant(self, version_id: str) -> dict[str, Any]:
         """Start the dedicated discovery assistant as an ordinary sandbox cell."""
 
@@ -1794,10 +2207,13 @@ class Launcher:
         cell, process = self._owned_live_process(cell_id)
         pid = process.pid if process else cell["pid"]
         cell["state"] = "stopping"
-        self._record_lifecycle(cell, "stopping", "SIGTERM requested")
+        self._record_lifecycle(cell, "stopping", "verified process-tree stop requested")
         self._save_cells()
         try:
-            os.killpg(pid, signal.SIGTERM)
+            if os.name == "nt":
+                _kill_windows_process_tree(pid)
+            else:
+                os.killpg(pid, signal.SIGTERM)
         except OSError as error:
             raise LauncherError(f"Could not signal the verified process group: {error}") from error
         if process:
@@ -1806,15 +2222,23 @@ class Launcher:
             except subprocess.TimeoutExpired:
                 if _process_birth(process.pid) != cell["process_birth"]:
                     raise LauncherError("Process identity changed while stopping; refusing SIGKILL")
-                os.killpg(process.pid, signal.SIGKILL)
+                if os.name == "nt":
+                    _kill_windows_process_tree(process.pid)
+                else:
+                    os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=2)
             returncode = process.returncode
+            if os.name == "nt":
+                time.sleep(0.1)
         else:
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline and _process_birth(cell["pid"]) == cell["process_birth"]:
                 time.sleep(0.05)
             if _process_birth(cell["pid"]) == cell["process_birth"]:
-                os.killpg(cell["pid"], signal.SIGKILL)
+                if os.name == "nt":
+                    _kill_windows_process_tree(cell["pid"])
+                else:
+                    os.killpg(cell["pid"], signal.SIGKILL)
             returncode = None
         cell["state"] = "stopped"
         cell["process"] = "exited"
@@ -1833,6 +2257,13 @@ class Launcher:
             raw = dict(cell["launch_spec"])
             if cell["state"] not in {"stopped", "exited"}:
                 self._stop(cell_id, 3.0)
+            if cell.get("profile_id"):
+                raw.update({
+                    "port": "auto" if cell.get("port") else None,
+                    "parent_cell_id": cell_id,
+                    "lineage_action": "restart",
+                })
+                return self._launch_profile(raw)
             raw.update({
                 "port": "auto" if raw.get("port") else None,
                 "home_mode": "clone",
@@ -1853,6 +2284,8 @@ class Launcher:
                 cell = self._cells.get(cell_id)
             if not cell:
                 raise LauncherError("Unknown cell")
+            if cell.get("profile_id"):
+                raise LauncherError("Existing local profiles cannot be cloned; stop or restart the profile")
             raw = dict(cell["launch_spec"])
             raw.update({
                 "port": "auto" if raw.get("port") else None,

@@ -354,9 +354,9 @@ class ScannerAndRunner(LauncherFixture):
             cloned_private = self.launcher._cells[cloned["id"]]
             self.assertNotEqual(source["id"], cloned["id"])
             self.assertNotEqual(source["port"], cloned["port"])
-            self.assertEqual((Path(cloned_private["real_home"]) / "sessions" / "one.jsonl").read_text(), "session")
+            self.assertEqual((Path(cloned_private["real_home"]) / "sessions" / "one.jsonl").read_text(encoding="utf-8"), "session")
             self.assertFalse((Path(cloned_private["real_home"]) / ".env").exists())
-            self.assertEqual((Path(cloned_private["real_workspace"]) / "artifact.txt").read_text(), "artifact")
+            self.assertEqual((Path(cloned_private["real_workspace"]) / "artifact.txt").read_text(encoding="utf-8"), "artifact")
             self.assertEqual(self.launcher.artifacts(cloned["id"])[0]["path"], "artifact.txt")
             self.launcher.stop(source["id"])
             self.launcher.stop(cloned["id"])

@@ -56,6 +56,14 @@
   .repo-snapshot-summary .mono { font-size: 10px; }
   .repo-seed-badge { display: inline-flex; align-items: center; gap: 6px; color: oklch(0.78 0.11 235); font: 9px 'IBM Plex Mono', monospace; letter-spacing: .08em; margin-bottom: 2px; }
   .repo-seed-badge span { width: 5px; height: 5px; background: currentColor; border-radius: 50%; }
+  .curated-strip { flex:0 0 auto; padding:12px 24px 14px; border-bottom:1px solid oklch(0.3 0.012 255); background:linear-gradient(90deg,oklch(0.22 0.025 280),oklch(0.205 0.018 235)); }
+  .curated-strip-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:oklch(0.72 0.08 285); font:9px 'IBM Plex Mono',monospace; letter-spacing:.1em; text-transform:uppercase; }
+  .curated-scroll { display:flex; gap:9px; overflow-x:auto; padding:1px 1px 7px; scrollbar-width:thin; }
+  .curated-card { flex:0 0 250px; min-width:0; padding:10px 11px; border:1px solid oklch(0.41 0.055 265); border-radius:7px; background:oklch(0.245 0.027 265); color:inherit; text-align:left; cursor:pointer; }
+  .curated-card:hover { border-color:oklch(0.59 0.09 265); }
+  .curated-card span { display:block; color:oklch(0.7 0.075 275); font:8.5px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.06em; }
+  .curated-card strong { display:block; margin:4px 0; font-size:11.5px; font-weight:600; overflow-wrap:anywhere; }
+  .curated-card p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; margin:0; color:oklch(0.68 0.012 255); font-size:9.5px; line-height:1.45; }
   .repo-workspace { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0,1fr) 390px; min-height: 0; }
   .repo-browse { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid oklch(0.3 0.012 255); }
   .repo-controls { padding: 18px 24px 12px; border-bottom: 1px solid oklch(0.29 0.012 255); }
@@ -171,6 +179,32 @@
   <main class="fleet-shell" aria-label="Harness fleet launcher">
 
     <section class="versions-rail" aria-label="Local Harness versions">
+
+      <div>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+          <span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.76 0.01 255);">Installed profiles</span>
+          <span style="flex:1 1 auto;"></span><span class="repo-label">Auto-detected</span>
+        </div>
+        <div style="margin:0 0 9px; font:9px 'IBM Plex Mono',monospace; color:oklch(0.56 0.01 255);">{{ profileCountLabel }}</div>
+        <p style="margin:0 0 10px; color:oklch(0.63 0.012 255); font-size:10.5px; line-height:1.55;">Profiles under <span class="mono">$DSH_HOME/profiles</span> appear without running their code. Web and headless profiles can launch here; terminal services expose their CLI.</p>
+        <sc-if value="{{ noLocalProfiles }}" hint-placeholder-val="true"><div style="padding:11px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:10px/1.55 'IBM Plex Mono',monospace;">No installed profile manifests found.</div></sc-if>
+        <sc-if value="{{ hasLocalProfiles }}" hint-placeholder-val="false">
+          <div style="display:flex; flex-direction:column; gap:7px;">
+            <sc-for list="{{ localProfiles }}" as="p" hint-placeholder-count="2">
+              <article style="padding:10px; border:1px solid oklch(0.34 0.016 255); border-radius:8px; background:oklch(0.215 0.012 255);">
+                <div style="display:flex; align-items:center; gap:7px;"><strong style="font-size:11.5px; overflow-wrap:anywhere;">{{ p.name }}</strong><span style="flex:1 1 auto;"></span><span class="repo-label">{{ p.surface }}</span></div>
+                <div style="margin-top:5px; color:oklch(0.6 0.012 255); font:9px/1.5 'IBM Plex Mono',monospace;">{{ p.bundleLabel }} · {{ p.dependencyLabel }}<br />{{ p.home }}</div>
+                <sc-if value="{{ p.headless }}" hint-placeholder-val="false"><textarea value="{{ p.task }}" onChange="{{ p.setTask }}" placeholder="Task for this headless profile…" rows="2" style="width:100%; margin-top:7px; resize:vertical; padding:6px 7px; border:1px solid oklch(0.34 0.012 255); border-radius:5px; background:oklch(0.18 0.008 255); color:oklch(0.9 0.01 255); font:9.5px 'IBM Plex Mono',monospace;"></textarea></sc-if>
+                <button onClick="{{ p.run }}" disabled="{{ p.disabled }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid {{ p.buttonBorder }}; background:{{ p.buttonBg }}; color:oklch(0.91 0.03 155); font-size:10.5px; font-weight:600; cursor:pointer;">{{ p.buttonLabel }}</button>
+                <div style="margin-top:6px; overflow-wrap:anywhere; color:oklch(0.54 0.012 255); font:8.5px/1.45 'IBM Plex Mono',monospace;">{{ p.command }}</div>
+              </article>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="margin-top:9px; color:oklch(0.68 0.09 85); font:9px/1.5 'IBM Plex Mono',monospace;">Existing profiles run on the host with their normal access. The confirmation screen names this boundary.</div>
+      </div>
+
+      <div style="height:1px; margin:12px 0; background:oklch(0.28 0.012 255);"></div>
 
       <div>
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
@@ -439,7 +473,7 @@
               <button onClick="{{ c.open }}" disabled="{{ c.openDisabled }}">Open</button>
               <button onClick="{{ c.stop }}" disabled="{{ c.stopDisabled }}">Stop</button>
               <button onClick="{{ c.restart }}">Restart</button>
-              <button onClick="{{ c.clone }}">Clone Session</button>
+              <button onClick="{{ c.clone }}" disabled="{{ c.cloneDisabled }}">Clone Session</button>
               <button onClick="{{ c.inspect }}">Inspect</button>
             </div>
           </article>
@@ -523,6 +557,17 @@
         <span class="mono">fork snapshot {{ snapshotAt }} UTC</span>
       </div>
     </div>
+
+    <sc-if value="{{ hasCuratedPicks }}" hint-placeholder-val="true">
+      <section class="curated-strip" aria-label="Administrator curated hidden gems">
+        <div class="curated-strip-head"><span>Forge picks · hidden gems</span><span>Editorial curation, not a security verdict</span></div>
+        <div class="curated-scroll">
+          <sc-for list="{{ curatedPicks }}" as="pick" hint-placeholder-count="4">
+            <button class="curated-card" onClick="{{ pick.select }}"><span>{{ pick.kindLabel }}</span><strong>{{ pick.name }}</strong><p>{{ pick.summary }}</p></button>
+          </sc-for>
+        </div>
+      </section>
+    </sc-if>
 
     <div class="repo-workspace">
       <section class="repo-browse" aria-label="Community artifact list">
@@ -614,9 +659,20 @@
             <div class="repo-planned-actions"><button onClick="{{ installPackage }}" disabled="{{ installDisabled }}">{{ installLabel }}</button><button disabled title="Package composition and upload are a separate boundary.">Add to package</button></div>
             <p class="repo-muted">{{ installStatus }}. Installation verifies trust, acquires exact bytes, rejects unsafe archives, uses an offline disposable profile, boots it in Apptainer, and promotes only after both smoke checks pass.</p>
           </div></sc-if>
-          <sc-if value="{{ isRepositoryDetail }}" hint-placeholder-val="true"><div class="repo-detail-section"><h3>Package workflow <span class="repo-label">Metadata only</span></h3>
-            <div class="repo-planned-actions"><button disabled title="{{ acquireReason }}">{{ acquireLabel }}</button><button disabled>Add to package</button></div>
-            <p class="repo-muted">Select a signed package recipe to install; repository listings never authorize execution.</p>
+          <sc-if value="{{ isPluginDetail }}" hint-placeholder-val="true"><div class="repo-detail-section"><h3>Install command <span class="repo-label">Explicit local action</span></h3>
+            <sc-if value="{{ pluginInstallable }}" hint-placeholder-val="true">
+              <label class="repo-muted" for="plugin-profile">Target installed profile</label>
+              <select id="plugin-profile" value="{{ selectedCatalogProfileId }}" onChange="{{ setCatalogProfile }}" disabled="{{ noCatalogProfiles }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;"><sc-for list="{{ catalogProfiles }}" as="profile" hint-placeholder-count="1"><option value="{{ profile.id }}">{{ profile.name }} · {{ profile.home }}</option></sc-for></select>
+              <div class="mono" style="padding:9px; border:1px solid oklch(0.32 0.012 255); border-radius:5px; background:oklch(0.17 0.008 255); color:oklch(0.82 0.06 155); font-size:9.5px; overflow-wrap:anywhere;">{{ pluginInstallCommand }}</div>
+              <button class="repo-button repo-button-primary" onClick="{{ copyPluginInstall }}" style="width:100%; margin-top:8px;">Copy exact-version install command</button>
+              <p class="repo-muted">This invokes DSH’s native plugin manager and mutates the selected host profile. Review the package, integrity, permissions, and lifecycle scripts before running it.</p>
+            </sc-if>
+            <sc-if value="{{ pluginCommandUnavailable }}" hint-placeholder-val="false"><p class="repo-muted">This entry is an MCP-sidecar package, not a native npm DSH bundle. Forge will not invent an incompatible install command; use the publisher’s pinned package metadata.</p></sc-if>
+          </div></sc-if>
+          <sc-if value="{{ isForkDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Download fork <span class="repo-label">Pinned source archive</span></h3>
+            <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ forkDownloadUrl }}" target="_blank" rel="noopener noreferrer" download>Download .tar.gz</a><button class="repo-button" onClick="{{ copyForkDownload }}">Copy command</button></div>
+            <div class="mono" style="padding:9px; border:1px solid oklch(0.32 0.012 255); border-radius:5px; background:oklch(0.17 0.008 255); color:oklch(0.82 0.06 155); font-size:9.5px; overflow-wrap:anywhere;">{{ forkDownloadCommand }}</div>
+            <p class="repo-muted">The archive is pinned to the captured commit and is never extracted or executed by Forge. It is unsigned community source.</p>
           </div></sc-if>
         </sc-if>
         <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>

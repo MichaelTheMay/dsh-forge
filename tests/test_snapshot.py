@@ -12,8 +12,8 @@ spec.loader.exec_module(embed)
 
 class SnapshotValidation(unittest.TestCase):
     def setUp(self):
-        self.snapshot = json.loads((ROOT / "data/public-repos.seed.json").read_text())
-        self.package_feed = json.loads((ROOT / "data/package-catalog.seed.json").read_text())
+        self.snapshot = json.loads((ROOT / "data/public-repos.seed.json").read_text(encoding="utf-8"))
+        self.package_feed = json.loads((ROOT / "data/package-catalog.seed.json").read_text(encoding="utf-8"))
         self.snapshot["package_entries"] = self.package_feed["packages"]
         self.snapshot["package_catalog_digest"] = self.package_feed["catalog_digest"]
 

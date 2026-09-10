@@ -9,7 +9,6 @@ never imports or executes community code.
 from __future__ import annotations
 
 from contextlib import contextmanager
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -18,6 +17,8 @@ import secrets
 import tempfile
 import time
 from typing import Any, Iterator, Mapping
+
+from .file_lock import lock as lock_file, unlock as unlock_file
 
 
 CONFIGURATION_SCHEMA = "dsh-forge.configuration/v1"
@@ -121,10 +122,10 @@ class ConfigurationRegistry:
     def _lock(self) -> Iterator[None]:
         descriptor = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         try:
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            lock_file(descriptor)
             yield
         finally:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            unlock_file(descriptor)
             os.close(descriptor)
 
     def _load_unlocked(self) -> list[dict[str, Any]]:
