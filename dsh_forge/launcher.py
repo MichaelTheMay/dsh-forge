@@ -23,6 +23,8 @@ from typing import Any, Iterable
 
 import fcntl
 
+from .configurations import ConfigurationError, ConfigurationRegistry
+from .packages import PackageError
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
 
@@ -30,6 +32,7 @@ PROTECTED_PORTS = {3080, 3090}
 CELL_REGISTRY_SCHEMA_VERSION = 1
 CELL_REGISTRY_EVENT_LIMIT = 64
 VERSION_REGISTRY_SCHEMA_VERSION = 1
+PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION = 1
 DEFAULT_VERSIONS_DIRECTORY = "dsh-versions"
 DEFAULT_VERSION_LAUNCH = {
     "surface": "web",
@@ -291,6 +294,11 @@ class Launcher:
         self.cells_file = self.state_root / "cells.json"
         self.cells_lock_file = self.state_root / "cells.lock"
         self.sandbox_results_file = self.state_root / "sandbox-results.json"
+        self.package_installs_file = self.state_root / "package-installations.json"
+        self.package_installs_lock_file = self.state_root / "package-installations.lock"
+        self.trusted_package_recipes_root = self.state_root / "trusted-package-recipes"
+        self.trusted_package_recipes_root.mkdir(exist_ok=True, mode=0o700)
+        self.configuration_registry = ConfigurationRegistry(self.state_root)
         self._lock = threading.RLock()
         self._mutation_lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
@@ -300,6 +308,7 @@ class Launcher:
         self._coverage_gaps: list[str] = []
         self.sandbox = sandbox or ApptainerSandbox(SandboxConfig.from_environment(), self.state_root / "sandbox")
         self._sandbox_results = self._load_sandbox_results()
+        self._package_installations = self._load_package_installations()
         roots = [Path(p).expanduser() for p in scan_roots]
         env_roots = os.environ.get("DSH_FORGE_SCAN_ROOTS", "")
         roots.extend(Path(p).expanduser() for p in env_roots.split(os.pathsep) if p)
@@ -359,6 +368,31 @@ class Launcher:
             return {}
         return {str(key): value for key, value in raw.items() if isinstance(value, dict)}
 
+    def _load_package_installations(self) -> dict[str, dict[str, Any]]:
+        payload = _read_json(self.package_installs_file)
+        schema_version = payload.get("schema_version", PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION)
+        if schema_version != PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION:
+            raise LauncherError(
+                f"Unsupported package-install registry schema {schema_version}; "
+                f"expected {PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION}"
+            )
+        records: dict[str, dict[str, Any]] = {}
+        for record in payload.get("installations", []) if isinstance(payload.get("installations", []), list) else []:
+            if isinstance(record, dict) and re.fullmatch(r"install_[a-f0-9]{20}", str(record.get("id") or "")):
+                records[record["id"]] = record
+        return records
+
+    def _save_package_installations(self) -> None:
+        temporary = self.package_installs_file.with_suffix(".tmp")
+        payload = {
+            "schema_version": PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION,
+            "updated_at": int(time.time() * 1000),
+            "installations": list(self._package_installations.values())[-128:],
+        }
+        temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o600)
+        temporary.replace(self.package_installs_file)
+
     def _save_sandbox_results(self) -> None:
         temporary = self.sandbox_results_file.with_suffix(".tmp")
         temporary.write_text(json.dumps({"results": self._sandbox_results}, indent=2) + "\n", encoding="utf-8")
@@ -394,6 +428,16 @@ class Launcher:
     def _roots_file_lock(self):
         """Serialize saved local-version mutations across UI and CLI processes."""
         descriptor = os.open(self.roots_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    @contextmanager
+    def _package_installs_file_lock(self):
+        descriptor = os.open(self.package_installs_lock_file, os.O_CREAT | os.O_RDWR, 0o600)
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX)
             yield
@@ -842,6 +886,9 @@ class Launcher:
             "cells": cells,
             "scan_roots": [_display_path(p) for p in self._scan_roots],
             "saved_versions": self._public_saved_versions(),
+            "package_installations": list(self._package_installations.values())[-25:],
+            "trusted_package_recipes": self.trusted_package_recipes(),
+            "configurations": self.configurations(),
             "versions_directory": {
                 "path": _display_path(self.versions_directory),
                 "available": self.versions_directory.is_dir(),
@@ -877,6 +924,32 @@ class Launcher:
                 "source_directories_mutated": False,
                 "auto_discovery_directory": _display_path(self.versions_directory),
                 "one_click_presets": True,
+            },
+            "saved_configurations": {
+                "available": True,
+                "schema_version": 1,
+                "cross_process_lock": True,
+                "mcp_drafts_require_approval": True,
+                "community_code_executed_on_load": False,
+            },
+            "mcp_catalog": {
+                "available": True,
+                "transport": "stdio",
+                "install_or_run_tools_exposed": False,
+                "drafts_require_approval": True,
+            },
+            "forge_assistant": {
+                "available": sandbox_ready,
+                "backend": "dsh-web-apptainer-mcp-tools-v1",
+                "host_fallback": False,
+                "reason": sandbox_status.get("reason"),
+            },
+            "package_profile_installation": {
+                "available": sandbox_ready,
+                "backend": "signed-quarantine-apptainer-v1",
+                "atomic_promotion": True,
+                "host_fallback": False,
+                "reason": sandbox_status.get("reason"),
             },
             "parallel_local_cells": {
                 "available": sandbox_ready,
@@ -960,6 +1033,366 @@ class Launcher:
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
+
+    def _tree_for_saved_version(self, version_id: str) -> dict[str, Any]:
+        if not re.fullmatch(r"version_[a-f0-9]{12}", str(version_id or "")):
+            raise LauncherError("Choose a saved Harness version")
+        record = self._saved_roots.get(version_id)
+        if not record:
+            raise LauncherError("Saved Harness version was not found")
+        root = record["path"].resolve()
+        candidates = []
+        for tree in self._trees.values():
+            try:
+                Path(tree["real_path"]).resolve().relative_to(root)
+            except (KeyError, OSError, ValueError):
+                continue
+            candidates.append(tree)
+        exact = next((tree for tree in candidates if Path(tree["real_path"]).resolve() == root), None)
+        selected = exact or (candidates[0] if candidates else None)
+        if not selected:
+            raise LauncherError("Saved version no longer contains a detected Harness")
+        return self._tree(selected["id"])
+
+    def _update_package_installation(self, install_id: str, **changes: Any) -> dict[str, Any]:
+        with self._package_installs_file_lock():
+            self._package_installations = self._load_package_installations()
+            record = self._package_installations.get(install_id, {"id": install_id})
+            record.update(changes)
+            record["updated_at"] = int(time.time() * 1000)
+            self._package_installations[install_id] = record
+            self._save_package_installations()
+            return dict(record)
+
+    def _configuration_runtime(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Attach honest, reproducible run readiness without changing the record."""
+
+        try:
+            tree = self._tree_for_saved_version(record["version_id"])
+            version_ready = True
+        except LauncherError:
+            tree = None
+            version_ready = False
+        package_slug = record.get("package_slug")
+        unresolved_selections = bool(record.get("selections") and not package_slug)
+        installation: dict[str, Any] | None = None
+        if tree and package_slug:
+            profile = record["launch"]["profile"]
+            for candidate in reversed(list(self._package_installations.values())):
+                package = candidate.get("package") if isinstance(candidate.get("package"), dict) else {}
+                if (
+                    candidate.get("state") == "ready"
+                    and package.get("id") == package_slug
+                    and candidate.get("version_id") == record["version_id"]
+                    and candidate.get("tree_id") == tree["id"]
+                    and candidate.get("profile") == profile
+                ):
+                    installation = candidate
+                    break
+        runnable = bool(
+            record.get("status") == "ready"
+            and version_ready
+            and not unresolved_selections
+            and (not package_slug or installation)
+            and self.sandbox.ready
+        )
+        if record.get("status") != "ready":
+            reason = "Review and approve this draft before running it"
+        elif not version_ready:
+            reason = "The saved Harness version is missing or not launch-ready"
+        elif unresolved_selections:
+            reason = "Compose the selected catalog items into one signed package recipe before running"
+        elif package_slug and not installation:
+            reason = "Install and sandbox-test the signed package for this Harness version first"
+        elif not self.sandbox.ready:
+            reason = str(self.sandbox.status().get("reason") or "Apptainer is not ready")
+        else:
+            reason = "Ready for fail-closed Apptainer launch"
+        return {
+            **record,
+            "runtime": {
+                "runnable": runnable,
+                "reason": reason,
+                "tree_id": tree.get("id") if tree else None,
+                "package_install_id": installation.get("id") if installation else None,
+            },
+        }
+
+    def configurations(self) -> list[dict[str, Any]]:
+        try:
+            return [self._configuration_runtime(record) for record in self.configuration_registry.list()]
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+
+    def save_configuration(
+        self,
+        *,
+        name: str,
+        version_id: str,
+        package_slug: str | None = None,
+        description: str = "",
+        selections: Any = None,
+        launch: Any = None,
+        draft: bool = False,
+        source: str = "user",
+    ) -> dict[str, Any]:
+        """Persist an inert record after resolving its local Harness identity."""
+
+        self._tree_for_saved_version(version_id)
+        if package_slug is not None and not any(
+            recipe["slug"] == package_slug for recipe in self.trusted_package_recipes()
+        ):
+            raise LauncherError("Choose a locally configured signed package recipe")
+        try:
+            saved = self.configuration_registry.save(
+                name=name,
+                description=description,
+                version_id=version_id,
+                package_slug=package_slug,
+                selections=selections,
+                launch=launch,
+                status="draft" if draft else "ready",
+                source=source,
+            )
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+        return self._configuration_runtime(saved)
+
+    def approve_configuration(self, configuration_id: str) -> dict[str, Any]:
+        try:
+            record = self.configuration_registry.approve(configuration_id)
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+        return self._configuration_runtime(record)
+
+    def remove_configuration(self, configuration_id: str) -> list[dict[str, Any]]:
+        try:
+            records = self.configuration_registry.remove(configuration_id)
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+        return [self._configuration_runtime(record) for record in records]
+
+    def _promoted_configuration_home(self, record: dict[str, Any], tree: dict[str, Any]) -> Path | None:
+        if not record.get("package_slug"):
+            return None
+        runtime = self._configuration_runtime(record)["runtime"]
+        install_id = runtime.get("package_install_id")
+        installation = self._package_installations.get(str(install_id or ""))
+        if not installation:
+            raise LauncherError(runtime["reason"])
+        home = Path(str(installation.get("home") or ""))
+        release_root = (
+            self.state_root / "package-profiles" / "profiles" / tree["id"]
+            / record["launch"]["profile"] / "releases"
+        ).resolve()
+        if home.is_symlink() or not home.is_dir():
+            raise LauncherError("Promoted package profile is missing or unsafe")
+        try:
+            resolved = home.resolve()
+            resolved.relative_to(release_root)
+        except (OSError, ValueError) as error:
+            raise LauncherError("Promoted package profile escapes its release root") from error
+        receipt_path = resolved / ".dsh-forge-install-receipt.json"
+        if receipt_path.is_symlink() or not receipt_path.is_file():
+            raise LauncherError("Promoted package profile has no immutable installation receipt")
+        receipt = _read_json(receipt_path)
+        if not (
+            receipt.get("install_id") == install_id
+            and receipt.get("tree_id") == tree["id"]
+            and receipt.get("profile") == record["launch"]["profile"]
+            and (receipt.get("package") or {}).get("id") == record["package_slug"]
+            and receipt.get("ready_for_sandbox_launch") is True
+            and receipt.get("atomically_promoted") is True
+        ):
+            raise LauncherError("Promoted package profile receipt does not match the saved configuration")
+        return resolved
+
+    def run_configuration(self, configuration_id: str, *, task: str | None = None) -> dict[str, Any]:
+        """Launch a reviewed configuration, cloning only a tested promoted home."""
+
+        try:
+            record = self.configuration_registry.get(configuration_id)
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+        runtime = self._configuration_runtime(record)["runtime"]
+        if not runtime["runnable"]:
+            raise LauncherError(runtime["reason"])
+        tree = self._tree_for_saved_version(record["version_id"])
+        launch = dict(record["launch"])
+        if task is not None:
+            if launch["surface"] != "headless":
+                raise LauncherError("Task overrides are supported only for headless configurations")
+            launch["task"] = str(task)
+        promoted_home = self._promoted_configuration_home(record, tree)
+        raw = {
+            "tree_id": tree["id"],
+            **launch,
+            "home_mode": "clone" if promoted_home else "fresh",
+            "clone_source": str(promoted_home) if promoted_home else "",
+            "configuration_id": record["id"],
+            "lineage_action": "configuration-run",
+        }
+        return self.launch(raw)
+
+    def install_acquired_package(
+        self,
+        *,
+        tree_id: str,
+        envelope: dict[str, Any],
+        trust_root: dict[str, Any],
+        receipt_path: str | Path,
+        install_root: str | Path,
+        profile: str = "web",
+        timeout_seconds: int = 900,
+    ) -> dict[str, Any]:
+        """Low-level CLI boundary for an already acquired signed package."""
+
+        from .installation import install_in_sandbox
+
+        tree = self._tree(tree_id)
+        try:
+            return install_in_sandbox(
+                envelope,
+                trust_root,
+                receipt_path,
+                tree=tree,
+                sandbox=self.sandbox,
+                install_root=install_root,
+                profile=profile,
+                timeout_seconds=timeout_seconds,
+            )
+        except (PackageError, SandboxError) as error:
+            raise LauncherError(str(error)) from error
+
+    def install_package(
+        self,
+        *,
+        version_id: str,
+        envelope: dict[str, Any],
+        trust_root: dict[str, Any],
+        profile: str = "web",
+        timeout_seconds: int = 900,
+    ) -> dict[str, Any]:
+        """Acquire, inspect, sandbox-test, and atomically promote one package."""
+
+        from .acquisition import acquire
+        from .installation import install_in_sandbox
+        from .packages import verify
+
+        tree = self._tree_for_saved_version(version_id)
+        install_id = "install_" + secrets.token_hex(10)
+        try:
+            verified = verify(envelope, trust_root)
+            package = verified["manifest"]["package"]
+        except PackageError as error:
+            raise LauncherError(str(error)) from error
+        self._update_package_installation(
+            install_id,
+            state="running",
+            step="verify",
+            detail="Verifying signed package and explicit trust root",
+            package=package,
+            version_id=version_id,
+            tree_id=tree["id"],
+            profile=profile,
+            rollback_preserved=True,
+            created_at=int(time.time() * 1000),
+        )
+
+        def progress(step: str, detail: str) -> None:
+            self._update_package_installation(install_id, state="running", step=step, detail=detail)
+
+        try:
+            progress("acquire", "Acquiring exact bytes into content-addressed quarantine")
+            acquisition = acquire(
+                envelope,
+                trust_root,
+                self.state_root / "quarantine",
+                total_timeout_seconds=min(timeout_seconds, 3600),
+            )
+            result = install_in_sandbox(
+                envelope,
+                trust_root,
+                acquisition["receipt"],
+                tree=tree,
+                sandbox=self.sandbox,
+                install_root=self.state_root / "package-profiles",
+                profile=profile,
+                timeout_seconds=timeout_seconds,
+                transaction_id=install_id,
+                progress=progress,
+            )
+        except (PackageError, SandboxError) as error:
+            self._update_package_installation(
+                install_id,
+                state="failed",
+                step="failed",
+                detail=str(error),
+                error={"code": getattr(error, "code", "install_failed"), "message": str(error)},
+                rollback_preserved=True,
+            )
+            raise LauncherError(str(error)) from error
+        return self._update_package_installation(
+            install_id,
+            state="ready",
+            step="complete",
+            detail="Compatibility-tested profile promoted",
+            receipt=result["receipt"],
+            home=result["home"],
+            rollback_install_id=result["rollback_install_id"],
+            rollback_preserved=True,
+        )
+
+    def trusted_package_recipes(self) -> list[dict[str, Any]]:
+        """List only local recipe slots; signatures are rechecked at install time."""
+
+        recipes: list[dict[str, Any]] = []
+        try:
+            candidates = sorted(self.trusted_package_recipes_root.iterdir())
+        except OSError:
+            return recipes
+        for directory in candidates[:128]:
+            if directory.is_symlink() or not directory.is_dir() or not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", directory.name):
+                continue
+            envelope = directory / "envelope.json"
+            trust_root = directory / "trust-root.json"
+            if envelope.is_file() and trust_root.is_file() and not envelope.is_symlink() and not trust_root.is_symlink():
+                recipes.append({"slug": directory.name, "configured": True, "verified_at_install": True})
+        return recipes
+
+    def install_trusted_catalog_package(
+        self,
+        *,
+        package_slug: str,
+        version_id: str,
+        profile: str = "web",
+    ) -> dict[str, Any]:
+        """Install one locally trusted catalog recipe without accepting browser file paths."""
+
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", str(package_slug or "")):
+            raise LauncherError("Choose a valid package")
+        directory = self.trusted_package_recipes_root / package_slug
+        if directory.is_symlink() or not directory.is_dir():
+            raise LauncherError("This package has no locally configured signed recipe")
+        envelope_path = directory / "envelope.json"
+        trust_path = directory / "trust-root.json"
+        if envelope_path.is_symlink() or trust_path.is_symlink():
+            raise LauncherError("Trusted package recipe may not contain symlinked inputs")
+        from .packages import read_json, verify
+        try:
+            envelope = read_json(envelope_path)
+            trust_root = read_json(trust_path)
+            manifest = verify(envelope, trust_root)["manifest"]
+        except PackageError as error:
+            raise LauncherError(str(error)) from error
+        if manifest["package"]["id"] != package_slug:
+            raise LauncherError("Signed package identity does not match its catalog route")
+        return self.install_package(
+            version_id=version_id,
+            envelope=envelope,
+            trust_root=trust_root,
+            profile=profile,
+        )
 
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
         tree = self._tree(str(raw.get("tree_id", "")))
@@ -1150,18 +1583,89 @@ class Launcher:
             self._sync_cells()
             return self._launch(raw)
 
-    def _launch(self, raw: dict[str, Any]) -> dict[str, Any]:
+    def launch_assistant(self, version_id: str) -> dict[str, Any]:
+        """Start the dedicated discovery assistant as an ordinary sandbox cell."""
+
+        tree = self._tree_for_saved_version(version_id)
+        raw = {
+            "tree_id": tree["id"],
+            "surface": "web",
+            "profile": "web",
+            "port": "auto",
+            "open_browser": False,
+            "home_mode": "fresh",
+            "workspace": "managed",
+            "network": "host",
+            "resources": {"gpu": "none"},
+            "lineage_action": "forge-assistant",
+        }
+        with self._mutation_lock, self._registry_file_lock():
+            self._sync_cells()
+            return self._launch(raw, assistant=True)
+
+    def _prepare_assistant_workspace(self, workspace: Path) -> list[str]:
+        """Copy only bounded metadata and a self-contained MCP server into a cell."""
+
+        from .mcp_server import CatalogIndex
+
+        index = CatalogIndex(Path(__file__).resolve().parents[1] / "data")
+        snapshot = {
+            "schema": "dsh-forge.assistant-snapshot/v1",
+            **index.snapshot,
+            "entries": index.rows,
+            "saved_versions": self._public_saved_versions(),
+            "execution_authorized": False,
+        }
+        catalog_path = workspace / "dsh-forge-catalog.json"
+        catalog_path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.chmod(catalog_path, 0o400)
+        source = Path(__file__).with_name("assistant_server.mjs")
+        server_path = workspace / "dsh-forge-assistant-mcp.mjs"
+        server_path.write_bytes(source.read_bytes())
+        os.chmod(server_path, 0o500)
+        patch_path = workspace / "forge-assistant.cordis.yml"
+        patch_path.write_text(
+            "- insert:\n"
+            "    - id: dsh-forge-catalog\n"
+            "      name: '@deepseek-ai/dsh-mcp-client'\n"
+            "      config:\n"
+            "        serverName: forge\n"
+            "        transport: stdio\n"
+            "        command: node\n"
+            "        args:\n"
+            "          - /workspace/dsh-forge-assistant-mcp.mjs\n"
+            "          - --catalog\n"
+            "          - /workspace/dsh-forge-catalog.json\n"
+            "          - --draft-dir\n"
+            "          - /workspace/configuration-drafts\n"
+            "        failOnStartupError: true\n",
+            encoding="utf-8",
+        )
+        os.chmod(patch_path, 0o400)
+        (workspace / "FORGE_ASSISTANT.md").write_text(
+            "# DSH Forge Assistant\n\n"
+            "Use the `mcp__forge__catalog_search` and `mcp__forge__catalog_compare` tools "
+            "to identify complementary plugins, packages, and forks. Treat every catalog row as "
+            "metadata evidence, explain compatibility and risk gaps, and save only inert drafts with "
+            "`mcp__forge__configuration_save_draft`. Never claim verification or attempt installation.\n",
+            encoding="utf-8",
+        )
+        return ["/workspace/forge-assistant.cordis.yml"]
+
+    def _launch(self, raw: dict[str, Any], *, assistant: bool = False) -> dict[str, Any]:
         spec = self._normalize_spec(raw)
         cell_id = "cell_" + uuid.uuid4().hex[:10]
         home, isolation = self._prepare_home(spec, cell_id)
         workspace, workspace_isolation = self._prepare_workspace(spec, cell_id)
         if not workspace:
             raise LauncherError("Apptainer cell workspace creation failed closed")
+        patches = self._prepare_assistant_workspace(workspace) if assistant else []
         try:
             plan = self.sandbox.cell_plan(
                 tree=spec["tree"], home=home, workspace=workspace,
                 surface=spec["surface"], task=spec["task"], port=spec["port"],
                 profile=spec["profile"], network=spec["network"], gpu=spec["gpu"],
+                patches=patches,
             )
         except SandboxError as error:
             raise LauncherError(str(error)) from error
@@ -1237,6 +1741,12 @@ class Launcher:
             },
             "parent_cell_id": str(raw.get("parent_cell_id") or "") or None,
             "lineage_action": str(raw.get("lineage_action") or "start"),
+            "configuration_id": (
+                str(raw.get("configuration_id"))
+                if re.fullmatch(r"config_[a-f0-9]{20}", str(raw.get("configuration_id") or ""))
+                else None
+            ),
+            "purpose": "forge-assistant" if assistant else "user-cell",
             "created_at": int(time.time() * 1000),
             "updated_at": int(time.time() * 1000),
             "lifecycle": [],

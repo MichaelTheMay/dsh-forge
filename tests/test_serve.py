@@ -549,6 +549,37 @@ class LauncherServer(LauncherFixture):
         self.assertTrue(updated["launch"]["open_browser"])
         self.assertEqual(updated["launch"]["resources"]["gpu"], "allocated")
 
+    def test_configuration_endpoints_save_and_run_without_accepting_paths(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with self.request(
+            "/api/v1/configurations",
+            {"name": "Web configuration", "version_id": saved_id, "launch": {"profile": "web"}},
+            cookie=cookie,
+        ) as response:
+            configuration = json.load(response)
+        self.assertTrue(configuration["runtime"]["runnable"])
+        with mock.patch.object(self.launcher, "launch", return_value={"id": "cell_web"}) as launch:
+            with self.request(
+                "/api/v1/configurations/run", {"id": configuration["id"]}, cookie=cookie,
+            ) as response:
+                started = json.load(response)
+        self.assertEqual(started["id"], "cell_web")
+        self.assertNotIn("path", launch.call_args.args[0])
+
+    def test_assistant_endpoint_passes_only_saved_version_identity(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        with mock.patch.object(self.launcher, "launch_assistant", return_value={"id": "cell_assistant"}) as start:
+            with self.request(
+                "/api/v1/assistant/start", {"version_id": saved_id}, cookie=cookie,
+            ) as response:
+                payload = json.load(response)
+        self.assertEqual(payload["id"], "cell_assistant")
+        start.assert_called_once_with(saved_id)
+
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()
         self.assertEqual(payload["mode"], "live-local-sidecar")

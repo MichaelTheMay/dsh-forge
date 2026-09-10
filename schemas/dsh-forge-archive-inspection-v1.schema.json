@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge archive inspection v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "package", "payload_digest", "composition_digest", "inspected_at", "artifacts", "limits", "archives_extracted_on_host", "lifecycle_scripts_allowed", "host_installation_authorized", "sandbox_installation_authorized", "execution_authorized"],
+  "properties": {
+    "schema": {"const": "dsh-forge.archive-inspection/v1"},
+    "package": {"type": "object"},
+    "payload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "composition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "inspected_at": {"type": "string", "format": "date-time"},
+    "artifacts": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"type": "object"}},
+    "limits": {"type": "object"},
+    "archives_extracted_on_host": {"const": false},
+    "lifecycle_scripts_allowed": {"const": false},
+    "host_installation_authorized": {"const": false},
+    "sandbox_installation_authorized": {"const": true},
+    "execution_authorized": {"const": false}
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "dsh-forge.package-spec/v1",
+  "package": {
+    "id": "agent-teams-builder",
+    "name": "AgentTeams builder",
+    "version": "1.0.0",
+    "description": "Pinned AgentTeams package for a sandbox-tested DeepSeek Harness 0.1.2-rc.1 profile.",
+    "license": "MIT",
+    "created_at": "2026-09-06T00:00:00Z"
+  },
+  "compatibility": {
+    "dsh": "0.1.2-rc.1",
+    "node": ">=22.19.0 <23",
+    "platforms": ["linux-arm64", "linux-x64"]
+  },
+  "plugins": [
+    {
+      "id": "dsh-agent-teams",
+      "source": {
+        "kind": "npm",
+        "name": "@nanmicoder/dsh-agent-teams",
+        "version": "0.1.16-rc.1",
+        "url": "https://registry.npmjs.org/@nanmicoder/dsh-agent-teams/-/dsh-agent-teams-0.1.16-rc.1.tgz",
+        "integrity": "sha512-gHrlUXuFnqz4wBw55v3ury/0PhNNCZ8/1eYycXUWGUgz97sxMzOMOLGGtpBijQ2/TzOqgRkv43+i/zKFU5GIZQ=="
+      },
+      "repository": {
+        "url": "https://github.com/NanmiCoder/dsh-agent-teams",
+        "commit": "eb09334f9a76dac890a25673449a6a51d5ceffcb"
+      },
+      "permissions": [
+        "filesystem:read",
+        "filesystem:write",
+        "model:invoke",
+        "session:read",
+        "session:write"
+      ],
+      "requires": [],
+      "conflicts_with": []
+    }
+  ],
+  "load_order": ["dsh-agent-teams"],
+  "provenance": {
+    "created_by": "DSH Forge AgentTeams evaluation",
+    "source": "organization_release",
+    "evidence": "metadata_only_unexecuted"
+  }
+}

@@ -108,6 +108,27 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertTrue(launch["open_browser"])
         self.assertEqual(launch["port"], "auto")
 
+    def test_configurations_save_list_and_run_use_stable_ids(self):
+        _, added = self.invoke("versions", "add", str(self.tree))
+        saved_id = added["data"]["saved_versions"][0]["id"]
+        code, saved = self.invoke(
+            "configurations", "save", "--name", "Review Harness",
+            "--version", saved_id, "--profile", "web",
+        )
+        self.assertEqual(code, 0)
+        configuration_id = saved["data"]["id"]
+        self.assertRegex(configuration_id, r"^config_[a-f0-9]{20}$")
+
+        code, listed = self.invoke("configs", "list")
+        self.assertEqual(code, 0)
+        self.assertEqual(listed["data"]["configurations"][0]["id"], configuration_id)
+
+        with mock.patch.object(self.launcher, "launch", return_value={"id": "cell_cli"}) as launch:
+            code, started = self.invoke("configurations", "run", configuration_id)
+        self.assertEqual(code, 0)
+        self.assertEqual(started["data"]["id"], "cell_cli")
+        self.assertEqual(launch.call_args.args[0]["configuration_id"], configuration_id)
+
     def test_start_fails_when_apptainer_runner_is_unavailable(self):
         class UnavailableSandbox(FakeCellSandbox):
             ready = False

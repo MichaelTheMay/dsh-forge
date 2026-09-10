@@ -1345,6 +1345,9 @@ const REPOSITORY_CATALOG = [
   riskLabel: a.curation ? a.curation.security_risk + ' risk' : '',
   archivedLabel: a.archived ? 'Archived' : '',
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
+  featured: a.artifact_type === 'plugin'
+    ? !!(a.curation && a.curation.rank <= 3)
+    : Number(a.seed_rank || 999) <= 3,
 }));
 
 const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(a => ({
@@ -1392,6 +1395,7 @@ const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(a => ({
 const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
 
 function catalogRoute(hash) {
+  if (hash === '#assistant') return { view: 'assistant', type: 'package' };
   if (hash === '#forks' || hash === '#public-repos') return { view: 'catalog', type: 'fork' };
   if (hash === '#packages' || hash === '#community') return { view: 'catalog', type: 'package', packageSlug: null };
   const packageMatch = /^#packages\/([a-z0-9][a-z0-9-]{1,63})$/.exec(hash);
@@ -1413,6 +1417,17 @@ class Component extends DCLogic {
       treeId: PREVIEW_TREES[0].id,
       trees: PREVIEW_TREES,
       savedVersions: [],
+      trustedPackageRecipes: [],
+      packageInstallations: [],
+      configurations: [],
+      packageVersionId: '',
+      packageInstallBusy: false,
+      configurationBusy: false,
+      catalogScope: 'all',
+      assistantVersionId: '',
+      assistantBusy: false,
+      assistantCellId: null,
+      assistantUrl: '',
       versionsDirectory: { path: '~/dsh-versions', available: false, auto_scan: true },
       versionFormOpen: false,
       versionPath: '',
@@ -1495,7 +1510,7 @@ class Component extends DCLogic {
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
         ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
-        : 'launch';
+        : (view === 'assistant' ? 'assistant' : 'launch');
     }
   }
 
@@ -1541,6 +1556,109 @@ class Component extends DCLogic {
     }
   }
 
+  async installPackage(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    if (!this.state.trustedPackageRecipes.some(item => item.slug === detail.slug && item.configured)) {
+      return this.flash('Add a signed envelope and trust root for this package first');
+    }
+    this.setState({ packageInstallBusy: true, packageVersionId: versionId });
+    try {
+      await this.api('/api/v1/packages/install', {
+        method: 'POST',
+        body: JSON.stringify({ package_slug: detail.slug, version_id: versionId, profile: 'web' })
+      });
+      await this.refreshStatus(true);
+      this.flash('Package verified, tested, and saved');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.flash(error.message);
+    } finally {
+      this.setState({ packageInstallBusy: false });
+    }
+  }
+
+  async saveCatalogConfiguration(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    const recipeConfigured = !!detail.catalogPackage && this.state.trustedPackageRecipes.some(
+      item => item.slug === detail.slug && item.configured
+    );
+    this.setState({ configurationBusy: true, packageVersionId: versionId });
+    try {
+      const payload = {
+        name: detail.name + ' configuration',
+        description: 'Saved from the bounded DSH Forge catalog snapshot.',
+        version_id: versionId,
+        package_slug: recipeConfigured ? detail.slug : null,
+        selections: [{ type: detail.type, id: detail.id }],
+        launch: {
+          surface: 'web', profile: 'web', task: '', port: 'auto', open_browser: false,
+          network: 'host', resources: { gpu: 'none' }
+        },
+        draft: !recipeConfigured
+      };
+      await this.api('/api/v1/configurations', { method: 'POST', body: JSON.stringify(payload) });
+      await this.refreshStatus(true);
+      this.flash(recipeConfigured ? 'Configuration saved' : 'Draft saved; compose and sign it before run');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ configurationBusy: false });
+    }
+  }
+
+  async runConfiguration(configuration) {
+    if (!configuration.runtime || !configuration.runtime.runnable) {
+      return this.flash((configuration.runtime && configuration.runtime.reason) || 'Configuration is not ready');
+    }
+    this.setState({ configurationBusy: true });
+    try {
+      const cell = await this.api('/api/v1/configurations/run', {
+        method: 'POST', body: JSON.stringify({ id: configuration.id })
+      });
+      await this.refreshStatus(true);
+      this.setState({ view: 'launch', selectedCell: cell.id, inspectorTab: 'logs' });
+      if (typeof window !== 'undefined') window.location.hash = 'launch';
+      this.flash('Configuration started inside Apptainer');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ configurationBusy: false });
+    }
+  }
+
+  async refreshAssistantUrl(cells = this.state.cells) {
+    const assistant = [...cells].reverse().find(cell => cell.purpose === 'forge-assistant' && cell.open_ready);
+    if (!assistant || assistant.id === this.state.assistantCellId && this.state.assistantUrl) return;
+    try {
+      const payload = await this.api('/api/v1/cells/' + encodeURIComponent(assistant.id) + '/open-url');
+      this.setState({ assistantCellId: assistant.id, assistantUrl: payload.url });
+    } catch {}
+  }
+
+  async startAssistant() {
+    const versionId = this.state.assistantVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    this.setState({ assistantBusy: true, assistantVersionId: versionId, assistantUrl: '' });
+    try {
+      const cell = await this.api('/api/v1/assistant/start', {
+        method: 'POST', body: JSON.stringify({ version_id: versionId })
+      });
+      this.setState({ assistantCellId: cell.id });
+      await this.refreshStatus(true);
+      this.flash('Forge Assistant is starting in an isolated Harness');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ assistantBusy: false });
+    }
+  }
+
   flash(msg) {
     this.setState({ toast: msg });
     if (this.toastTimer) clearTimeout(this.toastTimer);
@@ -1575,6 +1693,9 @@ class Component extends DCLogic {
       sidecarConnected: true, statusLoaded: true, trees, treeId: current,
       cells, selectedCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
+      trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
+      packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
+      configurations: Array.isArray(status.configurations) ? status.configurations : [],
       versionsDirectory: status.versions_directory || this.state.versionsDirectory,
       suggestedPort: status.suggested_port || this.state.suggestedPort,
       coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
@@ -1589,7 +1710,9 @@ class Component extends DCLogic {
       return;
     }
     try {
-      this.applyStatus(await this.api('/api/v1/status'));
+      const status = await this.api('/api/v1/status');
+      this.applyStatus(status);
+      await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
     } catch (error) {
       this.setState({ statusLoaded: true, sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
@@ -2010,6 +2133,7 @@ class Component extends DCLogic {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
         a.type === s.catalogType &&
+        (s.catalogScope === 'all' || a.featured) &&
         (!s.knownLicenseOnly || a.licenseOk);
     }).sort((a, b) => {
       if (s.catalogSort === 'name') return a.slug.localeCompare(b.slug);
@@ -2023,8 +2147,21 @@ class Component extends DCLogic {
     });
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
+    const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
+      id: item.id,
+      label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
+      selected: item.id === (s.packageVersionId || ((s.savedVersions.find(candidate => candidate.state === 'ready') || {}).id)),
+    }));
+    const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
+    const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
+      item => item.slug === detail.slug && item.configured
+    );
+    const latestPackageInstall = detail.catalogPackage
+      ? [...s.packageInstallations].reverse().find(item => item.package && item.package.id === detail.slug)
+      : null;
     const results = filtered.map(a => ({
       ...a, selected: a.id === detail.id,
+      featuredLabel: a.featured ? 'Featured' : '',
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
       border: a.id === detail.id ? SELB : BORDER,
       bg: a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
@@ -2097,8 +2234,10 @@ class Component extends DCLogic {
       catalogEnabled,
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
+      showAssistant: s.view === 'assistant',
       goLaunch: () => this.navigate('launch'),
       goCatalog: () => this.navigate('catalog', 'package'),
+      goAssistant: () => this.navigate('assistant'),
       modeLabel: s.sidecarConnected ? 'Local' : 'Preview',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,
@@ -2110,6 +2249,9 @@ class Component extends DCLogic {
       catalogTabBg: s.view === 'catalog' ? 'oklch(0.3 0.02 255)' : 'transparent',
       catalogTabFg: s.view === 'catalog' ? 'oklch(0.95 0.01 255)' : MUTED,
       catalogTabBorder: s.view === 'catalog' ? 'oklch(0.42 0.03 255)' : 'transparent',
+      assistantTabBg: s.view === 'assistant' ? 'oklch(0.3 0.02 255)' : 'transparent',
+      assistantTabFg: s.view === 'assistant' ? 'oklch(0.95 0.01 255)' : MUTED,
+      assistantTabBorder: s.view === 'assistant' ? 'oklch(0.42 0.03 255)' : 'transparent',
       cellsSummary: s.cells.filter(c => c.state === 'running').length + ' running',
       snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
       versions,
@@ -2253,6 +2395,14 @@ class Component extends DCLogic {
       setCatalogSort: e => this.setState({ catalogSort: e.target.value }),
       knownLicenseOnly: s.knownLicenseOnly,
       toggleKnownLicense: e => this.setState({ knownLicenseOnly: !!e.target.checked }),
+      catalogScopes: [{ id: 'featured', label: 'Featured' }, { id: 'all', label: 'All in snapshot' }].map(item => ({
+        ...item,
+        selected: s.catalogScope === item.id,
+        border: s.catalogScope === item.id ? 'oklch(0.43 0.05 235)' : 'transparent',
+        bg: s.catalogScope === item.id ? 'oklch(0.29 0.035 235)' : 'transparent',
+        color: s.catalogScope === item.id ? 'oklch(0.88 0.035 235)' : MUTED,
+        select: () => this.setState({ catalogScope: item.id })
+      })),
       repoTypes: [{ id: 'package', label: 'Packages' }, { id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
         ...f, count: CATALOG.filter(a => a.type === f.id).length,
         selected: s.catalogType === f.id,
@@ -2294,9 +2444,22 @@ class Component extends DCLogic {
         packageUrl: component.package.url,
         shortCommit: component.repository.commit.slice(0, 12)
       })) : [],
+      packageVersions,
+      noPackageVersions: packageVersions.length === 0,
+      selectedPackageVersion,
+      setPackageVersion: event => this.setState({ packageVersionId: event.target.value }),
+      installPackage: () => detail.catalogPackage ? this.installPackage(detail) : undefined,
+      installDisabled: !detail.catalogPackage || !s.sidecarConnected || !sandbox.ready || !selectedPackageVersion || !recipeConfigured || s.packageInstallBusy,
+      installLabel: s.packageInstallBusy ? 'Testing package…' : (latestPackageInstall && latestPackageInstall.state === 'ready' ? 'Install again' : 'Verify, test & install'),
+      installStatus: latestPackageInstall
+        ? (latestPackageInstall.state === 'ready' ? 'Ready · tested profile saved' : latestPackageInstall.detail)
+        : (recipeConfigured ? 'Signed recipe configured locally' : 'Signed recipe required'),
       acquireLabel: detail.catalogPackage ? detail.acquisition.label : 'Acquire verified bytes',
       acquireReason: detail.catalogPackage ? detail.acquisition.reason : 'A schema-valid signed package record is required before acquisition.',
       sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,
+      saveConfiguration: () => detail.id ? this.saveCatalogConfiguration(detail) : undefined,
+      saveConfigurationDisabled: !detail.id || !s.sidecarConnected || !selectedPackageVersion || s.configurationBusy,
+      saveConfigurationLabel: s.configurationBusy ? 'Saving…' : 'Save configuration',
       hasPackageLink: !!(detail.package && detail.package.url),
       detailPackageUrl: detail.package ? detail.package.url : '',
       detailPackageLabel: detail.package ? 'View ' + detail.package.registry + ' package ↗' : '',
@@ -2307,6 +2470,30 @@ class Component extends DCLogic {
       emptyActionLabel: emptyCopy.action,
       resetCatalogFilters: emptyCopy.run,
       copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
+
+      assistantVersions: packageVersions,
+      selectedAssistantVersion: s.assistantVersionId || selectedPackageVersion,
+      setAssistantVersion: event => this.setState({ assistantVersionId: event.target.value }),
+      startAssistant: () => this.startAssistant(),
+      assistantStartDisabled: !s.sidecarConnected || !sandbox.ready || !packageVersions.length || s.assistantBusy,
+      assistantStartLabel: s.assistantBusy ? 'Starting…' : (s.assistantUrl ? 'Restart isolated assistant' : 'Start isolated assistant'),
+      assistantReady: !!s.assistantUrl,
+      assistantEmpty: !s.assistantUrl,
+      assistantUrl: s.assistantUrl,
+      openAssistant: () => {
+        if (s.assistantUrl && typeof window !== 'undefined') window.open(s.assistantUrl, '_blank', 'noopener');
+      },
+      configurations: s.configurations.map(configuration => ({
+        ...configuration,
+        selectionLabel: (configuration.selections || []).length + ((configuration.selections || []).length === 1 ? ' selection' : ' selections'),
+        versionLabel: ((s.savedVersions.find(item => item.id === configuration.version_id) || {}).primary_tree || {}).version || 'Missing version',
+        statusLabel: configuration.status === 'draft' ? 'Draft' : ((configuration.runtime || {}).runnable ? 'Ready' : 'Needs setup'),
+        statusColor: (configuration.runtime || {}).runnable ? OK : (configuration.status === 'draft' ? WARN : MUTED),
+        run: () => this.runConfiguration(configuration),
+        runDisabled: !(configuration.runtime || {}).runnable || s.configurationBusy,
+        runLabel: (configuration.runtime || {}).runnable ? 'Run in Apptainer' : 'Not ready'
+      })),
+      noConfigurations: s.configurations.length === 0,
 
       previewOpen: !!s.preview,
       previewTitle: 'Confirm launch — exact argv and environment keys',

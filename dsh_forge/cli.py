@@ -18,6 +18,7 @@ from .acquisition import (
     DEFAULT_TOTAL_TIMEOUT_SECONDS,
     acquire as acquire_package,
 )
+from .installation import DEFAULT_INSTALL_ROOT, inspect_acquisition
 from .launcher import Launcher, LauncherError
 from .packages import (
     PackageError,
@@ -72,6 +73,31 @@ def _parser() -> argparse.ArgumentParser:
         help="open DSH Web automatically after launch",
     )
     version_commands.add_parser("rescan", help="rescan all configured and saved directories")
+
+    configurations = commands.add_parser("configurations", aliases=["configs"], help="save and run reviewed Harness configurations")
+    configuration_commands = configurations.add_subparsers(dest="configurations_command", required=True)
+    configuration_commands.add_parser("list", help="list saved and MCP-drafted configurations")
+    save_configuration = configuration_commands.add_parser("save", help="save a configuration without installing code")
+    save_configuration.add_argument("--name", required=True)
+    save_configuration.add_argument("--description", default="")
+    save_configuration.add_argument("--version", required=True, dest="version_id")
+    save_configuration.add_argument("--package", dest="package_slug")
+    save_configuration.add_argument("--select", action="append", default=[], metavar="TYPE:ID")
+    save_configuration.add_argument("--surface", choices=("web", "headless"), default="web")
+    save_configuration.add_argument("--task", default="")
+    save_configuration.add_argument("--profile", default="web")
+    save_configuration.add_argument("--port", default="auto")
+    save_configuration.add_argument("--network", choices=("none", "host"))
+    save_configuration.add_argument("--gpu", choices=("none", "allocated"), default="none")
+    save_configuration.add_argument("--open-browser", action=argparse.BooleanOptionalAction, default=False)
+    save_configuration.add_argument("--draft", action="store_true", help="require a separate approve step before run")
+    approve_configuration = configuration_commands.add_parser("approve", help="approve an inert draft for later CLI run")
+    approve_configuration.add_argument("configuration_id")
+    remove_configuration = configuration_commands.add_parser("remove", help="forget a configuration without deleting Harness files")
+    remove_configuration.add_argument("configuration_id")
+    run_configuration = configuration_commands.add_parser("run", help="run a reviewed configuration in Apptainer")
+    run_configuration.add_argument("configuration_id")
+    run_configuration.add_argument("--task", help="override the task of a headless configuration")
 
     cells = commands.add_parser("cells", help="control persistent local cells")
     cell_commands = cells.add_subparsers(dest="cells_command", required=True)
@@ -181,6 +207,38 @@ def _parser() -> argparse.ArgumentParser:
         metavar="SECONDS",
     )
 
+    inspect = package_commands.add_parser(
+        "inspect",
+        help="re-verify acquired artifacts and inspect npm archives without host extraction",
+    )
+    inspect.add_argument("--bundle", required=True, metavar="JSON")
+    inspect.add_argument("--trust-root", required=True, metavar="JSON")
+    inspect.add_argument("--receipt", required=True, metavar="JSON")
+    inspect.add_argument("--output", metavar="JSON")
+    inspect.add_argument("--force", action="store_true")
+
+    install = package_commands.add_parser(
+        "install-sandbox",
+        help="install a signed acquired package into a fresh Apptainer DSH profile",
+    )
+    install.add_argument("--bundle", required=True, metavar="JSON")
+    install.add_argument("--trust-root", required=True, metavar="JSON")
+    install.add_argument("--receipt", required=True, metavar="JSON")
+    install.add_argument("--tree", required=True, dest="tree_id")
+    install.add_argument("--profile", default="web")
+    install.add_argument("--install-root", default=str(DEFAULT_INSTALL_ROOT), metavar="DIR")
+    install.add_argument("--timeout", type=int, default=900, metavar="SECONDS")
+
+    transact = package_commands.add_parser(
+        "install",
+        help="acquire and promote a signed package for one saved Harness version",
+    )
+    transact.add_argument("--bundle", required=True, metavar="JSON")
+    transact.add_argument("--trust-root", required=True, metavar="JSON")
+    transact.add_argument("--version", required=True, dest="version_id")
+    transact.add_argument("--profile", default="web")
+    transact.add_argument("--timeout", type=int, default=900, metavar="SECONDS")
+
     return parser
 
 
@@ -189,6 +247,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"cells.{args.cells_command}"
     if args.command == "versions":
         return f"versions.{args.versions_command}"
+    if args.command in {"configurations", "configs"}:
+        return f"configurations.{args.configurations_command}"
     if args.command == "packages":
         return f"packages.{args.packages_command}"
     return str(args.command)
@@ -225,6 +285,30 @@ def _start_spec(args: argparse.Namespace) -> dict[str, Any]:
         "open_browser": False,
         "network": ("host" if args.surface == "web" else "none") if args.network == "auto" else args.network,
         "resources": {"gpu": args.gpu},
+    }
+
+
+def _configuration_selections(values: Sequence[str]) -> list[dict[str, str]]:
+    selections: list[dict[str, str]] = []
+    for value in values:
+        kind, separator, identity = value.partition(":")
+        if not separator or kind not in {"package", "plugin", "fork"} or not identity:
+            raise CliError("Each --select value must be TYPE:ID (package, plugin, or fork).", "invalid_argument")
+        selections.append({"type": kind, "id": identity})
+    return selections
+
+
+def _configuration_launch(args: argparse.Namespace) -> dict[str, Any]:
+    network = args.network or ("host" if args.surface == "web" else "none")
+    return {
+        "surface": args.surface,
+        "profile": args.profile,
+        "task": args.task,
+        "port": args.port,
+        "open_browser": args.open_browser,
+        "network": network,
+        "resources": {"gpu": args.gpu},
+        "workspace": "managed",
     }
 
 
@@ -310,6 +394,35 @@ def run(
                 timeout_seconds=args.timeout,
                 total_timeout_seconds=args.total_timeout,
             )
+        elif command == "packages.inspect":
+            data = inspect_acquisition(
+                read_json(args.bundle),
+                read_json(args.trust_root),
+                args.receipt,
+            )
+            if args.output:
+                write_json(args.output, data, force=args.force)
+                data = {**data, "output": str(Path(args.output).expanduser())}
+        elif command == "packages.install-sandbox":
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            data = launcher.install_acquired_package(
+                tree_id=args.tree_id,
+                envelope=read_json(args.bundle),
+                trust_root=read_json(args.trust_root),
+                receipt_path=args.receipt,
+                install_root=args.install_root,
+                profile=args.profile,
+                timeout_seconds=args.timeout,
+            )
+        elif command == "packages.install":
+            launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
+            data = launcher.install_package(
+                version_id=args.version_id,
+                envelope=read_json(args.bundle),
+                trust_root=read_json(args.trust_root),
+                profile=args.profile,
+                timeout_seconds=args.timeout,
+            )
         else:
             launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir)
             if command == "doctor":
@@ -372,6 +485,24 @@ def run(
                     "versions_directory": status["versions_directory"],
                     "coverage_gaps": status["coverage_gaps"],
                 }
+            elif command == "configurations.list":
+                data = {"configurations": launcher.configurations()}
+            elif command == "configurations.save":
+                data = launcher.save_configuration(
+                    name=args.name,
+                    description=args.description,
+                    version_id=args.version_id,
+                    package_slug=args.package_slug,
+                    selections=_configuration_selections(args.select),
+                    launch=_configuration_launch(args),
+                    draft=args.draft,
+                )
+            elif command == "configurations.approve":
+                data = launcher.approve_configuration(args.configuration_id)
+            elif command == "configurations.remove":
+                data = {"configurations": launcher.remove_configuration(args.configuration_id)}
+            elif command == "configurations.run":
+                data = launcher.run_configuration(args.configuration_id, task=args.task)
             elif command == "cells.list":
                 status = launcher.status()
                 data = {"cells": status["cells"], "registry": status["registry"]}

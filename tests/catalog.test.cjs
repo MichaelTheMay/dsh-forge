@@ -299,15 +299,42 @@ test('catalog interactions cannot add, stop, or modify local cells', () => {
   c.renderVals().setQuery({ target: { value: 'desktop' } });
   c.renderVals().goLaunch(); assert.equal(JSON.stringify(c.state.cells), before);
 });
-test('public code actions are disabled and the snapshot has no fabricated analysis', () => {
+test('repository actions stay disabled while signed package install is locally gated', () => {
   const section = html.slice(html.indexOf('<main class="public-browser"'), html.indexOf('<sc-if value="{{ previewOpen }}"'));
-  assert.equal((section.match(/<button disabled title=/g) || []).length, 3);
-  assert(!/onClick="{{.*(?:install|clone|run|sandbox)/i.test(section));
+  assert.equal((section.match(/<button disabled(?: title=)?/g) || []).length, 3);
+  assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
   assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
   assert(CATALOG.filter(r => r.type === 'plugin').every(r => r.analysis_status === 'manifest_reviewed'));
   assert(CATALOG.every(r => r.verification.metadata_only && !r.verification.executed && !r.verification.security_verified));
   assert(CATALOG.filter(r => r.type === 'package').every(r => !r.verification.installed && !r.verification.sandbox_verified && !r.acquisition.enabled));
+});
+
+test('package page selects a saved version and posts only stable local identities', async () => {
+  const c = instance({}, '#packages/agent-teams-builder');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], package_installations: [],
+    trusted_package_recipes: [{ slug: 'agent-teams-builder', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { state: 'ready' };
+  };
+  c.refreshStatus = async () => {};
+  const values = c.renderVals();
+  assert.equal(values.installDisabled, false);
+  assert.equal(values.packageVersions.length, 1);
+  await values.installPackage();
+  assert.deepEqual(request, {
+    url: '/api/v1/packages/install',
+    body: { package_slug: 'agent-teams-builder', version_id: saved.id, profile: 'web' }
+  });
 });
 
 test('dedicated package route selects the requested metadata page and remains non-executable', async () => {
@@ -320,4 +347,70 @@ test('dedicated package route selects the requested metadata page and remains no
   await values.sharePackagePage();
   assert.equal(clipboard.at(-1), 'http://127.0.0.1:3090/#packages/code-review-lab');
   assert.equal(c.lastMessage, 'Copied package page');
+});
+
+test('featured scope is explicit and All in snapshot preserves full inventory', () => {
+  const c = instance();
+  c.renderVals().goCatalog();
+  assert.equal(c.renderVals().results.length, 3);
+  c.renderVals().catalogScopes.find(scope => scope.id === 'featured').select();
+  assert.deepEqual(c.renderVals().results.map(row => row.slug), ['agent-teams-builder', 'code-review-lab']);
+  c.renderVals().repoTypes.find(type => type.id === 'plugin').select();
+  assert.equal(c.renderVals().results.length, 3);
+  c.renderVals().catalogScopes.find(scope => scope.id === 'all').select();
+  assert.equal(c.renderVals().results.length, 7);
+  assert.match(script, /All in snapshot/);
+});
+
+test('catalog page saves stable selections and signed package identity only when configured', async () => {
+  const c = instance({}, '#packages/agent-teams-builder');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [{ slug: 'agent-teams-builder', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { id: 'config_1234567890abcdef1234' };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().saveConfiguration();
+  assert.equal(request.url, '/api/v1/configurations');
+  assert.equal(request.body.version_id, saved.id);
+  assert.equal(request.body.package_slug, 'agent-teams-builder');
+  assert.deepEqual(request.body.selections, [{ type: 'package', id: 'catalog-package:agent-teams-builder' }]);
+  assert.equal(request.body.draft, false);
+  assert(!('path' in request.body));
+});
+
+test('Assistant tab starts a saved Harness through its dedicated endpoint', async () => {
+  const c = instance({}, '#assistant');
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [],
+    suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true, reason: 'ready' }
+  });
+  c.refreshStatus = async () => {};
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { id: 'cell_assistant' };
+  };
+  const values = c.renderVals();
+  assert(values.showAssistant);
+  assert.equal(values.assistantStartDisabled, false);
+  await values.startAssistant();
+  assert.deepEqual(request, {
+    url: '/api/v1/assistant/start', body: { version_id: saved.id }
+  });
+  assert.match(html, /Isolated DeepSeek Harness Forge Assistant/);
 });

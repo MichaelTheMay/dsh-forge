@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH Forge promoted sandbox install receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "install_id", "package", "payload_digest", "composition_digest", "installed_at", "tree_id", "profile", "home", "workspace", "log", "plugins", "archive_inspection", "sandbox", "dependency_resolution", "lifecycle_scripts_allowed", "host_profile_modified", "sandbox_installed", "composition_probe_passed", "web_smoke_passed", "atomically_promoted", "rollback_install_id", "ready_for_sandbox_launch"],
+  "properties": {
+    "schema": {"const": "dsh-forge.sandbox-install-receipt/v1"},
+    "install_id": {"type": "string", "pattern": "^install_[0-9a-f]{20}$"},
+    "package": {"type": "object"},
+    "payload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "composition_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "installed_at": {"type": "string", "format": "date-time"},
+    "tree_id": {"type": "string", "pattern": "^tree_[0-9a-f]{12}$"},
+    "profile": {"type": "string"},
+    "home": {"type": "string"},
+    "workspace": {"type": "string"},
+    "log": {"type": "string"},
+    "plugins": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"type": "object"}},
+    "archive_inspection": {"type": "object"},
+    "sandbox": {"type": "object"},
+    "dependency_resolution": {"type": "object"},
+    "lifecycle_scripts_allowed": {"const": false},
+    "host_profile_modified": {"const": false},
+    "sandbox_installed": {"const": true},
+    "composition_probe_passed": {"const": true},
+    "web_smoke_passed": {"const": true},
+    "atomically_promoted": {"const": true},
+    "rollback_install_id": {"type": ["string", "null"]},
+    "ready_for_sandbox_launch": {"const": true}
+  }
+}

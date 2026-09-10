@@ -8,7 +8,8 @@ The public ecosystem crawler and catalog publisher live in the separate
 
 ## Status
 
-The first local fleet launcher and **Community** interface are available.
+The local fleet launcher, **Community** browser, saved configurations, and an
+isolated **Assistant** surface are available.
 The loopback sidecar discovers configured DSH trees without executing candidate
 code, pins the two current official release installations, and repeatedly starts
 trusted local cells with automatic ports, separate writable homes, managed
@@ -36,8 +37,8 @@ promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
 
-Python 3.9+ is sufficient to serve the app. There is no package installation or
-build step, and no API key is needed.
+Python 3.9+ is sufficient to serve the app. There is no frontend dependency
+installation or build step, and no API key is needed to browse local metadata.
 
 From an existing checkout:
 
@@ -197,6 +198,32 @@ metadata contract, directory-ingestion boundary, dedicated pages, and proposed
 hosted-registry API. The separate
 [AgentTeams sandbox evaluation](docs/agentteams-sandbox-evaluation.md) pins the
 first candidate and installs it only inside a disposable Apptainer profile.
+
+The package page can now connect those boundaries for a locally configured
+signed recipe. Select a saved, launch-ready Harness version and choose **Verify,
+test & install**. The launcher acquires exact bytes, rejects unsafe npm archives,
+installs without network or lifecycle scripts into a disposable profile, checks
+composition and DeepSeek Web startup inside Apptainer, and atomically promotes a
+versioned profile pointer. A failed transaction leaves the current profile
+unchanged and retains bounded evidence. See
+[Sandbox package installation](docs/package-installation.md).
+
+## Configurations and Forge Assistant
+
+Any catalog page can save a configuration against a stable local Harness
+version. Locally trusted signed packages can become runnable after their exact
+profile passes the install transaction; raw plugin and fork selections remain
+inert drafts. Configurations can be listed and run through the UI or the
+versioned CLI. See [Saved Harness configurations](docs/saved-configurations.md).
+
+Forge also provides a dependency-free stdio [MCP server](docs/mcp-server.md)
+for catalog search, saved-version inspection, configuration listing, and draft
+creation. It intentionally exposes no install or execution tool.
+
+The second launcher tab starts an [embedded Forge Assistant](docs/forge-assistant.md)
+as a disposable DSH Web cell. Its local MCP tools help search and compare
+complementary package, plugin, and fork metadata, while all trust, install,
+promotion, and run decisions remain explicit launcher or CLI actions.
 
 ## Development
 
