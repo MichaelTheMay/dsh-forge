@@ -150,6 +150,7 @@ of following them.
   ports. Headless profiles require an explicit task.
 - Profile cells can be stopped and restarted but never cloned, because their
   home is the user's real profile directory rather than a disposable copy.
+- Resolved paths stay on internal fields the API never serializes.
 
 ```bash
 python3 -m dsh_forge profiles list

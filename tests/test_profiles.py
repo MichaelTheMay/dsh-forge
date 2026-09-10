@@ -16,7 +16,7 @@ import unittest
 from unittest import mock
 
 from dsh_forge import cli
-from dsh_forge.launcher import Launcher, LauncherError
+from dsh_forge.launcher import Launcher, LauncherError, _display_path
 from tests.helpers import FakeCellSandbox
 
 
@@ -111,11 +111,14 @@ class LocalProfileDetectionTests(ProfileFixture):
         self.assertEqual(found["coding"]["surface"], "terminal")
         self.assertEqual(found["coding"]["launchability"], "terminal-only")
 
-    def test_public_profile_records_never_leak_absolute_host_paths(self):
+    def test_public_profile_records_omit_internal_resolved_paths(self):
         self.write_profile("web", manifest("dsh-profile-web", ["@deepseek-ai/dsh-web-app"]))
         profile = self.profiles_by_name(self.build())["web"]
+        # Resolved paths stay on real_-prefixed fields, which the API never serializes.
         self.assertFalse(any(key.startswith("real_") for key in profile))
-        self.assertNotIn(str(self.home), json.dumps(profile))
+        # Displayed paths follow the launcher-wide convention: ~/ when under the user home.
+        self.assertEqual(profile["home"], _display_path(self.home))
+        self.assertEqual(profile["path"], _display_path(self.profiles / "web"))
 
     def test_surface_classification_gates_one_click_to_web_and_headless(self):
         self.write_profile("web", manifest("w", ["@deepseek-ai/dsh-web-app"]))

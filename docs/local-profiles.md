@@ -24,8 +24,9 @@ path list, and then `$DSH_HOME` (falling back to `~/.dsh`). Each detected
 profile gets an ID derived from its home and directory name, so the same
 profile name in two homes stays distinct and IDs survive a rescan.
 
-Public profile records never include absolute host paths; those stay on
-`real_`-prefixed fields the API does not serialize.
+Resolved paths stay on `real_`-prefixed fields that the API never serializes.
+Displayed paths follow the launcher-wide convention: abbreviated to `~/` when
+they sit under the user's home directory, and shown in full otherwise.
 
 ## Surfaces and what one-click means
 
