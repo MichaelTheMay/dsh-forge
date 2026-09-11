@@ -23,10 +23,10 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("gh release create", workflow)
         self.assertRegex(workflow, r"permissions:\s*\n\s*contents: write")
 
-    def test_pull_request_template_prefers_development(self):
+    def test_pull_request_template_targets_main(self):
         template = (ROOT / ".github/pull_request_template.md").read_text(encoding="utf-8")
-        self.assertIn("targets `development`", template)
-        self.assertIn("`development` to `main`", template)
+        self.assertIn("targets the protected `main` branch", template)
+        self.assertNotIn("`development` to `main`", template)
 
 
 if __name__ == "__main__":
