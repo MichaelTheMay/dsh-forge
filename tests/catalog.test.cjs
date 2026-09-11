@@ -9,6 +9,8 @@ const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
 const packageFeed = JSON.parse(fs.readFileSync(path.join(root, 'data/package-catalog.seed.json'), 'utf8'));
 const vercel = JSON.parse(fs.readFileSync(path.join(root, 'web/vercel.json'), 'utf8'));
+const rootVercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'));
+const vercelIgnore = fs.readFileSync(path.join(root, '.vercelignore'), 'utf8').split(/\r?\n/);
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
@@ -536,6 +538,10 @@ test('permanent static deployment preserves the launcher security headers', () =
   assert.equal(headers['X-Content-Type-Options'], 'nosniff');
   assert.equal(headers['X-Frame-Options'], 'DENY');
   assert.equal(headers['Referrer-Policy'], 'no-referrer');
+  assert.equal(rootVercel.outputDirectory, 'web');
+  assert.deepEqual(rootVercel.headers, vercel.headers);
+  assert.ok(vercelIgnore.includes('.serena'));
+  assert.ok(vercelIgnore.includes('dist'));
 });
 
 test('imported research evidence marks only bounded hidden-gem candidates', async () => {
