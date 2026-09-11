@@ -31,6 +31,7 @@ from .packages import (
     verify as verify_package,
     write_json,
 )
+from .research import ResearchError, certify_proposal, compose_proposal
 
 
 CLI_API_VERSION = "dsh-forge.cli/v1"
@@ -107,6 +108,31 @@ def _parser() -> argparse.ArgumentParser:
     search_catalog.add_argument("--featured", action="store_true", help="only administrator-curated entries")
     search_catalog.add_argument("--licensed", action="store_true", help="only entries reporting a license")
     search_catalog.add_argument("--no-archived", action="store_true", help="exclude archived repositories")
+
+    research = commands.add_parser("research", help="rank hidden gems and publish curator-reviewed package proposals")
+    research_commands = research.add_subparsers(dest="research_command", required=True)
+    gems = research_commands.add_parser("gems", help="list explainable low-visibility plugin candidates")
+    gems.add_argument("query", nargs="?", default="", help="optional capability or keyword query")
+    gems.add_argument("--limit", type=int, default=25)
+    propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
+    propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
+    propose.add_argument("--package-id", required=True)
+    propose.add_argument("--name", required=True)
+    propose.add_argument("--version", required=True)
+    propose.add_argument("--description", required=True)
+    propose.add_argument("--created-at", required=True, metavar="UTC")
+    propose.add_argument("--output", required=True, metavar="JSON")
+    propose.add_argument("--force", action="store_true")
+    certify = research_commands.add_parser("certify", help="sign and publish a proposal after explicit curator review")
+    certify.add_argument("--proposal", required=True, metavar="JSON")
+    certify.add_argument("--private-key", required=True, metavar="PEM")
+    certify.add_argument("--public-key", required=True, metavar="PEM")
+    certify.add_argument("--root-id", required=True)
+    certify.add_argument("--expires-at", required=True, metavar="UTC")
+    certify.add_argument("--reviewer", required=True)
+    certify.add_argument("--publish-root", required=True, metavar="DIR")
+    for review in ("source", "permissions", "license", "compatibility"):
+        certify.add_argument(f"--review-{review}", action="store_true", required=True)
 
     profiles = commands.add_parser("profiles", help="inspect and run installed DSH profiles")
     profile_commands = profiles.add_subparsers(dest="profiles_command", required=True)
@@ -298,6 +324,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"configurations.{args.configurations_command}"
     if args.command == "packages":
         return f"packages.{args.packages_command}"
+    if args.command == "research":
+        return f"research.{args.research_command}"
     return str(args.command)
 
 
@@ -470,6 +498,17 @@ def run(
                 profile=args.profile,
                 timeout_seconds=args.timeout,
             )
+        elif command == "research.certify":
+            data = certify_proposal(
+                read_json(args.proposal),
+                private_key=args.private_key,
+                public_key=args.public_key,
+                root_id=args.root_id,
+                expires_at=args.expires_at,
+                reviewer=args.reviewer,
+                reviews=("source", "permissions", "license", "compatibility"),
+                destination_root=args.publish_root,
+            )
         else:
             launcher = launcher_factory(scan_roots=args.scan_root, state_root=args.state_dir, dsh_homes=args.dsh_home)
             if command == "doctor":
@@ -567,6 +606,49 @@ def run(
                     licensed_only=args.licensed,
                     include_archived=not args.no_archived,
                 )
+            elif command == "research.gems":
+                page = launcher.catalog_search(
+                    query=args.query,
+                    types=["plugin"],
+                    sort="rank",
+                    limit=args.limit,
+                    include_archived=False,
+                )
+                reports = page.pop("research", {})
+                candidates = [
+                    {**record, "hidden_gem": reports.get(record.get("artifact_id"), {})}
+                    for record in page.pop("artifacts", [])
+                    if reports.get(record.get("artifact_id"), {}).get("candidate") is True
+                ]
+                data = {**page, "policy": launcher.catalog_store.meta().get("research_policy"), "candidates": candidates}
+            elif command == "research.propose":
+                records = []
+                evidence = {}
+                for artifact_id in args.artifacts:
+                    record = launcher.catalog_store.get(artifact_id)
+                    if record is None:
+                        raise ResearchError(f"Unknown catalog artifact: {artifact_id}")
+                    report = launcher.catalog_store.get_research(artifact_id)
+                    if not report or report.get("candidate") is not True:
+                        raise ResearchError(f"Artifact is not in the current hidden-gem queue: {artifact_id}")
+                    records.append(record)
+                    evidence[artifact_id] = report
+                proposal, reports = compose_proposal(
+                    records,
+                    package_id=args.package_id,
+                    name=args.name,
+                    version=args.version,
+                    description=args.description,
+                    created_at=args.created_at,
+                    evidence=evidence,
+                )
+                write_json(args.output, proposal, force=args.force)
+                data = {
+                    "output": str(Path(args.output).expanduser()),
+                    "package": proposal["manifest"]["package"],
+                    "candidate_count": len(reports),
+                    "status": proposal["status"],
+                }
             elif command == "profiles.list":
                 status = launcher.status()
                 data = {"profiles": status["profiles"], "dsh_homes": status["dsh_homes"]}
@@ -647,6 +729,13 @@ def run(
     except PackageError as error:
         _write(
             _envelope(command, False, error={"code": error.code, "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return 2
+    except ResearchError as error:
+        _write(
+            _envelope(command, False, error={"code": "research_error", "message": str(error)}),
             args.json,
             stream=sys.stderr,
         )

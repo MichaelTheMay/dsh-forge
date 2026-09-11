@@ -1704,6 +1704,9 @@ class Launcher:
     def trusted_package_recipes(self) -> list[dict[str, Any]]:
         """List only local recipe slots; signatures are rechecked at install time."""
 
+        from .packages import read_json
+        from .research import CERTIFICATION_SCHEMA, POLICY_VERSION, signed_review_statement
+
         recipes: list[dict[str, Any]] = []
         try:
             candidates = sorted(self.trusted_package_recipes_root.iterdir())
@@ -1714,8 +1717,40 @@ class Launcher:
                 continue
             envelope = directory / "envelope.json"
             trust_root = directory / "trust-root.json"
-            if envelope.is_file() and trust_root.is_file() and not envelope.is_symlink() and not trust_root.is_symlink():
-                recipes.append({"slug": directory.name, "configured": True, "verified_at_install": True})
+            certification = directory / "certification.json"
+            if (
+                envelope.is_file() and trust_root.is_file() and certification.is_file()
+                and not envelope.is_symlink() and not trust_root.is_symlink() and not certification.is_symlink()
+            ):
+                try:
+                    certified = read_json(certification)
+                except PackageError:
+                    continue
+                if (
+                    isinstance(certified, dict)
+                    and certified.get("schema") == CERTIFICATION_SCHEMA
+                    and certified.get("policy") == POLICY_VERSION
+                    and certified.get("package_id") == directory.name
+                    and certified.get("signed_review_statement") == signed_review_statement(str(certified.get("reviewer") or ""))
+                    and certified.get("attestations") == {
+                        "source": True, "permissions": True, "license": True, "compatibility": True
+                    }
+                    and certified.get("security_verified") is False
+                    and certified.get("sandbox_verified") is False
+                    and certified.get("metadata_candidate") is True
+                    and certified.get("install_policy") == "acquire-inspect-networkless-apptainer-smoke-test-then-promote"
+                ):
+                    recipes.append({
+                        "slug": directory.name,
+                        "name": str(certified.get("package_name") or directory.name)[:128],
+                        "version": str(certified.get("package_version") or "")[:64],
+                        "component_count": certified.get("component_count") if isinstance(certified.get("component_count"), int) else 0,
+                        "configured": True,
+                        "certified": True,
+                        "reviewer": str(certified.get("reviewer") or "")[:128],
+                        "reviewed_at": str(certified.get("reviewed_at") or "")[:32],
+                        "verified_at_install": False,
+                    })
         return recipes
 
     def install_trusted_catalog_package(
@@ -1734,17 +1769,41 @@ class Launcher:
             raise LauncherError("This package has no locally configured signed recipe")
         envelope_path = directory / "envelope.json"
         trust_path = directory / "trust-root.json"
-        if envelope_path.is_symlink() or trust_path.is_symlink():
+        certification_path = directory / "certification.json"
+        if envelope_path.is_symlink() or trust_path.is_symlink() or certification_path.is_symlink():
             raise LauncherError("Trusted package recipe may not contain symlinked inputs")
         from .packages import read_json, verify
+        from .research import CERTIFICATION_SCHEMA, POLICY_VERSION, signed_review_statement
         try:
             envelope = read_json(envelope_path)
             trust_root = read_json(trust_path)
-            manifest = verify(envelope, trust_root)["manifest"]
+            verified = verify(envelope, trust_root)
+            manifest = verified["manifest"]
+            certification = read_json(certification_path)
         except PackageError as error:
             raise LauncherError(str(error)) from error
         if manifest["package"]["id"] != package_slug:
             raise LauncherError("Signed package identity does not match its catalog route")
+        if (
+            certification.get("schema") != CERTIFICATION_SCHEMA
+            or certification.get("policy") != POLICY_VERSION
+            or certification.get("package_id") != package_slug
+            or certification.get("package_name") != manifest["package"]["name"]
+            or certification.get("package_version") != manifest["package"]["version"]
+            or certification.get("component_count") != len(manifest["plugins"])
+            or certification.get("payload_digest") != verified["payload_digest"]
+            or certification.get("valid_signers") != verified["valid_signers"]
+            or certification.get("signed_review_statement") != signed_review_statement(str(certification.get("reviewer") or ""))
+            or manifest["provenance"]["created_by"] != certification.get("signed_review_statement")
+            or certification.get("attestations") != {
+                "source": True, "permissions": True, "license": True, "compatibility": True
+            }
+            or certification.get("security_verified") is not False
+            or certification.get("sandbox_verified") is not False
+            or certification.get("metadata_candidate") is not True
+            or certification.get("install_policy") != "acquire-inspect-networkless-apptainer-smoke-test-then-promote"
+        ):
+            raise LauncherError("Package certification does not match its signed manifest and review policy")
         return self.install_package(
             version_id=version_id,
             envelope=envelope,

@@ -141,11 +141,11 @@
   .repo-empty p, .repo-detail-empty p { color: oklch(0.67 0.016 255); font-size: 12px; line-height: 1.7; max-width: 380px; margin: 12px auto 20px; }
   @media (max-width: 1150px) { .header-snapshot { display: none !important; } .repo-workspace { grid-template-columns: minmax(0,1fr) 340px; } .repo-controls, .repo-results { padding-left: 16px; padding-right: 16px; } .repo-ranking-note { display: none; } .repo-inspector { padding: 18px; } }
   @media (max-width: 800px) { .app-header { height: auto !important; min-height: 52px; padding: 10px 14px !important; gap: 10px !important; flex-wrap: wrap; } .header-loopback { display: none !important; } .public-browser { overflow-y: auto; } .repo-workspace { display: block; flex: 0 0 auto; } .repo-browse { border-right: 0; } .repo-results { max-height: 58vh; min-height: 190px; } .repo-inspector { overflow: visible; border-top: 1px solid oklch(0.3 0.012 255); padding: 22px; } .repo-masthead { padding: 20px; } .repo-snapshot-summary { display: none; } .repo-masthead h1 { font-size: 23px; } .repo-footer { padding: 12px 20px; } .assistant-shell { display:flex; flex-direction:column; overflow-y:auto; } .assistant-sidebar { flex:0 0 auto; border-right:0; border-bottom:1px solid oklch(0.3 0.012 255); } .assistant-frame { min-height:620px; } }
-  @media (max-width: 440px) { .repo-search-row { flex-wrap: wrap; } .repo-search { flex-basis: 100%; } .repo-sort select { padding: 7px 10px; } .repo-rank { display: none; } .repo-card { gap: 6px; padding: 12px; } .repo-masthead h1 { font-size: 21px; } .repo-upstream { font-size: 10px; } }
+  @media (max-width: 440px) { html, body, .app-root { width:100%; max-width:100vw; overflow-x:hidden; } .app-header > div:first-child { min-width:0; flex-wrap:wrap; } .fleet-shell, .versions-rail, .fleet-center, .fleet-inspector, .public-browser, .repo-workspace, .repo-browse, .repo-masthead, .repo-controls, .repo-results, .repo-inspector { width:100%; max-width:100vw; min-width:0; } .versions-rail p, .repo-masthead p { overflow-wrap:anywhere; } .fleet-grid { grid-template-columns:minmax(0,1fr); padding:12px; } .repo-search-row { flex-wrap:wrap; } .repo-search { flex:1 0 100%; } .repo-sort { width:100%; } .repo-sort select { width:100%; padding:7px 10px; } .repo-rank { display:none; } .repo-card { max-width:100%; gap:6px; padding:12px; } .repo-masthead h1 { font-size:21px; } .repo-upstream { font-size:10px; } }
 
 </style>
 </helmet>
-<div style="height: 100vh; display: flex; flex-direction: column; background: oklch(0.185 0.008 255); color: oklch(0.93 0.006 255); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; overflow: hidden;">
+<div class="app-root" style="height: 100vh; display: flex; flex-direction: column; background: oklch(0.185 0.008 255); color: oklch(0.93 0.006 255); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; overflow: hidden;">
 
   <header class="app-header" style="flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 0 16px; height: 52px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255);">
     <div style="display: flex; align-items: baseline; gap: 8px;">
@@ -244,6 +244,14 @@
         </div>
         </sc-if>
         <div style="margin-top: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.68 0.09 85);">{{ coverageGap }}</div>
+      </div>
+
+      <div style="height:1px; margin:12px 0; background:oklch(0.28 0.012 255);"></div>
+
+      <div>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;"><span style="font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:oklch(0.76 0.01 255);">Certified packages</span><span style="flex:1 1 auto;"></span><span class="repo-label">Curator signed</span></div>
+        <sc-if value="{{ noCertifiedPackages }}" hint-placeholder-val="true"><div style="padding:11px; border:1px dashed oklch(0.34 0.014 255); border-radius:8px; color:oklch(0.62 0.012 255); font:9.5px/1.55 'IBM Plex Mono',monospace;">No certified packages yet. Research proposals stay hidden until all four curator reviews and signing are complete.</div></sc-if>
+        <sc-if value="{{ hasCertifiedPackages }}" hint-placeholder-val="false"><div style="display:flex; flex-direction:column; gap:7px;"><sc-for list="{{ certifiedPackages }}" as="package" hint-placeholder-count="2"><article style="padding:10px; border:1px solid oklch(0.4 0.06 155); border-radius:8px; background:oklch(0.225 0.02 155);"><div style="display:flex; gap:7px; align-items:center;"><strong style="font-size:11.5px; overflow-wrap:anywhere;">{{ package.displayName }}</strong><span style="flex:1 1 auto;"></span><span class="repo-label">{{ package.versionLabel }}</span></div><div style="margin-top:5px; color:oklch(0.64 0.012 255); font:9px/1.5 'IBM Plex Mono',monospace;">{{ package.componentLabel }} · {{ package.reviewLabel }}</div><button onClick="{{ package.install }}" disabled="{{ package.disabled }}" style="width:100%; margin-top:7px; padding:7px; border-radius:5px; border:1px solid oklch(0.52 0.1 155); background:oklch(0.32 0.07 155); color:oklch(0.92 0.03 155); font-size:10.5px; font-weight:600; cursor:pointer;">{{ package.buttonLabel }}</button></article></sc-for></div></sc-if>
       </div>
 
       <div title="{{ sandboxReason }}" style="margin-top:12px; display:flex; align-items:center; gap:7px; padding:8px 9px; border:1px solid {{ sandboxBorder }}; background:{{ sandboxBg }}; border-radius:7px; color:oklch(0.76 0.02 255); font-size:10.5px;"><span style="width:6px; height:6px; border-radius:50%; background:{{ sandboxColor }};"></span><span>{{ sandboxTitle }}</span></div>
@@ -603,7 +611,7 @@
           <sc-if value="{{ canLoadMore }}" hint-placeholder-val="{{ false }}">
             <button class="repo-button repo-load-more" onClick="{{ loadMore }}">{{ loadMoreLabel }}</button>
           </sc-if>
-          <div class="repo-list-footnote">Packages and plugins use static evidence, compatibility, maintenance, license, and risk. They are review priorities—not security verification. Directory inclusion and GitHub stars are discovery metadata only.</div>
+          <div class="repo-list-footnote">H-ranks combine static validation, exact pins, maintenance, license, capability, risk, and low visibility. They prioritize research; they are not security verification. GitHub stars are only a visibility signal.</div>
         </div>
       </section>
 

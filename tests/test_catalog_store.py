@@ -431,6 +431,12 @@ class CatalogCliTests(unittest.TestCase):
         slugs = {item.get("full_name") or item.get("slug") for item in found["artifacts"]}
         self.assertIn("NanmiCoder/dsh-agent-teams", slugs)
 
+        code, gems = self.invoke("research", "gems", "memory", "--limit", "3")
+        self.assertEqual(code, 0)
+        self.assertEqual(gems["policy"], "dsh-forge.hidden-gems/v1")
+        self.assertTrue(gems["candidates"])
+        self.assertTrue(all(item["hidden_gem"]["candidate"] for item in gems["candidates"]))
+
         code, forks = self.invoke("catalog", "search", "--type", "fork", "--sort", "stars", "--limit", "2")
         self.assertEqual(code, 0)
         self.assertEqual(len(forks["artifacts"]), 2)

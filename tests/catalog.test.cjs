@@ -451,7 +451,7 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.equal(values.catalogSourceLabel, 'Imported catalog store');
   assert.equal(values.catalogCountLabel, '9,949 plugins · 23,890 forks');
   assert.equal(values.repoTypes.find(type => type.id === 'plugin').count, 9949);
-  assert.match(values.sortExplanation, /not a Forge quality score/);
+  assert.match(values.sortExplanation, /metadata only, not a security verdict/);
   assert.equal(values.results.length, 1);
   // The store hands back snapshot records; the browser applies its one mapping.
   const embedded = CATALOG.find(item => item.id === fork.artifact_id);
@@ -462,6 +462,33 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.match(values.resultCount, /1 of 23,890 forks/);
   assert.equal(values.canLoadMore, true);
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
+});
+
+test('imported research evidence marks only bounded hidden-gem candidates', async () => {
+  const c = instance();
+  const plugin = snapshot.supplemental_entries[0];
+  const report = {
+    policy: 'dsh-forge.hidden-gems/v1', artifact_id: plugin.artifact_id,
+    score: 94, rank: 7, visibility: 'hidden', confidence: 'metadata-only',
+    candidate: true, capabilities: ['orchestration'],
+    signals: [{ id: 'capability', points: 6, evidence: 'orchestration' }],
+    gaps: ['compatibility unverified'], security_verified: false, executed: false
+  };
+  c.api = async () => ({
+    artifacts: [plugin], research: { [plugin.artifact_id]: report },
+    total: 9949, next_cursor: '', generation: 7
+  });
+  connectedStore(c, { available: true, artifact_count: 9949, counts: { plugin: 9949, fork: 0, package: 0 } });
+  await c.refreshCatalog();
+
+  const values = c.renderVals();
+  assert.equal(values.results[0].rankLabel, 'H07');
+  assert.equal(values.results[0].featuredLabel, 'Hidden gem');
+  values.results[0].select();
+  const detail = c.renderVals();
+  assert(detail.detailRows.some(row => row.k === 'Hidden-gem score' && /94\/100/.test(row.v)));
+  assert.match(detail.detailEvidenceText, /capability/);
+  assert.match(detail.sortExplanation, /metadata only, not a security verdict/);
 });
 
 test('a plugin-only imported store retains the embedded fork snapshot', () => {
@@ -592,6 +619,38 @@ test('package page selects a saved version and posts only stable local identitie
   assert.deepEqual(request, {
     url: '/api/v1/packages/install',
     body: { package_slug: 'agent-teams-builder', version_id: saved.id, profile: 'web' }
+  });
+});
+
+test('front page installs only curator-certified recipes through the sandbox transaction', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], package_installations: [],
+    trusted_package_recipes: [{
+      slug: 'memory-lab', name: 'Memory Lab', version: '1.0.0', component_count: 2,
+      configured: true, certified: true, reviewer: 'Release curator'
+    }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { state: 'ready' };
+  };
+  c.refreshStatus = async () => {};
+
+  const values = c.renderVals();
+  assert.equal(values.certifiedPackages.length, 1);
+  assert.equal(values.certifiedPackages[0].disabled, false);
+  assert.equal(values.certifiedPackages[0].reviewLabel, 'Reviewed by Release curator');
+  await values.certifiedPackages[0].install();
+  assert.deepEqual(request, {
+    url: '/api/v1/packages/install',
+    body: { package_slug: 'memory-lab', version_id: saved.id, profile: 'web' }
   });
 });
 

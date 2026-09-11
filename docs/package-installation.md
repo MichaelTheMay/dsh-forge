@@ -4,35 +4,30 @@ DSH Forge exposes one end-to-end install transaction only for a locally trusted,
 signed recipe and a saved Harness version. Catalog metadata alone never enables
 the button.
 
-## Configure a signed recipe
+## Configure a certified recipe
 
-Create and protect your own Ed25519 release key. Compose and sign the pinned
-AgentTeams example, then place only the public trust root and signed envelope in
-the launcher's fixed recipe slot:
+Create and protect your own Ed25519 release key. Build a proposal from the
+current hidden-gem queue, review its exact source, requested permissions,
+license, and compatibility, then let the research command atomically place the
+signed recipe in the launcher's fixed recipe directory:
 
 ```bash
-python3 -m dsh_forge packages compose \
-  --spec examples/agentteams-package-spec.v1.json \
-  --output /tmp/agent-teams.manifest.json
-
-python3 -m dsh_forge packages sign \
-  --manifest /tmp/agent-teams.manifest.json \
+python3 -m dsh_forge research certify \
+  --proposal /tmp/agent-teams.proposal.json \
   --private-key /secure/path/release-key.pem \
-  --output /tmp/agent-teams.dsse.json
-
-python3 -m dsh_forge packages trust-root \
   --public-key /secure/path/release-key.pub.pem \
   --root-id local.agent-teams \
   --expires-at 2027-09-01T00:00:00Z \
-  --output /tmp/agent-teams.trust-root.json
-
-install -d -m 700 \
-  ~/.local/state/dsh-forge/trusted-package-recipes/agent-teams-builder
-install -m 600 /tmp/agent-teams.dsse.json \
-  ~/.local/state/dsh-forge/trusted-package-recipes/agent-teams-builder/envelope.json
-install -m 600 /tmp/agent-teams.trust-root.json \
-  ~/.local/state/dsh-forge/trusted-package-recipes/agent-teams-builder/trust-root.json
+  --reviewer "Release curator" \
+  --review-source --review-permissions --review-license --review-compatibility \
+  --publish-root ~/.local/state/dsh-forge/trusted-package-recipes
 ```
+
+The slot contains the signed envelope, trust root, original proposal, and
+certification receipt. The signed manifest binds the reviewer and completed
+checklist; the signature is rechecked when installation starts. See
+[Hidden-gem research and publication](hidden-gem-pipeline.md) for proposal
+creation and the full trust boundary.
 
 Restart the loopback launcher, open `#packages/agent-teams-builder`, choose a
 saved Harness version, and select **Verify, test & install**. The browser sends
@@ -43,8 +38,8 @@ The equivalent CLI transaction is:
 
 ```bash
 python3 -m dsh_forge packages install \
-  --bundle /tmp/agent-teams.dsse.json \
-  --trust-root /tmp/agent-teams.trust-root.json \
+  --bundle ~/.local/state/dsh-forge/trusted-package-recipes/agent-teams-builder/envelope.json \
+  --trust-root ~/.local/state/dsh-forge/trusted-package-recipes/agent-teams-builder/trust-root.json \
   --version version_REPLACE_WITH_SAVED_ID \
   --profile web
 ```
