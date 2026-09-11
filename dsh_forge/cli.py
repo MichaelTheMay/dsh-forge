@@ -20,6 +20,7 @@ from .acquisition import (
 )
 from .installation import DEFAULT_INSTALL_ROOT, inspect_acquisition
 from .launcher import Launcher, LauncherError
+from .marketplace import DEFAULT_CATALOG_URL, fetch_catalog
 from .packages import (
     PackageError,
     canonical_bytes,
@@ -83,6 +84,15 @@ def _parser() -> argparse.ArgumentParser:
     import_catalog.add_argument("--package-feed", help="optional validated package catalog feed")
     import_catalog.add_argument("--envelope", help="signed DSSE catalog snapshot to verify and import")
     import_catalog.add_argument("--trust-root", dest="trust_root", help="trust root required to verify --envelope")
+    sync_plugins = catalog_commands.add_parser(
+        "sync-plugins",
+        help="import every plugin from the public DSH Plugin Marketplace feed",
+    )
+    sync_plugins.add_argument(
+        "--url",
+        default=DEFAULT_CATALOG_URL,
+        help="credential-free HTTPS marketplace catalog v1 URL",
+    )
     sign_catalog = catalog_commands.add_parser("sign", help="wrap a catalog snapshot in a signed DSSE envelope")
     sign_catalog.add_argument("snapshot", help="path to the catalog snapshot JSON file")
     sign_catalog.add_argument("--key", required=True, help="Ed25519 private key PEM")
@@ -533,6 +543,9 @@ def run(
                     envelope=read_json(args.envelope) if args.envelope else None,
                     trust_root=read_json(args.trust_root) if args.trust_root else None,
                 )
+            elif command == "catalog.sync-plugins":
+                snapshot = fetch_catalog(args.url)
+                data = launcher.import_catalog(snapshot)
             elif command == "catalog.sign":
                 from .catalog_store import sign_snapshot
 

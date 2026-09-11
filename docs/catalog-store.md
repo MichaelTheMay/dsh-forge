@@ -13,12 +13,15 @@ snapshot. It is what a connected sidecar reads, and it is the only path that
 scales to the real fork network. The upstream fork endpoint captured in the seed
 reports roughly 24,000 forks; ten of them are embedded today.
 
-This mirrors the launcher's existing rule that live sidecar data replaces
-preview inventory rather than merging with it.
+An imported corpus replaces the embedded rows for each artifact type it
+contains. Types absent from that corpus keep their small offline snapshot, so a
+plugin-only feed does not erase the captured fork browser.
 
 ## Importing
 
 ```bash
+python3 -m dsh_forge catalog sync-plugins
+python3 scripts/serve.py --sync-plugins
 python3 -m dsh_forge catalog import data/public-repos.seed.json \
   --package-feed data/package-catalog.seed.json
 python3 -m dsh_forge catalog status
@@ -26,6 +29,22 @@ python3 -m dsh_forge catalog status
 
 Import is offline and inert. It parses metadata, writes rows, and builds a text
 index. It never fetches, unpacks, or executes anything.
+
+`catalog sync-plugins` is the deliberate networked exception. It downloads the
+public DSH Plugin Marketplace v1 catalog over credential-free HTTPS, with a 15
+MB limit and a 60-second timeout. It validates the marketplace's logical SHA-256
+digest, counts, stable GitHub identities, canonical repository URLs, immutable
+commits, and critical field types before converting entries to the same neutral
+snapshot rows used by every other importer. The current marketplace source is:
+
+```text
+https://w2112515.github.io/dsh-plugin-marketplace/plugin-marketplace/catalog-v1.json
+```
+
+The imported provenance remains `unsigned_external_catalog`. Logical integrity
+detects accidental or in-transit mutation; it is not publisher authentication,
+a Forge signature, compatibility proof, or permission to execute a plugin.
+Failed download or validation leaves the previous store untouched.
 
 Import **never upgrades trust on its own**. Whatever `provenance` the snapshot
 recorded is stored verbatim and repeated in every search response, so an
