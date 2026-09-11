@@ -4,7 +4,7 @@ Public power-user repositories can reveal useful plugin combinations that do
 not rank highly in catalogs. Treat this as an additional lead source, not a
 trust source or permission to copy code.
 
-## Evidence to collect later
+## Additional evidence to collect
 
 For an explicitly public repository and immutable commit, parse only declared
 configuration and lock data: DSH profile patches, package manifests, lockfiles,
@@ -27,12 +27,12 @@ compatibility, dependency/conflict consistency, and security blast radius.
 Stars remain display metadata. Deduplicate forks and copied lockfiles by content
 digest so one template does not look like independent adoption.
 
-The first launcher action for an observed set should be **Acquire verified
-bytes**, not **Install**. A curator must compose and sign an exact Forge package;
-the user must select a trust root; and `packages acquire` may then place matching
-artifacts in quarantine. One-click installation and execution remain disabled
-until archive inspection, a disposable profile builder, and networkless
-Apptainer tests are separate reviewed stages.
+The implemented pipeline first creates a metadata-only research proposal. A
+curator must review source identity, permissions, licenses, and compatibility,
+then sign the exact manifest. The front-page action verifies the recipe,
+acquires matching bytes into quarantine, inspects the archive, builds without
+network or lifecycle scripts, and runs smoke checks in Apptainer before atomic
+promotion. See [Hidden-gem research and publication](../hidden-gem-pipeline.md).
 
 Before redistributing a package recipe or artifact, verify license terms for
 every component. A public commit or npm download does not automatically grant

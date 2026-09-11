@@ -21,7 +21,9 @@ user's machine; the disconnected demo does not substitute release cards.
 Community contains a small offline snapshot of real plugins and forks. A
 connected launcher can import the integrity-checked public DSH Plugin Marketplace
 feed, currently covering thousands of plugins, into the local search store.
-Provisional generated packages are no longer promoted in the main browser.
+Forge adds an explainable, bounded hidden-gem research queue over that full
+inventory. Only curator-reviewed, signed recipes appear as packages on the
+front page; provisional generated packages remain hidden.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
@@ -185,6 +187,7 @@ python3 -m dsh_forge catalog sync-plugins
 python3 -m dsh_forge catalog import data/public-repos.seed.json   --package-feed data/package-catalog.seed.json
 python3 -m dsh_forge catalog search "agent teams" --limit 10
 python3 -m dsh_forge catalog search --type fork --sort stars
+python3 -m dsh_forge research gems "project memory" --limit 25
 ```
 
 Import is offline and inert. A snapshot produced by a registry Forge does not
@@ -204,9 +207,11 @@ whose scanner publishes a daily full catalog. Forge bounds the download to 15
 MB, requires credential-free HTTPS, rechecks redirects, validates entry identity
 and the feed's logical SHA-256 digest, and imports metadata only. The upstream
 digest detects corruption but is not a signature or a Forge security verdict.
-The normalized SQLite store is source-neutral: future adapters for other
-agentic development tools can emit the same artifact rows without changing the
-browser or search path.
+The normalized SQLite store and hidden-gem ranker are source-neutral: future
+adapters for other agentic development tools can emit the same artifact rows
+without changing the browser, search path, or research policy. A scheduled
+workflow refreshes a bounded metadata-only review queue daily; it cannot sign
+or publish packages. See [Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
 
 When a store is imported the Community browser searches it instead of the
 embedded snapshot, pages with a **Load more results** button, and names the
@@ -225,13 +230,16 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
   provisional package recipes are not promoted in the primary browser.
 - Search names, authors, descriptions, capabilities, and taxonomy labels.
 - Sort by static-review recommendation, GitHub stars, most recent push, or name.
+- See an H-rank, reproducible score, positive signals, and evidence gaps for the
+  top 250 metadata candidates while retaining the entire imported inventory.
 - Inspect source links, exact package versions and integrity, captured commit
   references, compatibility notes, reported licenses, risk, and provenance.
 - Browse seven evidence-ranked plugin records and ten captured forks without
   network access, or explicitly sync the public marketplace into the connected
   store for full-catalog search. Package publication stays disabled until a
   research process proposes a coherent combination and a curator reviews and
-  signs its exact components.
+  signs its exact components. Certified local recipes then appear on the front
+  page with a sandbox-gated **Verify, test & install** action.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
@@ -313,8 +321,7 @@ promotion, and run decisions remain explicit launcher or CLI actions.
 
 ## Development
 
-All feature and fix pull requests target `development`; `main` is reserved for
-tested release promotions. See the
+Feature and fix pull requests target `main`. See the
 [development and release workflow](docs/development-workflow.md) for the branch
 policy, required checks, and tagged release process.
 

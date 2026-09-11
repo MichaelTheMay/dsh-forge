@@ -1311,6 +1311,7 @@ function catalogDate(value) {
 // One mapping serves both corpora: the embedded snapshot and the records the
 // catalog store hands back verbatim.
 function mapRepositoryArtifact(a) {
+  const hiddenGem = a.hidden_gem && a.hidden_gem.policy ? a.hidden_gem : null;
   return ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
@@ -1325,18 +1326,21 @@ function mapRepositoryArtifact(a) {
   licenseOk: !!a.license.spdx, licenseLabel: a.license.spdx || 'License unknown',
   starsLabel: Number.isInteger(a.github_stars) ? a.github_stars.toLocaleString('en-US') : '—',
   activity: 'Pushed ' + catalogDate(a.pushed_at),
-  rankLabel: a.seed_rank
+  hiddenGem,
+  rankLabel: hiddenGem && hiddenGem.rank
+    ? 'H' + String(hiddenGem.rank).padStart(2, '0')
+    : (a.seed_rank
     ? 'F' + String(a.seed_rank).padStart(2, '0')
-    : (a.curation && a.curation.rank ? 'P' + String(a.curation.rank).padStart(2, '0') : 'B'),
+    : (a.curation && a.curation.rank ? 'P' + String(a.curation.rank).padStart(2, '0') : 'B')),
   versionLabel: a.package ? a.package.registry + ' · ' + a.package.version : '',
   riskLabel: a.curation
     ? a.curation.security_risk + ' risk'
     : ((a.risk_signals || []).length ? (a.risk_signals || []).length + ' risk signal(s)' : ''),
   archivedLabel: a.archived ? 'Archived' : '',
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
-  featured: a.artifact_type === 'plugin'
+  featured: hiddenGem ? hiddenGem.candidate : (a.artifact_type === 'plugin'
     ? !!(a.curation && a.curation.rank <= 3)
-    : Number(a.seed_rank || 999) <= 3,
+    : Number(a.seed_rank || 999) <= 3),
   });
 }
 
@@ -1596,6 +1600,26 @@ class Component extends DCLogic {
     }
   }
 
+  async installCertifiedPackage(recipe) {
+    const versionId = (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    this.setState({ packageInstallBusy: true });
+    try {
+      await this.api('/api/v1/packages/install', {
+        method: 'POST',
+        body: JSON.stringify({ package_slug: recipe.slug, version_id: versionId, profile: 'web' })
+      });
+      await this.refreshStatus(true);
+      this.flash('Certified package tested and installed');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.flash(error.message);
+    } finally {
+      this.setState({ packageInstallBusy: false });
+    }
+  }
+
   async saveCatalogConfiguration(detail) {
     const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
@@ -1790,7 +1814,11 @@ class Component extends DCLogic {
       const page = await this.api('/api/v1/catalog/search?' + parameters.toString());
       // A slower reply for an older query must not overwrite the current one.
       if (this.catalogQueryKey() !== key) return;
-      const mapped = (page.artifacts || []).map(mapCatalogRecord);
+      const research = page.research || {};
+      const mapped = (page.artifacts || []).map(record => mapCatalogRecord({
+        ...record,
+        hidden_gem: research[record.artifact_id] || null
+      }));
       this.setState({
         storeArtifacts: append ? [...this.state.storeArtifacts, ...mapped] : mapped,
         storeTotal: page.total || 0,
@@ -2149,6 +2177,17 @@ class Component extends DCLogic {
       .filter(tree => tree.trust !== 'foreign' && !savedTreeIds.has(tree.id))
       .map(tree => localVersionCard(tree));
     const versions = [...savedCards, ...sessionCards];
+    const installVersion = s.savedVersions.find(item => item.state === 'ready');
+    const certifiedPackages = s.trustedPackageRecipes.map(recipe => ({
+      ...recipe,
+      displayName: recipe.name || recipe.slug,
+      versionLabel: recipe.version ? 'v' + recipe.version : 'signed manifest',
+      componentLabel: recipe.component_count + (recipe.component_count === 1 ? ' component' : ' components'),
+      reviewLabel: recipe.reviewer ? 'Reviewed by ' + recipe.reviewer : 'Curator reviewed',
+      disabled: !s.sidecarConnected || !sandbox.ready || !installVersion || s.packageInstallBusy,
+      buttonLabel: s.packageInstallBusy ? 'Testing…' : 'Verify, test & install',
+      install: () => this.installCertifiedPackage(recipe)
+    }));
     const selectedProfileTree = this.tree(s.treeId);
     const profileTreeReady = !!selectedProfileTree.id && selectedProfileTree.trust !== 'foreign' && selectedProfileTree.launchability === 'ready';
     const localProfiles = s.profiles.map(profile => {
@@ -2324,7 +2363,7 @@ class Component extends DCLogic {
       : null;
     const results = filtered.map(a => ({
       ...a, selected: a.id === detail.id,
-      featuredLabel: a.featured ? 'Featured' : '',
+      featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Featured' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
       border: a.id === detail.id ? SELB : BORDER,
       bg: a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
@@ -2354,6 +2393,10 @@ class Component extends DCLogic {
         v: detail.external_validation.status + (detail.external_validation.code ? ' · ' + detail.external_validation.code : ''),
         color: detail.external_validation.status === 'valid' ? MUTED : WARN
       }] : []),
+      ...(detail.hiddenGem ? [
+        { k: 'Hidden-gem score', v: detail.hiddenGem.score + '/100 · rank H' + String(detail.hiddenGem.rank).padStart(2, '0'), color: BLUE },
+        { k: 'Visibility', v: detail.hiddenGem.visibility + ' · metadata-only confidence', color: MUTED }
+      ] : []),
       ...(detail.installability ? [{ k: 'Installability', v: detail.installability + ' · external catalog claim', color: WARN }] : []),
       { k: 'Last push', v: detail.pushed_at || 'Not reported', color: MUTED },
       { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
@@ -2364,11 +2407,13 @@ class Component extends DCLogic {
       : '';
     const detailEvidenceText = detail.catalogPackage
       ? 'Directory inclusion was used only for discovery. Exact registry versions, integrity values, repository commits, and component roles are shown separately; no component combination has been reproduced.'
-      : (detail.curation
+      : (detail.hiddenGem
+        ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + detail.hiddenGem.signals.map(signal => signal.id).join(', ') + '. The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
+        : (detail.curation
         ? detail.curation.evidence
         : (detail.external_validation
           ? 'The external marketplace classified this entry as ' + detail.external_validation.status + (detail.external_validation.code ? ' (' + detail.external_validation.code + ')' : '') + '. Forge verified the catalog digest but has not executed or security-reviewed the plugin.'
-          : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.'));
+          : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.')));
     const detailTaxonomy = detail.catalogPackage
       ? detail.taxonomy.join(' / ')
       : (detail.curation ? detail.curation.taxonomy.join(' / ') : ((detail.topics || []).slice(0, 8).join(' / ') || 'Unclassified'));
@@ -2441,6 +2486,9 @@ class Component extends DCLogic {
       hasVersions: versions.length > 0,
       noVersions: versions.length === 0,
       versionCountLabel: versions.length + (versions.length === 1 ? ' version found' : ' versions found'),
+      certifiedPackages,
+      hasCertifiedPackages: certifiedPackages.length > 0,
+      noCertifiedPackages: certifiedPackages.length === 0,
       versionsDirectory: (s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions',
       versionFormOpen: s.versionFormOpen,
       versionPath: s.versionPath,
@@ -2611,7 +2659,7 @@ class Component extends DCLogic {
       loadMore: () => this.refreshCatalog({ append: true }),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
-          ? 'Imported metadata order · not a Forge quality score'
+          ? 'Explainable hidden-gem priority · metadata only, not a security verdict'
           : (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order'))
         : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
       results,
@@ -2626,7 +2674,9 @@ class Component extends DCLogic {
       detailTaxonomy,
       detailRisk: detail.catalogPackage
         ? detail.risk.level + ' risk · package candidate B' + String(detail.rank).padStart(2, '0')
-        : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed'),
+        : (detail.hiddenGem
+          ? detail.hiddenGem.confidence + ' · ' + detail.hiddenGem.gaps.length + ' evidence gap(s)'
+          : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed')),
       isPackageDetail: !!detail.catalogPackage,
       isRepositoryDetail: !!detail.id && !detail.catalogPackage,
       isPluginDetail: detail.type === 'plugin',

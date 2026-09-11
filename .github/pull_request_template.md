@@ -8,6 +8,6 @@
 
 ## Branch policy
 
-- [ ] This PR targets `development`, or it is an explicit release promotion from `development` to `main`.
+- [ ] This PR targets the protected `main` branch.
 - [ ] The launcher and catalog checks pass.
 - [ ] User-facing safety or trust claims remain evidence-based.

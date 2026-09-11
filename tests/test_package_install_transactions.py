@@ -8,7 +8,8 @@ from unittest import mock
 
 from dsh_forge.installation import InstallationError
 from dsh_forge.launcher import Launcher, LauncherError
-from dsh_forge.packages import compose, create_trust_root, sign
+from dsh_forge.packages import compose, create_trust_root, sign, verify
+from dsh_forge.research import signed_review_statement
 from tests.helpers import FakeCellSandbox
 from tests.test_packages import package_spec
 
@@ -51,6 +52,7 @@ class PackageInstallTransactionTests(unittest.TestCase):
         )
         spec = package_spec()
         spec["package"]["id"] = "agent-teams-builder"
+        spec["provenance"]["created_by"] = signed_review_statement("Test curator")
         self.envelope = sign(compose(spec), self.private)
         self.trust_root = create_trust_root(
             self.public,
@@ -115,6 +117,25 @@ class PackageInstallTransactionTests(unittest.TestCase):
         recipe.mkdir()
         (recipe / "envelope.json").write_text(json.dumps(self.envelope), encoding="utf-8")
         (recipe / "trust-root.json").write_text(json.dumps(self.trust_root), encoding="utf-8")
+        verified = verify(self.envelope, self.trust_root)
+        (recipe / "certification.json").write_text(json.dumps({
+            "schema": "dsh-forge.package-certification/v1",
+            "policy": "dsh-forge.hidden-gems/v1",
+            "package_id": "agent-teams-builder",
+            "package_name": "Review stack",
+            "package_version": "1.0.0",
+            "component_count": 2,
+            "reviewer": "Test curator",
+            "signed_review_statement": verified["manifest"]["provenance"]["created_by"],
+            "reviewed_at": "2026-09-11T05:00:00Z",
+            "attestations": {"source": True, "permissions": True, "license": True, "compatibility": True},
+            "payload_digest": verified["payload_digest"],
+            "valid_signers": verified["valid_signers"],
+            "metadata_candidate": True,
+            "security_verified": False,
+            "sandbox_verified": False,
+            "install_policy": "acquire-inspect-networkless-apptainer-smoke-test-then-promote",
+        }), encoding="utf-8")
         with mock.patch.object(self.launcher, "install_package", return_value={"state": "ready"}) as install:
             result = self.launcher.install_trusted_catalog_package(
                 package_slug="agent-teams-builder",
@@ -123,8 +144,22 @@ class PackageInstallTransactionTests(unittest.TestCase):
         self.assertEqual(result["state"], "ready")
         self.assertEqual(install.call_args.kwargs["version_id"], self.version_id)
         self.assertEqual(self.launcher.trusted_package_recipes(), [
-            {"slug": "agent-teams-builder", "configured": True, "verified_at_install": True}
+            {
+                "slug": "agent-teams-builder", "name": "Review stack", "version": "1.0.0",
+                "component_count": 2, "configured": True, "certified": True,
+                "reviewer": "Test curator", "reviewed_at": "2026-09-11T05:00:00Z",
+                "verified_at_install": False,
+            }
         ])
+        certification = json.loads((recipe / "certification.json").read_text(encoding="utf-8"))
+        certification["reviewer"] = "Different curator"
+        (recipe / "certification.json").write_text(json.dumps(certification), encoding="utf-8")
+        self.assertEqual(self.launcher.trusted_package_recipes(), [])
+        with self.assertRaisesRegex(LauncherError, "does not match"):
+            self.launcher.install_trusted_catalog_package(
+                package_slug="agent-teams-builder",
+                version_id=self.version_id,
+            )
 
 
 if __name__ == "__main__":

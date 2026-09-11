@@ -25,10 +25,11 @@ import time
 from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from .packages import PackageError, sign_payload, verify_signed_payload
+from .research import POLICY_VERSION, rank_artifacts
 
 
-STORE_SCHEMA_VERSION = 1
-CATALOG_STORE_SCHEMA = "dsh-forge.catalog-store/v1"
+STORE_SCHEMA_VERSION = 2
+CATALOG_STORE_SCHEMA = "dsh-forge.catalog-store/v2"
 
 MAX_QUERY_LENGTH = 200
 MAX_QUERY_TERMS = 12
@@ -167,7 +168,12 @@ def _terms(values: Iterable[Any]) -> str:
 
 def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
     """Yield storable rows for forks, plugins, and packages in one shape."""
-    for entry in list(snapshot.get("entries") or []) + list(snapshot.get("supplemental_entries") or []):
+    repository_entries = list(snapshot.get("entries") or []) + list(snapshot.get("supplemental_entries") or [])
+    research = rank_artifacts(
+        (entry for entry in repository_entries if isinstance(entry, Mapping)),
+        snapshot.get("fetched_at"),
+    )
+    for entry in repository_entries:
         if not isinstance(entry, dict):
             continue
         identity = _text(entry.get("artifact_id"), 256)
@@ -177,7 +183,8 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
         curation = entry.get("curation") if isinstance(entry.get("curation"), dict) else {}
         package = entry.get("package") if isinstance(entry.get("package"), dict) else {}
         license_value = entry.get("license") if isinstance(entry.get("license"), dict) else {}
-        rank = _integer(entry.get("seed_rank")) or _integer(curation.get("rank"))
+        report = research.get(identity, {})
+        rank = _integer(entry.get("seed_rank")) or _integer(curation.get("rank")) or _integer(report.get("rank"))
         yield {
             "artifact_id": identity,
             "type": kind,
@@ -199,6 +206,7 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
                 *(curation.get("taxonomy") or []),
                 package.get("name"), package.get("version"), package.get("registry"),
             ]),
+            "research": report,
             "record": entry,
         }
 
@@ -240,6 +248,7 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
                 *(entry.get("taxonomy") or []),
                 *component_terms,
             ]),
+            "research": {},
             "record": entry,
         }
 
@@ -276,6 +285,7 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             featured    INTEGER NOT NULL,
             risk        TEXT NOT NULL,
             terms       TEXT NOT NULL,
+            research    TEXT NOT NULL,
             record      TEXT NOT NULL
         );
         CREATE INDEX artifacts_rank ON artifacts (rank_value, stars DESC, artifact_id);
@@ -324,14 +334,15 @@ def build(
                         """
                         INSERT OR REPLACE INTO artifacts (
                             artifact_id, type, slug, name, name_key, owner, description, language,
-                            license, stars, pushed_at, archived, rank_value, featured, risk, terms, record
-                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            license, stars, pushed_at, archived, rank_value, featured, risk, terms, research, record
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """,
                         (
                             row["artifact_id"], row["type"], row["slug"], row["name"], row["name"].casefold(),
                             row["owner"], row["description"], row["language"], row["license"], row["stars"],
                             row["pushed_at"], row["archived"], row["rank_value"], row["featured"], row["risk"],
-                            row["terms"], json.dumps(row["record"], separators=(",", ":")),
+                            row["terms"], json.dumps(row["research"], separators=(",", ":")),
+                            json.dumps(row["record"], separators=(",", ":")),
                         ),
                     )
                 connection.execute(
@@ -349,6 +360,7 @@ def build(
                     "provenance": json.dumps(provenance or snapshot.get("provenance") or {}, sort_keys=True),
                     # Only a verified envelope may record a signature here.
                     "signature": json.dumps(dict(signature) if signature else {"verified": False}, sort_keys=True),
+                    "research_policy": POLICY_VERSION,
                 }
                 connection.executemany(
                     "INSERT INTO meta (key, value) VALUES (?, ?)", sorted(recorded.items())
@@ -451,6 +463,7 @@ class CatalogStore:
             "fetched_at": values.get("fetched_at", ""),
             "provenance": json.loads(values.get("provenance", "{}")),
             "signature": json.loads(values.get("signature", '{"verified": false}')),
+            "research_policy": values.get("research_policy", ""),
         }
 
     def status(self) -> dict[str, Any]:
@@ -526,7 +539,7 @@ class CatalogStore:
         try:
             total = connection.execute(f"SELECT COUNT(*) AS n FROM {source}{clause}", parameters).fetchone()["n"]
             rows = connection.execute(
-                f"SELECT artifacts.record FROM {source}{clause} ORDER BY {order} LIMIT ? OFFSET ?",
+                f"SELECT artifacts.record, artifacts.research FROM {source}{clause} ORDER BY {order} LIMIT ? OFFSET ?",
                 [*parameters, limit + 1, offset],
             ).fetchall()
         except sqlite3.Error as error:
@@ -534,9 +547,15 @@ class CatalogStore:
 
         has_more = len(rows) > limit
         page = [json.loads(row["record"]) for row in rows[:limit]]
+        research = {
+            record["artifact_id"]: json.loads(row["research"])
+            for record, row in zip(page, rows[:limit])
+            if row["research"] and record.get("artifact_id")
+        }
         next_offset = offset + limit
         return {
             "artifacts": page,
+            "research": research,
             "total": total,
             "offset": offset,
             "limit": limit,
@@ -555,6 +574,13 @@ class CatalogStore:
             "SELECT record FROM artifacts WHERE artifact_id = ?", (str(artifact_id or "")[:256],)
         ).fetchone()
         return json.loads(row["record"]) if row else None
+
+    def get_research(self, artifact_id: str) -> dict[str, Any] | None:
+        connection = self._open()
+        row = connection.execute(
+            "SELECT research FROM artifacts WHERE artifact_id = ?", (str(artifact_id or "")[:256],)
+        ).fetchone()
+        return json.loads(row["research"]) if row and row["research"] else None
 
     @staticmethod
     def _encode_cursor(generation: int, offset: int) -> str:

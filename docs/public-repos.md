@@ -87,11 +87,12 @@ Plugin records remain separate from the top-ten fork ranking with
 only a repository name, topic, store listing, or the presence of plugin-like
 code. A fork must not enter the ranked ten unless it actually ranks there.
 
-The production research registry should enrich these candidates, propose
-coherent multi-plugin packages, and publish only curator-approved signed
-snapshots. Its unsigned status, absent source analysis, unknown compatibility,
-and lack of security verification must remain visible until each stage supplies
-evidence.
+Forge now creates a bounded, explainable metadata research queue, resolves exact
+npm pins for curator-selected proposals, and publishes a local recipe only after
+four explicit reviews and an Ed25519 signature. The daily workflow cannot sign.
+Unsigned status, absent source analysis, unknown compatibility, and lack of
+security verification remain visible until each later stage supplies evidence.
+See [Hidden-gem research and publication](hidden-gem-pipeline.md).
 
 Metadata is rendered as text. The embedding script rejects noncanonical source
 URLs, checks identity and commit shape, and escapes script delimiters. It will
@@ -99,21 +100,19 @@ not treat a production signature as verified without a real verifier.
 
 ## Deferred actions
 
-Browser-based composition, upload, download, and integration into an existing
-version remain disabled. Offline metadata composition, signature verification,
-and explicit signed-bundle acquisition into a non-executable quarantine are
-available through the CLI. Acquisition cannot start from an unsigned browser
-entry. No downloaded archive is extracted, installed, built, or executed. If a
+Browser-based composition and public uploads remain disabled. The CLI research
+path can create and certify a local proposal, and the front page can run the
+complete signed acquisition and sandbox-install transaction for that certified
+recipe. Acquisition cannot start from an unsigned browser entry. If a
 community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
 enable host launch. An isolated port or writable home alone is not a security
 sandbox.
 
-The intended later skill must pin revisions, assess compatibility, preserve
-the original installation through a disposable clone/new profile, and expose
-conflicts or unsupported changes. Sandbox checks must pass before promotion.
-Do not promise automatic integration of every fork.
+Broader adapters still need to pin revisions and normalize their metadata.
+Curators must assess compatibility and expose conflicts; sandbox checks pass
+before promotion. Forge does not promise automatic integration of every fork.
 
 ## Readiness
 

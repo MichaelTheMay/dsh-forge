@@ -1,0 +1,44 @@
+name: Catalog research queue
+
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-research
+  cancel-in-progress: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build the metadata-only hidden-gem queue
+        run: python3 scripts/research_catalog.py --output dist/hidden-gems.json
+      - name: Validate the queue contract
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          queue = json.loads(Path('dist/hidden-gems.json').read_text(encoding='utf-8'))
+          assert queue['schema'] == 'dsh-forge.discovery-queue/v1'
+          assert queue['source_count'] >= queue['candidate_count'] > 0
+          assert queue['claims'] == {
+              'executed': False,
+              'metadata_only': True,
+              'security_verified': False,
+          }
+          PY
+      - name: Retain the review queue
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hidden-gem-research-${{ github.run_id }}
+          path: dist/hidden-gems.json
+          if-no-files-found: error
+          retention-days: 30

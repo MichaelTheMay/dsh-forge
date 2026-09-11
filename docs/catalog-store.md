@@ -30,6 +30,12 @@ python3 -m dsh_forge catalog status
 Import is offline and inert. It parses metadata, writes rows, and builds a text
 index. It never fetches, unpacks, or executes anything.
 
+Each repository row also gets a separate explainable research report under
+`dsh-forge.hidden-gems/v1`. The source record is preserved verbatim. Ranking the
+full corpus selects at most 250 candidates per artifact type for human review;
+all other rows remain searchable. Re-import a store created by schema v1 so it
+can add these reports.
+
 `catalog sync-plugins` is the deliberate networked exception. It downloads the
 public DSH Plugin Marketplace v1 catalog over credential-free HTTPS, with a 15
 MB limit and a 60-second timeout. It validates the marketplace's logical SHA-256
@@ -133,6 +139,8 @@ API read.
 - **Records are returned verbatim.** The store hands back the same record the
   snapshot contained, so the browser applies one mapping for both the embedded
   and the imported path.
+- **Research is returned separately.** The `research` object is keyed by stable
+  artifact ID, preventing an upstream record from asserting its own Forge score.
 
 ## What the browser shows
 
@@ -176,9 +184,10 @@ Everything is bounded so a large corpus cannot turn into a large response:
 | Paging depth | 10,000 results |
 
 Deep paging stops rather than letting a caller walk the whole corpus one page at
-a time; narrow the query instead. At 24,000 records the store builds in well
-under a second, occupies roughly 27 MB, and answers text queries in tens of
-milliseconds.
+a time; narrow the query instead. The 9,949-entry marketplace snapshot, including
+its explainable research evidence, builds in under a second and occupies about
+45 MB in the current Windows test environment. CI also exercises bounded pages
+against a synthetic 12,000-row corpus.
 
 ## Concurrency
 
