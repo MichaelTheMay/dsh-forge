@@ -9,7 +9,12 @@ from tests.test_marketplace import sample_catalog
 
 
 def root(count=2):
-    return {"id": 100, "full_name": "deepseek-ai/deepseek-harness", "network_count": count}
+    return {
+        "id": 100,
+        "full_name": "deepseek-ai/deepseek-harness",
+        "network_count": count,
+        "default_branch": "main",
+    }
 
 
 def fork(identity, name, *, stars=1):
@@ -80,6 +85,7 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(snapshot["coverage"][0]["discovered_count"], 2)
         self.assertEqual(len(snapshot["entries"]), 2)
         self.assertTrue(all(item["head_sha"] is None for item in snapshot["entries"]))
+        self.assertTrue(all(item["source_default_branch"] == "main" for item in snapshot["entries"]))
 
     def test_changed_count_and_page_budget_are_reported_as_incomplete(self):
         first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
@@ -150,10 +156,11 @@ class RegistryTests(unittest.TestCase):
         self.assertEqual(record["artifact_type"], "plugin")
         self.assertEqual(set(record["classifications"]), {"plugin", "fork"})
 
-    def test_fork_can_enter_metadata_research_without_being_installable(self):
+    def test_unanalyzed_fork_is_a_lead_but_not_a_hidden_gem_candidate(self):
         record = _fork(fork(1, "review-gem"), "deepseek-ai/deepseek-harness")
         report = evaluate_artifact(record, "2026-09-11T12:00:00Z")
-        self.assertTrue(report["candidate"])
+        self.assertFalse(report["candidate"])
+        self.assertGreaterEqual(report["score"], 45)
         self.assertFalse(report["security_verified"])
         self.assertIn("no immutable source revision", report["gaps"])
         self.assertIn("fork divergence not analyzed", report["gaps"])

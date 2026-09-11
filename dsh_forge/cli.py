@@ -31,7 +31,7 @@ from .packages import (
     verify as verify_package,
     write_json,
 )
-from .research import ResearchError, certify_proposal, compose_proposal
+from .research import ResearchError, certify_proposal, compose_proposal, create_fork_assessment
 from .catalog_store import MAX_SNAPSHOT_BYTES
 
 
@@ -116,6 +116,16 @@ def _parser() -> argparse.ArgumentParser:
     gems.add_argument("query", nargs="?", default="", help="optional capability or keyword query")
     gems.add_argument("--limit", type=int, default=25)
     gems.add_argument("--type", action="append", choices=["plugin", "fork"], dest="types")
+    evaluate = research_commands.add_parser("evaluate", help="record an inert curator decision for one analyzed fork")
+    evaluate.add_argument("--artifact", required=True)
+    evaluate.add_argument("--decision", required=True, choices=["advance", "hold", "reject"])
+    evaluate.add_argument("--reviewer", required=True)
+    evaluate.add_argument("--reviewed-at", required=True, metavar="UTC")
+    evaluate.add_argument("--notes", default="")
+    evaluate.add_argument("--output", required=True, metavar="JSON")
+    evaluate.add_argument("--force", action="store_true")
+    for review in ("source", "risk", "license", "compatibility"):
+        evaluate.add_argument(f"--review-{review}", action="store_true", required=True)
     propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
     propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
     propose.add_argument("--package-id", required=True)
@@ -650,6 +660,29 @@ def run(
                     "package": proposal["manifest"]["package"],
                     "candidate_count": len(reports),
                     "status": proposal["status"],
+                }
+            elif command == "research.evaluate":
+                record = launcher.catalog_store.get(args.artifact)
+                if record is None:
+                    raise ResearchError(f"Unknown catalog artifact: {args.artifact}")
+                report = launcher.catalog_store.get_research(args.artifact)
+                assessment = create_fork_assessment(
+                    record,
+                    report or {},
+                    decision=args.decision,
+                    reviewer=args.reviewer,
+                    reviewed_at=args.reviewed_at,
+                    reviews=("source", "risk", "license", "compatibility"),
+                    notes=args.notes,
+                )
+                write_json(args.output, assessment, force=args.force)
+                data = {
+                    "output": str(Path(args.output).expanduser()),
+                    "artifact_id": assessment["artifact_id"],
+                    "commit": assessment["commit"],
+                    "decision": assessment["decision"],
+                    "assessment_digest": assessment["assessment_digest"],
+                    "installation_authorized": False,
                 }
             elif command == "profiles.list":
                 status = launcher.status()

@@ -7,6 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WorkflowPolicyTests(unittest.TestCase):
+    def test_node_setup_action_uses_node24_runtime(self):
+        revision = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0"
+        for name in ("checks.yml", "release.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            self.assertIn(revision, workflow)
+
     def test_ci_covers_integration_and_release_branches(self):
         workflow = (ROOT / ".github/workflows/checks.yml").read_text(encoding="utf-8")
         self.assertRegex(workflow, r"pull_request:\s*\n\s*branches: \[development, main\]")
@@ -31,6 +37,8 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_catalog_research_indexes_plugins_and_forks_before_ranking(self):
         workflow = (ROOT / ".github/workflows/catalog-research.yml").read_text(encoding="utf-8")
         self.assertIn("scripts/index_registry.py", workflow)
+        self.assertIn("scripts/analyze_registry.py", workflow)
+        self.assertIn("--snapshot dist/registry-raw.json", workflow)
         self.assertIn("--snapshot dist/registry.json", workflow)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("dist/registry.json", workflow)

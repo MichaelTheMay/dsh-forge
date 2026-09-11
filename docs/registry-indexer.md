@@ -6,7 +6,8 @@ depends on GitHub or a marketplace being online.
 
 ```bash
 export GITHUB_TOKEN=REDACTED
-python3 scripts/index_registry.py --output registry.json
+python3 scripts/index_registry.py --output registry-raw.json
+python3 scripts/analyze_registry.py --snapshot registry-raw.json --output registry.json
 python3 -m dsh_forge catalog import registry.json
 ```
 
@@ -57,14 +58,17 @@ the product must not call it “all forks.” The endpoint response is metadata
 only: the indexer never clones, installs, imports, or executes repository code.
 
 Fork rows initially remain `browse-only` and deliberately omit an immutable
-head commit. The research queue may select promising low-visibility forks for
-deeper analysis, but installation requires later commit resolution, source and
+head commit. The bounded analysis command selects at most 100 promising
+metadata leads, pins source and fork heads, captures GitHub compare evidence,
+and extracts path/manifest compatibility and risk signals without cloning or
+executing code. Unselected records remain fully browseable. Installation requires source and
 permission review, license verification, compatibility testing, signing, and
 the existing networkless Apptainer certification path.
 
 ## Scheduled output
 
-`.github/workflows/catalog-research.yml` rebuilds `registry.json` and the bounded
+`.github/workflows/catalog-research.yml` rebuilds the raw registry, enriched
+`registry.json`, and the bounded
 `hidden-gems.json` research queue every day and on manual dispatch. Both are
 retained for 30 days as workflow artifacts. The workflow has read-only contents
 permission and no curator signing key, so it cannot certify or publish a

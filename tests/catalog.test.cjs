@@ -465,6 +465,42 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
 });
 
+test('analyzed forks disclose immutable divergence evidence without claiming execution', async () => {
+  const c = instance();
+  const fork = snapshot.entries[0];
+  const analyzed = {
+    ...fork,
+    divergence: {
+      status: 'diverged', ahead_by: 4, behind_by: 2, listed_file_count: 300,
+      files_truncated: true, changed_paths: ['plugins/memory/index.ts']
+    },
+    compatibility: {
+      status: 'inferred_metadata', changed_surfaces: ['plugin runtime'],
+      summary: 'Source-diff signals only; runtime compatibility has not been tested.'
+    },
+    analysis_evidence: {
+      digest: 'sha256:' + 'a'.repeat(64), analyzer: 'dsh-forge.github-compare/v1'
+    }
+  };
+  c.api = async () => ({
+    artifacts: [analyzed], total: 1, next_cursor: '', generation: 8,
+    research: { [fork.artifact_id]: {
+      policy: 'dsh-forge.hidden-gems/v1', candidate: true, score: 91, rank: 1,
+      confidence: 'source-diff-metadata', signals: [], gaps: []
+    } }
+  });
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  connectedStore(c, { available: true, counts: { plugin: 0, fork: 1, package: 0 } });
+  await c.refreshCatalog();
+  const values = c.renderVals();
+  assert.match(values.detailRows.find(row => row.k === 'Source difference').v, /4 fork-only commit/);
+  assert.match(values.detailRows.find(row => row.k === 'Changed files').v, /provider limit reached/);
+  assert.match(values.detailRows.find(row => row.k === 'Trust').v, /not executed or security-reviewed/);
+  assert.match(values.detailEvidenceText, /300-file response limit/);
+  assert.equal(values.forkDownloadUrl,
+    'https://codeload.github.com/' + fork.full_name + '/tar.gz/' + fork.head_sha);
+});
+
 test('fork coverage is disclosed beside imported results', () => {
   const c = instance();
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();

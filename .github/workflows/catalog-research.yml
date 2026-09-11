@@ -21,8 +21,12 @@ jobs:
       - name: Index the external plugin catalog and GitHub fork network
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/index_registry.py --output dist/registry.json
-      - name: Build the metadata-only hidden-gem queue
+        run: python3 scripts/index_registry.py --output dist/registry-raw.json
+      - name: Analyze a bounded set of promising forks at immutable commits
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/analyze_registry.py --snapshot dist/registry-raw.json --output dist/registry.json
+      - name: Build the evidence-ranked hidden-gem queue
         run: python3 scripts/research_catalog.py --snapshot dist/registry.json --output dist/hidden-gems.json
       - name: Validate the queue contract
         run: |
@@ -36,6 +40,9 @@ jobs:
           assert queue['source_count'] >= queue['candidate_count'] > 0
           assert registry['coverage']
           assert all(item['status'] in {'complete', 'incomplete'} for item in registry['coverage'])
+          analysis = next(item for item in registry['coverage'] if item['source'] == 'github-rest/fork-analysis')
+          assert analysis['selected_count'] == analysis['analyzed_count'] + analysis['failed_count']
+          assert analysis['limit'] == 100
           assert queue['claims'] == {
               'executed': False,
               'metadata_only': True,

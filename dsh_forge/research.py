@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -27,6 +28,7 @@ POLICY_VERSION = "dsh-forge.hidden-gems/v1"
 PROPOSAL_SCHEMA = "dsh-forge.research-proposal/v1"
 CERTIFICATION_SCHEMA = "dsh-forge.package-certification/v1"
 DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v1"
+FORK_ASSESSMENT_SCHEMA = "dsh-forge.fork-assessment/v1"
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_PROPOSAL_PLUGINS = 8
 MAX_DISCOVERY_QUEUE = 250
@@ -104,16 +106,35 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
 
     artifact_type = str(record.get("artifact_type") or "repository")
     source_repository = record.get("source_repository")
+    divergence = record.get("divergence") if isinstance(record.get("divergence"), Mapping) else None
     if artifact_type == "fork" and isinstance(source_repository, str) and source_repository:
         add("fork-lineage", 14, f"GitHub reports fork-network lineage from {source_repository}")
-        if not isinstance(record.get("divergence"), Mapping):
+        if divergence is None:
             gaps.append("fork divergence not analyzed")
+        else:
+            ahead = divergence.get("ahead_by")
+            listed_files = divergence.get("listed_file_count")
+            if isinstance(ahead, int) and not isinstance(ahead, bool) and ahead > 0:
+                add(
+                    "fork-divergence",
+                    18,
+                    f"{ahead} fork-only commit(s), {listed_files if isinstance(listed_files, int) else 'unknown'} changed file(s) listed",
+                )
+                if divergence.get("files_truncated") is True:
+                    gaps.append("changed-file inventory truncated at provider limit")
+            else:
+                add("no-fork-divergence", -20, str(divergence.get("status") or "no fork-only commits"))
+                gaps.append("no fork-only commits found")
 
     commit = record.get("head_sha")
     if isinstance(commit, str) and _COMMIT.fullmatch(commit):
         add("immutable-revision", 10, commit)
     else:
         gaps.append("no immutable source revision")
+
+    compatibility = record.get("compatibility") if isinstance(record.get("compatibility"), Mapping) else {}
+    if compatibility.get("status") == "inferred_metadata":
+        add("compatibility-signals", 4, ", ".join(compatibility.get("changed_surfaces") or []) or "source-diff metadata")
 
     package = record.get("package") if isinstance(record.get("package"), Mapping) else {}
     if isinstance(package.get("name"), str) and isinstance(package.get("version"), str):
@@ -195,6 +216,12 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
             and score >= 55
             and isinstance(source_repository, str)
             and source_repository
+            and isinstance(commit, str)
+            and _COMMIT.fullmatch(commit)
+            and divergence is not None
+            and isinstance(divergence.get("ahead_by"), int)
+            and not isinstance(divergence.get("ahead_by"), bool)
+            and divergence.get("ahead_by") > 0
             and capabilities
             and len(description) >= 40
         )
@@ -212,7 +239,7 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
         "score": score,
         "rank": None,
         "visibility": visibility,
-        "confidence": "metadata-only",
+        "confidence": "source-diff-metadata" if divergence is not None else "metadata-only",
         "candidate": eligible,
         "capabilities": capabilities,
         "signals": signals,
@@ -220,6 +247,79 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
         "security_verified": False,
         "executed": False,
     }
+
+
+def create_fork_assessment(
+    record: Mapping[str, Any],
+    research: Mapping[str, Any],
+    *,
+    decision: str,
+    reviewer: str,
+    reviewed_at: str,
+    reviews: Iterable[str],
+    notes: str = "",
+) -> dict[str, Any]:
+    """Create an inert curator decision bound to one analyzed fork revision."""
+
+    if record.get("artifact_type") != "fork":
+        raise ResearchError("Fork assessment requires a fork artifact")
+    identity = str(record.get("artifact_id") or "")
+    repository_url = str(record.get("repository_url") or "")
+    commit = str(record.get("head_sha") or "")
+    evidence = record.get("analysis_evidence") if isinstance(record.get("analysis_evidence"), Mapping) else {}
+    evidence_digest = evidence.get("digest")
+    if not identity or not repository_url.startswith("https://github.com/") or not _COMMIT.fullmatch(commit):
+        raise ResearchError("Fork assessment requires an immutable GitHub revision")
+    if not isinstance(evidence_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", evidence_digest):
+        raise ResearchError("Fork assessment requires source-analysis evidence")
+    if (
+        not isinstance(research, Mapping)
+        or research.get("policy") != POLICY_VERSION
+        or research.get("artifact_id") != identity
+        or not isinstance(research.get("subject"), Mapping)
+        or research["subject"].get("commit") != commit
+    ):
+        raise ResearchError("Fork assessment research does not match the analyzed revision")
+    if decision not in {"advance", "hold", "reject"}:
+        raise ResearchError("Fork assessment decision must be advance, hold, or reject")
+    required = {"source", "risk", "license", "compatibility"}
+    completed = set(reviews)
+    if completed != required:
+        raise ResearchError("Fork assessment requires explicit source, risk, license, and compatibility reviews")
+    reviewer = str(reviewer or "").strip()
+    notes = str(notes or "").strip()
+    if not 2 <= len(reviewer) <= 128 or any(ord(character) < 32 for character in reviewer):
+        raise ResearchError("Reviewer must contain 2 to 128 printable characters")
+    if len(notes) > 4_000 or any(ord(character) < 9 for character in notes):
+        raise ResearchError("Assessment notes exceed the safe text limit")
+    instant = _instant(reviewed_at)
+    if instant is None or len(reviewed_at) > 64:
+        raise ResearchError("Assessment reviewed-at must be an ISO 8601 timestamp with a timezone")
+    payload = {
+        "schema": FORK_ASSESSMENT_SCHEMA,
+        "policy": POLICY_VERSION,
+        "artifact_id": identity,
+        "repository_url": repository_url,
+        "commit": commit,
+        "evidence_digest": evidence_digest,
+        "research_score": research.get("score"),
+        "research_rank": research.get("rank"),
+        "decision": decision,
+        "reviewer": reviewer,
+        "reviewed_at": instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "attestations": {name: True for name in sorted(required)},
+        "notes": notes,
+        "claims": {
+            "signed": False,
+            "executed": False,
+            "security_verified": False,
+            "installation_authorized": False,
+        },
+    }
+    payload["assessment_digest"] = "sha256:" + hashlib.sha256(json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode("utf-8")).hexdigest()
+    return payload
 
 
 def rank_artifacts(records: Iterable[Mapping[str, Any]], observed_at: Any = None) -> dict[str, dict[str, Any]]:

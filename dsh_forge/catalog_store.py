@@ -182,6 +182,8 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
             continue
         curation = entry.get("curation") if isinstance(entry.get("curation"), dict) else {}
         package = entry.get("package") if isinstance(entry.get("package"), dict) else {}
+        divergence = entry.get("divergence") if isinstance(entry.get("divergence"), dict) else {}
+        compatibility = entry.get("compatibility") if isinstance(entry.get("compatibility"), dict) else {}
         license_value = entry.get("license") if isinstance(entry.get("license"), dict) else {}
         report = research.get(identity, {})
         rank = _integer(entry.get("seed_rank")) or _integer(curation.get("rank")) or _integer(report.get("rank"))
@@ -204,6 +206,8 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
                 entry.get("name"), entry.get("owner"), entry.get("full_name"),
                 *(entry.get("topics") or []),
                 *(curation.get("taxonomy") or []),
+                *(divergence.get("changed_paths") or []),
+                *(compatibility.get("changed_surfaces") or []),
                 package.get("name"), package.get("version"), package.get("registry"),
             ]),
             "research": report,

@@ -14,6 +14,7 @@ from dsh_forge.research import (
     ResearchError,
     certify_proposal,
     compose_proposal,
+    create_fork_assessment,
     discovery_queue,
     evaluate_artifact,
     fetch_npm_pin,
@@ -21,6 +22,8 @@ from dsh_forge.research import (
     signed_review_statement,
 )
 from tests.test_marketplace import sample_catalog
+from tests.test_registry import fork
+from dsh_forge.registry import _fork
 
 
 def plugin_record():
@@ -55,6 +58,39 @@ def npm_pin(name="@example/dsh-memory", version="0.5.2"):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_fork_assessment_binds_curator_decision_to_evidence_and_never_authorizes_install(self):
+        record = _fork(fork(7, "review-gem"), "deepseek-ai/deepseek-harness")
+        record.update({
+            "head_sha": "a" * 40,
+            "divergence": {"ahead_by": 2, "listed_file_count": 3, "status": "ahead"},
+            "analysis_evidence": {"digest": "sha256:" + "b" * 64},
+        })
+        report = evaluate_artifact(record, "2026-09-11T12:00:00Z")
+        assessment = create_fork_assessment(
+            record,
+            report,
+            decision="advance",
+            reviewer="Release curator",
+            reviewed_at="2026-09-11T13:00:00-05:00",
+            reviews=("source", "risk", "license", "compatibility"),
+            notes="Advance to isolated source review.",
+        )
+        self.assertEqual(assessment["commit"], "a" * 40)
+        self.assertEqual(assessment["reviewed_at"], "2026-09-11T18:00:00Z")
+        self.assertFalse(assessment["claims"]["installation_authorized"])
+        self.assertFalse(assessment["claims"]["signed"])
+        self.assertRegex(assessment["assessment_digest"], r"^sha256:[0-9a-f]{64}$")
+        record["head_sha"] = "c" * 40
+        with self.assertRaisesRegex(ResearchError, "does not match"):
+            create_fork_assessment(
+                record,
+                report,
+                decision="advance",
+                reviewer="Release curator",
+                reviewed_at="2026-09-11T18:00:00Z",
+                reviews=("source", "risk", "license", "compatibility"),
+            )
+
     def test_hidden_gem_score_is_explainable_and_rewards_low_visibility(self):
         record = plugin_record()
         report = evaluate_artifact(record, "2026-09-10T08:07:32Z")
