@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
 const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
 const snapshot = JSON.parse(fs.readFileSync(path.join(root, 'data/public-repos.seed.json'), 'utf8'));
 const packageFeed = JSON.parse(fs.readFileSync(path.join(root, 'data/package-catalog.seed.json'), 'utf8'));
+const vercel = JSON.parse(fs.readFileSync(path.join(root, 'web/vercel.json'), 'utf8'));
 class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
@@ -462,6 +463,15 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.match(values.resultCount, /1 of 23,890 forks/);
   assert.equal(values.canLoadMore, true);
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
+});
+
+test('permanent static deployment preserves the launcher security headers', () => {
+  const headers = Object.fromEntries(vercel.headers[0].headers.map(item => [item.key, item.value]));
+  assert.match(headers['Content-Security-Policy'], /script-src 'self'/);
+  assert.match(headers['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.equal(headers['X-Content-Type-Options'], 'nosniff');
+  assert.equal(headers['X-Frame-Options'], 'DENY');
+  assert.equal(headers['Referrer-Policy'], 'no-referrer');
 });
 
 test('imported research evidence marks only bounded hidden-gem candidates', async () => {
