@@ -44,6 +44,13 @@ reconciliation; partial snapshots remain available with explicit reasons. The qu
 and carries explicit `executed: false` and `security_verified: false` claims. It
 never commits generated data or publishes a package automatically.
 
+On `main`, the workflow also writes deterministic gzip versions plus
+`registry-feed.json` to the stable `catalog-latest` GitHub Release. The feed
+index is uploaded last, so readers either verify the complete new registry or
+fail closed during the short replacement window. Both compressed and expanded
+SHA-256 values are checked before JSON import. This is a durable public metadata
+feed, not a Forge signature or installation approval.
+
 Build the same review artifact locally:
 
 ```bash
@@ -51,6 +58,7 @@ python3 scripts/index_registry.py --output /tmp/registry.json
 python3 scripts/analyze_registry.py --snapshot /tmp/registry.json --output /tmp/registry-analyzed.json
 python3 scripts/research_catalog.py --snapshot /tmp/registry-analyzed.json --output /tmp/hidden-gems.json
 python3 -m dsh_forge catalog sync-plugins
+python3 -m dsh_forge catalog sync
 python3 -m dsh_forge research gems "project memory" --type plugin --type fork --limit 25
 ```
 

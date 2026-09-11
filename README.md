@@ -3,9 +3,9 @@
 DSH Forge is the open-source local launcher and catalog client for discovering,
 inspecting, and running trusted DeepSeek Harness installations.
 
-The public ecosystem crawler and catalog publisher are planned as a separate,
-agent-tool-neutral `dsh-forge-registry` service. This repository already owns
-the versioned catalog contract and offline client boundary.
+The source-neutral crawler publishes a checksum-verified, compressed public
+catalog from this repository. The local launcher consumes that feed without a
+GitHub credential and keeps the imported search store on the user's machine.
 
 ## Status
 
@@ -19,8 +19,8 @@ inspector. It controls only processes whose PID and process-start identity it
 recorded. The front page shows only DSH versions and profiles detected on the
 user's machine; the disconnected demo does not substitute release cards.
 Community contains a small offline snapshot of real plugins and forks. A
-connected launcher can import the integrity-checked public DSH Plugin Marketplace
-feed, currently covering thousands of plugins, into the local search store.
+connected launcher can sync the continuously refreshed Forge feed, currently
+covering thousands of plugins and tens of thousands of forks, into the local search store.
 Forge adds an explainable, bounded hidden-gem research queue over that full
 inventory. Only curator-reviewed, signed recipes appear as packages on the
 front page; provisional generated packages remain hidden.
@@ -63,6 +63,8 @@ register one or more source roots at startup when needed:
 
 ```bash
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
+# refresh the full Forge catalog once before opening the launcher
+python3 scripts/serve.py --sync-catalog
 # refresh the public plugin catalog once before opening the launcher
 python3 scripts/serve.py --sync-plugins
 ```
@@ -183,6 +185,7 @@ the only path that scales to a fork network with tens of thousands of entries.
 Ten forks remain embedded for disconnected preview use.
 
 ```bash
+python3 -m dsh_forge catalog sync
 python3 -m dsh_forge catalog sync-plugins
 python3 scripts/index_registry.py --output registry.json
 python3 -m dsh_forge catalog import registry.json
@@ -202,7 +205,14 @@ rather than collapsing them. Builds are atomic, so a
 failed import leaves the previous store intact. Page size, query length, and
 paging depth are all bounded.
 
-`catalog sync-plugins` (or `scripts/serve.py --sync-plugins`) is the explicit
+`catalog sync` downloads the current 3-4 MB compressed Forge registry from the
+stable `catalog-latest` GitHub Release, checks the compressed and expanded
+SHA-256 digests, bounds expansion to 128 MB, then atomically rebuilds the local
+store. The feed is unsigned metadata and never authorizes installation.
+
+`scripts/serve.py --sync-catalog` performs the same full-catalog refresh before
+starting the desktop shell. `catalog sync-plugins` (or
+`scripts/serve.py --sync-plugins`) remains the narrower
 networked adapter for the public
 [DSH Plugin Marketplace](https://github.com/w2112515/dsh-plugin-marketplace),
 whose scanner publishes a daily full catalog. Forge bounds the download to 15
@@ -213,7 +223,8 @@ The normalized SQLite store and hidden-gem ranker are source-neutral: future
 adapters for other agentic development tools can emit the same artifact rows
 without changing the browser, search path, or research policy. A scheduled
 workflow refreshes the neutral registry and a bounded metadata-only review
-queue daily; it cannot sign or publish packages. Fork pagination includes a
+queue daily, then publishes compressed feed assets. It cannot sign or publish
+installable packages. Fork pagination includes a
 coverage ledger. Forge says `complete` only when pagination ends and the
 root and recursive child pages reconcile with unchanged reported counts. The
 claim covers visible API results; inaccessible forks can still make it

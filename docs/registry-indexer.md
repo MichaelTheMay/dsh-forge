@@ -71,5 +71,20 @@ the existing networkless Apptainer certification path.
 `registry.json`, and the bounded
 `hidden-gems.json` research queue every day and on manual dispatch. Both are
 retained for 30 days as workflow artifacts. The workflow has read-only contents
-permission and no curator signing key, so it cannot certify or publish a
-package.
+for source acquisition and no curator signing key, so it cannot certify or
+publish a package. Its only repository write is replacing three assets on the
+`catalog-latest` prerelease: `registry-feed.json`, `registry.json.gz`, and
+`hidden-gems.json.gz`. Publication runs only from `main`.
+The index uses `dsh-forge.registry-feed/v1`, intentionally distinct from the
+existing signed-package catalog contract.
+
+Consumers use the stable default endpoint without GitHub credentials:
+
+```bash
+python3 -m dsh_forge catalog sync
+```
+
+The feed index declares byte sizes and SHA-256 digests for compressed and
+expanded JSON. Sync validates HTTPS redirects, download bounds, gzip expansion,
+both digests, and the snapshot identity before atomically replacing the local
+SQLite store. Its provenance remains `unsigned_checksum_verified`.
