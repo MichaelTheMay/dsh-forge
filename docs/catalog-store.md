@@ -10,8 +10,8 @@ is connected.
 
 The **catalog store** is an FTS5-indexed SQLite database built from an imported
 snapshot. It is what a connected sidecar reads, and it is the only path that
-scales to the real fork network. The upstream fork endpoint captured in the seed
-reports roughly 24,000 forks; ten of them are embedded today.
+scales to fork networks with tens of thousands of repositories; ten forks stay
+embedded for disconnected preview use.
 
 An imported corpus replaces the embedded rows for each artifact type it
 contains. Types absent from that corpus keep their small offline snapshot, so a
@@ -21,6 +21,8 @@ plugin-only feed does not erase the captured fork browser.
 
 ```bash
 python3 -m dsh_forge catalog sync-plugins
+python3 scripts/index_registry.py --output registry.json
+python3 -m dsh_forge catalog import registry.json
 python3 scripts/serve.py --sync-plugins
 python3 -m dsh_forge catalog import data/public-repos.seed.json \
   --package-feed data/package-catalog.seed.json
@@ -51,6 +53,15 @@ The imported provenance remains `unsigned_external_catalog`. Logical integrity
 detects accidental or in-transit mutation; it is not publisher authentication,
 a Forge signature, compatibility proof, or permission to execute a plugin.
 Failed download or validation leaves the previous store untouched.
+
+`scripts/index_registry.py` assembles that marketplace feed with one or more
+GitHub fork networks. It follows GitHub's `Link` pagination, caps pages and
+records, validates public repository identities, and reads the root network
+count before and after the crawl. Its coverage ledger claims completeness only
+if pagination ends, the root count stayed stable, and that count matches the
+distinct collected IDs. An interrupted or changing crawl is retained as
+`incomplete` rather than being described as every fork. See
+[Registry indexing](registry-indexer.md).
 
 Import **never upgrades trust on its own**. Whatever `provenance` the snapshot
 recorded is stored verbatim and repeated in every search response, so an
@@ -182,6 +193,7 @@ Everything is bounded so a large corpus cannot turn into a large response:
 | Query length | 200 characters |
 | Query terms | 12 |
 | Paging depth | 10,000 results |
+| Snapshot input/signature payload | 128 MiB |
 
 Deep paging stops rather than letting a caller walk the whole corpus one page at
 a time; narrow the query instead. The 9,949-entry marketplace snapshot, including

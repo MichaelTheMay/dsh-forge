@@ -179,11 +179,13 @@ otherwise. See [docs/local-profiles.md](docs/local-profiles.md).
 The embedded snapshot in `web/launcher.js` stays the corpus for the
 disconnected preview, which must remain a single self-contained file. A
 connected sidecar reads from an imported FTS5-indexed SQLite store instead —
-the only path that scales to the real fork network. The upstream fork endpoint
-captured in the seed reports roughly 24,000 forks; ten are embedded today.
+the only path that scales to a fork network with tens of thousands of entries.
+Ten forks remain embedded for disconnected preview use.
 
 ```bash
 python3 -m dsh_forge catalog sync-plugins
+python3 scripts/index_registry.py --output registry.json
+python3 -m dsh_forge catalog import registry.json
 python3 -m dsh_forge catalog import data/public-repos.seed.json   --package-feed data/package-catalog.seed.json
 python3 -m dsh_forge catalog search "agent teams" --limit 10
 python3 -m dsh_forge catalog search --type fork --sort stars
@@ -210,8 +212,12 @@ digest detects corruption but is not a signature or a Forge security verdict.
 The normalized SQLite store and hidden-gem ranker are source-neutral: future
 adapters for other agentic development tools can emit the same artifact rows
 without changing the browser, search path, or research policy. A scheduled
-workflow refreshes a bounded metadata-only review queue daily; it cannot sign
-or publish packages. See [Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
+workflow refreshes the neutral registry and a bounded metadata-only review
+queue daily; it cannot sign or publish packages. Fork pagination includes a
+coverage ledger. Forge says `complete` only when pagination ends and the
+distinct repository count reconciles with an unchanged GitHub network count.
+See [Registry indexing](docs/registry-indexer.md) and
+[Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
 
 When a store is imported the Community browser searches it instead of the
 embedded snapshot, pages with a **Load more results** button, and names the

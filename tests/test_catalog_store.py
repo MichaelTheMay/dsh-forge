@@ -94,6 +94,7 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertEqual(meta["artifact_count"], 20)
         self.assertEqual(meta["schema_version"], STORE_SCHEMA_VERSION)
         self.assertEqual(meta["snapshot_id"], seed_snapshot()["snapshot_id"])
+        self.assertEqual(meta["coverage"], [])
 
     def test_records_are_returned_verbatim_so_one_mapping_serves_both_paths(self):
         snapshot = seed_snapshot()

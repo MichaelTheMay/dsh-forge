@@ -47,6 +47,10 @@ _CAPABILITIES = {
 }
 
 
+def _mentions(text: str, term: str) -> bool:
+    return re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", text) is not None
+
+
 class ResearchError(ValueError):
     """A ranking, registry-enrichment, or certification input failed closed."""
 
@@ -98,6 +102,13 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
     else:
         gaps.append("no validated installation route")
 
+    artifact_type = str(record.get("artifact_type") or "repository")
+    source_repository = record.get("source_repository")
+    if artifact_type == "fork" and isinstance(source_repository, str) and source_repository:
+        add("fork-lineage", 14, f"GitHub reports fork-network lineage from {source_repository}")
+        if not isinstance(record.get("divergence"), Mapping):
+            gaps.append("fork divergence not analyzed")
+
     commit = record.get("head_sha")
     if isinstance(commit, str) and _COMMIT.fullmatch(commit):
         add("immutable-revision", 10, commit)
@@ -143,7 +154,7 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
     ]).casefold()
     capabilities = [
         capability for capability, terms in _CAPABILITIES.items()
-        if any(term in searchable for term in terms)
+        if any(_mentions(searchable, term) for term in terms)
     ]
     if capabilities:
         add("capability", min(10, 4 + len(capabilities) * 2), ", ".join(capabilities))
@@ -177,14 +188,18 @@ def evaluate_artifact(record: Mapping[str, Any], observed_at: Any = None) -> dic
         add("archived", -40, "repository is archived")
 
     score = max(0, min(100, score))
-    eligible = bool(
-        score >= 65
-        and status != "invalid"
-        and record.get("archived") is not True
-        and isinstance(commit, str)
-        and package
-        and _known_license(record)
-    )
+    eligible = bool(status != "invalid" and record.get("archived") is not True and _known_license(record))
+    if artifact_type == "fork":
+        eligible = bool(
+            eligible
+            and score >= 55
+            and isinstance(source_repository, str)
+            and source_repository
+            and capabilities
+            and len(description) >= 40
+        )
+    else:
+        eligible = bool(eligible and score >= 65 and isinstance(commit, str) and package)
     return {
         "policy": POLICY_VERSION,
         "artifact_id": identity,
