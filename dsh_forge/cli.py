@@ -20,6 +20,7 @@ from .acquisition import (
 )
 from .installation import DEFAULT_INSTALL_ROOT, inspect_acquisition
 from .launcher import Launcher, LauncherError
+from .feed import DEFAULT_FEED_URL, FeedError, fetch_catalog_feed
 from .marketplace import DEFAULT_CATALOG_URL, fetch_catalog
 from .packages import (
     PackageError,
@@ -81,6 +82,8 @@ def _parser() -> argparse.ArgumentParser:
     catalog = commands.add_parser("catalog", help="import and search the local catalog store")
     catalog_commands = catalog.add_subparsers(dest="catalog_command", required=True)
     catalog_commands.add_parser("status", help="report the imported catalog store and its provenance")
+    sync_catalog = catalog_commands.add_parser("sync", help="download and import the current public Forge catalog")
+    sync_catalog.add_argument("--url", default=DEFAULT_FEED_URL, help="credential-free HTTPS catalog feed URL")
     import_catalog = catalog_commands.add_parser("import", help="build the local store from a validated snapshot")
     import_catalog.add_argument("snapshot", nargs="?", help="path to an unsigned catalog snapshot JSON file")
     import_catalog.add_argument("--package-feed", help="optional validated package catalog feed")
@@ -594,6 +597,9 @@ def run(
                     envelope=read_json(args.envelope) if args.envelope else None,
                     trust_root=read_json(args.trust_root) if args.trust_root else None,
                 )
+            elif command == "catalog.sync":
+                snapshot = fetch_catalog_feed(args.url)
+                data = launcher.import_catalog(snapshot)
             elif command == "catalog.sync-plugins":
                 snapshot = fetch_catalog(args.url)
                 data = launcher.import_catalog(snapshot)
@@ -771,6 +777,13 @@ def run(
     except ResearchError as error:
         _write(
             _envelope(command, False, error={"code": "research_error", "message": str(error)}),
+            args.json,
+            stream=sys.stderr,
+        )
+        return 2
+    except FeedError as error:
+        _write(
+            _envelope(command, False, error={"code": "catalog_feed_error", "message": str(error)}),
             args.json,
             stream=sys.stderr,
         )

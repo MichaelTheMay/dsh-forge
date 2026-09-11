@@ -38,10 +38,16 @@ class WorkflowPolicyTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/catalog-research.yml").read_text(encoding="utf-8")
         self.assertIn("scripts/index_registry.py", workflow)
         self.assertIn("scripts/analyze_registry.py", workflow)
+        self.assertIn("scripts/build_catalog_feed.py", workflow)
         self.assertIn("--snapshot dist/registry-raw.json", workflow)
         self.assertIn("--snapshot dist/registry.json", workflow)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("dist/registry.json", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
+        self.assertIn("gh release upload catalog-latest", workflow)
+        self.assertIn("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1", workflow)
+        self.assertRegex(workflow, r"permissions:\s*\n\s*contents: read")
+        self.assertRegex(workflow, r"permissions:\s*\n\s*contents: write")
 
 
 if __name__ == "__main__":

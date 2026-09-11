@@ -145,6 +145,28 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(assessment["evidence_digest"], "sha256:" + "b" * 64)
         self.assertFalse(assessment["claims"]["signed"])
 
+    def test_catalog_sync_imports_checksum_verified_public_feed(self):
+        snapshot = {
+            "snapshot_id": "public-feed-test",
+            "fetched_at": "2026-09-11T18:00:00Z",
+            "provenance": {
+                "method": "test",
+                "feed": {"signature_status": "unsigned_checksum_verified"},
+            },
+            "coverage": [],
+            "entries": [],
+            "supplemental_entries": [],
+            "package_entries": [],
+        }
+        with mock.patch("dsh_forge.cli.fetch_catalog_feed", return_value=snapshot) as fetch:
+            code, result = self.invoke(
+                "catalog", "sync", "--url", "https://example.com/registry-feed.json"
+            )
+        self.assertEqual(code, 0)
+        fetch.assert_called_once_with("https://example.com/registry-feed.json")
+        self.assertEqual(result["data"]["snapshot_id"], "public-feed-test")
+        self.assertFalse(result["data"]["signature"]["verified"])
+
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))
         saved_id = added["data"]["saved_versions"][0]["id"]

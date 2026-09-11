@@ -20,9 +20,11 @@ plugin-only feed does not erase the captured fork browser.
 ## Importing
 
 ```bash
+python3 -m dsh_forge catalog sync
 python3 -m dsh_forge catalog sync-plugins
 python3 scripts/index_registry.py --output registry.json
 python3 -m dsh_forge catalog import registry.json
+python3 scripts/serve.py --sync-catalog
 python3 scripts/serve.py --sync-plugins
 python3 -m dsh_forge catalog import data/public-repos.seed.json \
   --package-feed data/package-catalog.seed.json
@@ -38,7 +40,18 @@ full corpus selects at most 250 candidates per artifact type for human review;
 all other rows remain searchable. Re-import a store created by schema v1 so it
 can add these reports.
 
-`catalog sync-plugins` is the deliberate networked exception. It downloads the
+`catalog sync` is the default full-catalog path. It downloads a small public
+feed index and gzip-compressed registry from the stable `catalog-latest` GitHub
+Release, verifies declared compressed and expanded SHA-256 digests, and bounds
+the expanded JSON to 128 MB before parsing or import. The store records
+`unsigned_checksum_verified`; transport integrity is not publisher identity or
+curator trust.
+
+Use `scripts/serve.py --sync-catalog` to perform that same verified refresh once
+before the desktop shell starts. The launcher keeps the previous local snapshot
+if publication is temporarily incomplete or validation fails.
+
+`catalog sync-plugins` is the narrower networked exception. It downloads the
 public DSH Plugin Marketplace v1 catalog over credential-free HTTPS, with a 15
 MB limit and a 60-second timeout. It validates the marketplace's logical SHA-256
 digest, counts, stable GitHub identities, canonical repository URLs, immutable
