@@ -56,14 +56,6 @@
   .repo-snapshot-summary .mono { font-size: 10px; }
   .repo-seed-badge { display: inline-flex; align-items: center; gap: 6px; color: oklch(0.78 0.11 235); font: 9px 'IBM Plex Mono', monospace; letter-spacing: .08em; margin-bottom: 2px; }
   .repo-seed-badge span { width: 5px; height: 5px; background: currentColor; border-radius: 50%; }
-  .curated-strip { flex:0 0 auto; padding:12px 24px 14px; border-bottom:1px solid oklch(0.3 0.012 255); background:linear-gradient(90deg,oklch(0.22 0.025 280),oklch(0.205 0.018 235)); }
-  .curated-strip-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; color:oklch(0.72 0.08 285); font:9px 'IBM Plex Mono',monospace; letter-spacing:.1em; text-transform:uppercase; }
-  .curated-scroll { display:flex; gap:9px; overflow-x:auto; padding:1px 1px 7px; scrollbar-width:thin; }
-  .curated-card { flex:0 0 250px; min-width:0; padding:10px 11px; border:1px solid oklch(0.41 0.055 265); border-radius:7px; background:oklch(0.245 0.027 265); color:inherit; text-align:left; cursor:pointer; }
-  .curated-card:hover { border-color:oklch(0.59 0.09 265); }
-  .curated-card span { display:block; color:oklch(0.7 0.075 275); font:8.5px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.06em; }
-  .curated-card strong { display:block; margin:4px 0; font-size:11.5px; font-weight:600; overflow-wrap:anywhere; }
-  .curated-card p { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; margin:0; color:oklch(0.68 0.012 255); font-size:9.5px; line-height:1.45; }
   .repo-workspace { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0,1fr) 390px; min-height: 0; }
   .repo-browse { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid oklch(0.3 0.012 255); }
   .repo-controls { padding: 18px 24px 12px; border-bottom: 1px solid oklch(0.29 0.012 255); }
@@ -545,8 +537,8 @@
     <div class="repo-masthead">
       <div>
         <div class="repo-eyebrow">COMMUNITY / DEEPSEEK HARNESS</div>
-        <h1>Package browser <span class="repo-label">Metadata preview</span></h1>
-        <p>Start with curated plugin packages, then inspect individual plugins and upstream forks. Every package has a stable page and schema-defined provenance.</p>
+        <h1>Plugin &amp; fork browser <span class="repo-label">Metadata preview</span></h1>
+        <p>Browse individual plugins and upstream forks with source, compatibility, maintenance, license, and risk metadata. Generated packages stay unpublished until their combinations are researched and reviewed.</p>
         <a class="repo-upstream mono" href="https://github.com/deepseek-ai/deepseek-harness" target="_blank" rel="noopener noreferrer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="6" cy="5" r="2.5"/><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><path d="M6 7.5v9M18 7.5v1a4 4 0 0 1-4 4H6"/></svg>
           deepseek-ai/deepseek-harness <span>↗</span>
@@ -559,17 +551,6 @@
         <span class="mono">fork snapshot {{ snapshotAt }} UTC</span>
       </div>
     </div>
-
-    <sc-if value="{{ hasCuratedPicks }}" hint-placeholder-val="true">
-      <section class="curated-strip" aria-label="Administrator curated hidden gems">
-        <div class="curated-strip-head"><span>Forge picks · hidden gems</span><span>Editorial curation, not a security verdict</span></div>
-        <div class="curated-scroll">
-          <sc-for list="{{ curatedPicks }}" as="pick" hint-placeholder-count="4">
-            <button class="curated-card" onClick="{{ pick.select }}"><span>{{ pick.kindLabel }}</span><strong>{{ pick.name }}</strong><p>{{ pick.summary }}</p></button>
-          </sc-for>
-        </div>
-      </section>
-    </sc-if>
 
     <div class="repo-workspace">
       <section class="repo-browse" aria-label="Community artifact list">
@@ -590,9 +571,6 @@
               <sc-for list="{{ repoTypes }}" as="f" hint-placeholder-count="3">
                 <button class="repo-type" onClick="{{ f.select }}" aria-pressed="{{ f.selected }}" style="background: {{ f.bg }}; color: {{ f.color }}; border-color: {{ f.border }};">{{ f.label }} <span>{{ f.count }}</span></button>
               </sc-for>
-            </div>
-            <div class="repo-types" role="group" aria-label="Catalog scope">
-              <sc-for list="{{ catalogScopes }}" as="scope" hint-placeholder-count="2"><button class="repo-type" onClick="{{ scope.select }}" aria-pressed="{{ scope.selected }}" style="background:{{ scope.bg }}; color:{{ scope.color }}; border-color:{{ scope.border }};">{{ scope.label }}</button></sc-for>
             </div>
             <label class="repo-license-filter"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
           </div>
@@ -675,7 +653,7 @@
               <button class="repo-button repo-button-primary" onClick="{{ copyPluginInstall }}" style="width:100%; margin-top:8px;">Copy exact-version install command</button>
               <p class="repo-muted">This invokes DSH’s native plugin manager and mutates the selected host profile. Review the package, integrity, permissions, and lifecycle scripts before running it.</p>
             </sc-if>
-            <sc-if value="{{ pluginCommandUnavailable }}" hint-placeholder-val="false"><p class="repo-muted">This entry is an MCP-sidecar package, not a native npm DSH bundle. Forge will not invent an incompatible install command; use the publisher’s pinned package metadata.</p></sc-if>
+            <sc-if value="{{ pluginCommandUnavailable }}" hint-placeholder-val="false"><p class="repo-muted">This catalog entry does not provide a Forge-verified native npm install target. Forge will not invent an incompatible command; review the pinned source and publisher instructions.</p></sc-if>
           </div></sc-if>
           <sc-if value="{{ isForkDetail }}" hint-placeholder-val="false"><div class="repo-detail-section"><h3>Download fork <span class="repo-label">Pinned source archive</span></h3>
             <div class="repo-detail-actions"><a class="repo-button repo-button-primary" href="{{ forkDownloadUrl }}" target="_blank" rel="noopener noreferrer" download>Download .tar.gz</a><button class="repo-button" onClick="{{ copyForkDownload }}">Copy command</button></div>
@@ -686,7 +664,7 @@
         <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>No artifact selected</h2><p>Adjust the browser to inspect a plugin, fork, or future package.</p></div></sc-if>
       </aside>
     </div>
-    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Install requires a local signed recipe, saved Harness version, and passing Apptainer checks</span></footer>
+    <footer class="repo-footer"><span><span class="repo-status-dot"></span>Schema-valid cached metadata · works without registry access</span><span>Full plugin catalog: python3 -m dsh_forge catalog sync-plugins</span></footer>
   </main>
   </sc-if>
 

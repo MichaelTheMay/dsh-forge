@@ -11,19 +11,6 @@ const TXT = 'oklch(0.86 0.01 255)';
 const BORDER = 'oklch(0.31 0.012 255)';
 const SELB = 'oklch(0.58 0.11 235)';
 
-const PINNED_RELEASES = [
-  { id: 'official-alpha-3', name: 'Harness alpha.3', version: '0.1.2-alpha.3', tag: 'dsh-v0.1.2-alpha.3', commit: 'dd6322d',
-    releaseUrl: 'https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.3' },
-  { id: 'official-alpha-2', name: 'Harness alpha.2', version: '0.1.2-alpha.2', tag: 'dsh-v0.1.2-alpha.2', commit: '0a53fb5',
-    releaseUrl: 'https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.2' }
-];
-
-const PREVIEW_TREES = PINNED_RELEASES.map(pin => ({
-  id: pin.id, name: pin.name, kind: 'official release', version: pin.version, path: 'Install this exact official release to enable Launch',
-  git: { branch: pin.tag, sha: pin.commit, dirty: false }, trust: 'readonly', launchability: 'preview-only', short: pin.id,
-  exe: 'not detected', node: 'not detected'
-}));
-
 // CATALOG_SNAPSHOT_START
 const CATALOG_SNAPSHOT = {
   "schema_version": 1,
@@ -1342,7 +1329,9 @@ function mapRepositoryArtifact(a) {
     ? 'F' + String(a.seed_rank).padStart(2, '0')
     : (a.curation && a.curation.rank ? 'P' + String(a.curation.rank).padStart(2, '0') : 'B'),
   versionLabel: a.package ? a.package.registry + ' · ' + a.package.version : '',
-  riskLabel: a.curation ? a.curation.security_risk + ' risk' : '',
+  riskLabel: a.curation
+    ? a.curation.security_risk + ' risk'
+    : ((a.risk_signals || []).length ? (a.risk_signals || []).length + ' risk signal(s)' : ''),
   archivedLabel: a.archived ? 'Archived' : '',
   commitUrl: a.head_sha ? a.repository_url + '/tree/' + a.head_sha : a.repository_url,
   featured: a.artifact_type === 'plugin'
@@ -1408,13 +1397,14 @@ const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(mapPackageA
 const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
 
 function catalogRoute(hash) {
-  if (hash === '#assistant') return { view: 'assistant', type: 'package' };
+  if (hash === '#assistant') return { view: 'assistant', type: 'plugin' };
   if (hash === '#forks' || hash === '#public-repos') return { view: 'catalog', type: 'fork' };
-  if (hash === '#packages' || hash === '#community') return { view: 'catalog', type: 'package', packageSlug: null };
+  if (hash === '#packages') return { view: 'catalog', type: 'package', packageSlug: null };
+  if (hash === '#community') return { view: 'catalog', type: 'plugin' };
   const packageMatch = /^#packages\/([a-z0-9][a-z0-9-]{1,63})$/.exec(hash);
   if (packageMatch) return { view: 'catalog', type: 'package', packageSlug: packageMatch[1] };
   if (hash === '#plugins') return { view: 'catalog', type: 'plugin' };
-  return { view: 'launch', type: 'package' };
+  return { view: 'launch', type: 'plugin' };
 }
 
 const COLUMNS = ['Cell / state', 'Tree', 'Surface', 'URL', 'Process identity', 'Uptime', 'Home / isolation', 'Workspace', 'Trust', 'Health', 'Actions'];
@@ -1427,8 +1417,8 @@ class Component extends DCLogic {
     const initialRoute = catalogRoute(typeof window !== 'undefined' ? window.location.hash : '');
     this.state = {
       view: initialRoute.view,
-      treeId: PREVIEW_TREES[0].id,
-      trees: PREVIEW_TREES,
+      treeId: null,
+      trees: [],
       savedVersions: [],
       trustedPackageRecipes: [],
       packageInstallations: [],
@@ -1769,7 +1759,9 @@ class Component extends DCLogic {
   }
 
   usingCatalogStore(state = this.state) {
-    return !!(state.sidecarConnected && state.catalogStore && state.catalogStore.available);
+    if (!(state.sidecarConnected && state.catalogStore && state.catalogStore.available)) return false;
+    const counts = state.catalogStore.counts;
+    return !counts || Number(counts[state.catalogType] || 0) > 0;
   }
 
   catalogQueryKey(state = this.state) {
@@ -1847,8 +1839,8 @@ class Component extends DCLogic {
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
     });
-    // Once a store is imported it replaces the embedded preview inventory,
-    // matching how live trees and cells already replace theirs.
+    // An imported corpus replaces the embedded inventory for artifact types it
+    // contains. Missing types keep their small offline snapshot.
     if (this.usingCatalogStore() && !this.state.storeArtifacts.length && !this.state.storeLoading) {
       this.refreshCatalog();
     }
@@ -2156,26 +2148,7 @@ class Component extends DCLogic {
     const sessionCards = s.trees
       .filter(tree => tree.trust !== 'foreign' && !savedTreeIds.has(tree.id))
       .map(tree => localVersionCard(tree));
-    const previewCards = PINNED_RELEASES.map(pin => ({
-      ...pin,
-      treeId: null,
-      installPath: 'Official reference; start the sidecar to add a local checkout',
-      originLabel: 'official pin',
-      status: 'preview only',
-      statusColor: WARN,
-      buttonLabel: 'Preview only',
-      disabled: true,
-      buttonCursor: 'not-allowed',
-      buttonBg: 'oklch(0.25 0.01 255)',
-      buttonBorder: BORDER,
-      showForget: false,
-      showSettings: false,
-      settingsOpen: false,
-      launchSummary: 'Auto port · new session',
-      launch: () => this.quickLaunch(pin),
-      forget: () => {}
-    }));
-    const versions = s.sidecarConnected ? [...savedCards, ...sessionCards] : previewCards;
+    const versions = [...savedCards, ...sessionCards];
     const selectedProfileTree = this.tree(s.treeId);
     const profileTreeReady = !!selectedProfileTree.id && selectedProfileTree.trust !== 'foreign' && selectedProfileTree.launchability === 'ready';
     const localProfiles = s.profiles.map(profile => {
@@ -2325,16 +2298,6 @@ class Component extends DCLogic {
     const filtered = storeActive ? s.storeArtifacts : embeddedFiltered;
     // Never keep an unrelated detail open after search/filter removes it.
     const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
-    const curatedPicks = CATALOG
-      .filter(artifact => artifact.featured && artifact.type !== 'fork')
-      .sort((a, b) => ((a.rank || (a.curation && a.curation.rank)) || 999) - ((b.rank || (b.curation && b.curation.rank)) || 999))
-      .slice(0, 8)
-      .map(artifact => ({
-        ...artifact,
-        kindLabel: artifact.type === 'package' ? 'Curated package' : 'Hidden-gem plugin',
-        summary: artifact.description,
-        select: () => this.selectCatalogArtifact(artifact)
-      }));
     const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
       id: item.id,
       label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
@@ -2384,8 +2347,14 @@ class Component extends DCLogic {
       ...(detail.package ? [
         { k: 'Package', v: detail.package.name + '@' + detail.package.version, color: BLUE },
         { k: 'Registry', v: detail.package.registry + ' · exact version', color: MUTED },
-        { k: 'Integrity', v: detail.package.integrity, color: MUTED }
+        ...(detail.package.integrity ? [{ k: 'Integrity', v: detail.package.integrity, color: MUTED }] : [])
       ] : []),
+      ...(detail.external_validation ? [{
+        k: 'Marketplace validation',
+        v: detail.external_validation.status + (detail.external_validation.code ? ' · ' + detail.external_validation.code : ''),
+        color: detail.external_validation.status === 'valid' ? MUTED : WARN
+      }] : []),
+      ...(detail.installability ? [{ k: 'Installability', v: detail.installability + ' · external catalog claim', color: WARN }] : []),
       { k: 'Last push', v: detail.pushed_at || 'Not reported', color: MUTED },
       { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
       { k: 'Trust', v: 'Metadata only · not executed', color: WARN }
@@ -2397,13 +2366,23 @@ class Component extends DCLogic {
       ? 'Directory inclusion was used only for discovery. Exact registry versions, integrity values, repository commits, and component roles are shown separately; no component combination has been reproduced.'
       : (detail.curation
         ? detail.curation.evidence
-        : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.');
+        : (detail.external_validation
+          ? 'The external marketplace classified this entry as ' + detail.external_validation.status + (detail.external_validation.code ? ' (' + detail.external_validation.code + ')' : '') + '. Forge verified the catalog digest but has not executed or security-reviewed the plugin.'
+          : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.'));
     const detailTaxonomy = detail.catalogPackage
       ? detail.taxonomy.join(' / ')
-      : (detail.curation ? detail.curation.taxonomy.join(' / ') : 'Unclassified');
-    const packageCount = CATALOG.filter(a => a.type === 'package').length;
+      : (detail.curation ? detail.curation.taxonomy.join(' / ') : ((detail.topics || []).slice(0, 8).join(' / ') || 'Unclassified'));
     const pluginCount = CATALOG.filter(a => a.type === 'plugin').length;
     const forkCount = CATALOG.filter(a => a.type === 'fork').length;
+    const storeCounts = s.sidecarConnected && s.catalogStore.available && s.catalogStore.counts
+      ? s.catalogStore.counts
+      : null;
+    const displayedPluginCount = storeCounts && Number(storeCounts.plugin || 0) > 0
+      ? Number(storeCounts.plugin)
+      : pluginCount;
+    const displayedForkCount = storeCounts && Number(storeCounts.fork || 0) > 0
+      ? Number(storeCounts.fork)
+      : forkCount;
     const emptyCopy = s.catalogType === 'package'
       ? {
           title: 'No community packages published yet',
@@ -2436,7 +2415,7 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
       goLaunch: () => this.navigate('launch'),
-      goCatalog: () => this.navigate('catalog', 'package'),
+      goCatalog: () => this.navigate('catalog', 'plugin'),
       goAssistant: () => this.navigate('assistant'),
       modeLabel: s.sidecarConnected ? 'Local' : 'Preview',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
@@ -2502,7 +2481,7 @@ class Component extends DCLogic {
           select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees can be capability-tested only; complete-cell promotion is not implemented')
         };
       }),
-      treeCountLabel: s.sidecarConnected ? s.trees.length + ' detected · evidence-based' : s.trees.length + ' neutral preview records',
+      treeCountLabel: s.trees.length + ' detected · evidence-based',
       coverageGap: s.coverageGaps.length
         ? s.coverageGaps.length + (s.coverageGaps.length === 1 ? ' folder needs attention' : ' folders need attention')
         : '',
@@ -2599,16 +2578,11 @@ class Component extends DCLogic {
       setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,
       toggleKnownLicense: e => { this.setState({ knownLicenseOnly: !!e.target.checked }); this.scheduleCatalogRefresh(); },
-      catalogScopes: [{ id: 'featured', label: 'Featured' }, { id: 'all', label: 'All in snapshot' }].map(item => ({
-        ...item,
-        selected: s.catalogScope === item.id,
-        border: s.catalogScope === item.id ? 'oklch(0.43 0.05 235)' : 'transparent',
-        bg: s.catalogScope === item.id ? 'oklch(0.29 0.035 235)' : 'transparent',
-        color: s.catalogScope === item.id ? 'oklch(0.88 0.035 235)' : MUTED,
-        select: () => { this.setState({ catalogScope: item.id }); this.scheduleCatalogRefresh(); }
-      })),
-      repoTypes: [{ id: 'package', label: 'Packages' }, { id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
-        ...f, count: CATALOG.filter(a => a.type === f.id).length,
+      repoTypes: [{ id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
+        ...f,
+        count: storeCounts && Number(storeCounts[f.id] || 0) > 0
+          ? Number(storeCounts[f.id])
+          : CATALOG.filter(a => a.type === f.id).length,
         selected: s.catalogType === f.id,
         border: s.catalogType === f.id ? 'oklch(0.43 0.05 235)' : 'transparent',
         bg: s.catalogType === f.id ? 'oklch(0.29 0.035 235)' : 'transparent',
@@ -2618,15 +2592,16 @@ class Component extends DCLogic {
       seedCount: CATALOG_SNAPSHOT.entries.length,
       pluginCount,
       forkCount,
-      packageCount,
-      catalogCountLabel: pluginCount + ' plugins · ' + forkCount + ' forks · ' + packageCount + ' packages',
+      catalogCountLabel: displayedPluginCount.toLocaleString('en-US') + ' plugins · ' + displayedForkCount.toLocaleString('en-US') + ' forks',
       resultCount: (storeActive && s.storeTotal > results.length
         ? results.length + ' of ' + s.storeTotal.toLocaleString('en-US')
         : String(results.length)
       ) + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
       catalogSourceLabel: storeActive
         ? 'Imported catalog store'
-        : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot'),
+        : (s.sidecarConnected && s.catalogStore.available
+          ? 'Embedded snapshot · no imported ' + s.catalogType + ' records'
+          : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot')),
       storeActive,
       storeLoading: s.storeLoading,
       storeError: s.storeError,
@@ -2635,11 +2610,11 @@ class Component extends DCLogic {
       loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more results',
       loadMore: () => this.refreshCatalog({ append: true }),
       sortExplanation: s.catalogSort === 'recommended'
-        ? (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order')
+        ? (storeActive
+          ? 'Imported metadata order · not a Forge quality score'
+          : (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order'))
         : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
       results,
-      curatedPicks,
-      hasCuratedPicks: curatedPicks.length > 0,
       noResults: results.length === 0,
       hasDetail: !!detail.id,
       detail,

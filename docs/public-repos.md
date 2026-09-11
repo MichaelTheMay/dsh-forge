@@ -1,12 +1,13 @@
 # Community browsers implementation boundary
 
-The Community page contains three deliberately separate browsers: Packages,
-Plugins, and Forks. Packages is the primary browser and starts with three
-schema-validated, metadata-only recipes; Plugins has a bounded, manually
-reviewed seven-row seed; Forks retains the ten-row upstream snapshot. The signed
-metadata schema, offline composer, and separate CLI quarantine acquirer exist,
-but no browser publication/download path is connected. It does not add
-Forge-native stars, accounts, publishing, installation, or social voting.
+The Community page exposes two primary browsers: Plugins and Forks. Plugins has
+a bounded, manually reviewed seven-row offline seed; Forks retains the ten-row
+upstream snapshot. A connected launcher can replace either artifact type with
+every entry from an imported external catalog; types absent from the import keep
+their offline rows. Provisional package recipes and the featured strip are not
+shown as recommendations. The signed package schema, offline
+composer, and separate CLI quarantine acquirer remain available without
+claiming that the current recipes are genuinely useful bundles.
 
 ## Current implementation
 
@@ -15,9 +16,10 @@ catalog is presented as the Community page. The application logic is a
 precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
 that class without evaluating the inline design export as JavaScript.
 The page supports search, sort, type routing, details, source/package links, and
-copying a captured commit URL or package-page route. Stable routes are
-`#packages/<slug>`, `#packages`, `#plugins`, and `#forks`; the old
-`#public-repos` link continues to resolve to Forks.
+copying a captured commit URL. Stable primary routes are `#plugins` and
+`#forks`; the old `#public-repos` link continues to resolve to Forks. Existing
+`#packages/<slug>` routes remain compatible but are not linked from the primary
+browser.
 
 The metadata snapshot is embedded from `data/public-repos.seed.json`, with the
 ranked REST response retained in `data/github-forks.response.json`. Its source
@@ -47,9 +49,10 @@ The raw launcher seed keeps `package_entries` empty so plugin/fork capture and
 package publication remain separate inputs. The bounded, networkless
 `scripts/ingest_package_catalog.py` validates
 `data/package-catalog.sources.json` against the exact plugin metadata, emits
-`data/package-catalog.seed.json`, and `scripts/embed_catalog.py` merges that
-validated feed into the offline browser. The three initial package pages are
-unsigned curation records, not publisher uploads. Uploader authorization,
+`data/package-catalog.seed.json`. `scripts/embed_catalog.py` retains that feed
+for package-contract compatibility, but the primary UI no longer promotes it.
+The three initial package pages are unsigned curation records, not publisher
+uploads or current recommendations. Uploader authorization,
 moderation, signed registry metadata, trust-root distribution, and immutable
 blob storage remain deferred. The local
 `dsh-forge.package/v1` schema, DSSE/Ed25519 signing path, trust root, and offline
@@ -57,22 +60,38 @@ composer are documented in [Signed packages](signed-packages.md). The package
 feed contract and proposed hosted-service boundary are documented in
 [Package catalog](package-catalog.md).
 
-## Connecting the ingester later
+## External plugin catalog
 
-The collaborator owns the registry/ingester. Do not add an automatic scraper to
-this launcher. `scripts/seed_catalog.py` is a manually invoked maintenance tool,
-not a service and not an app-startup action.
+The first external adapter consumes the daily catalog published by
+`w2112515/dsh-plugin-marketplace`:
+
+```bash
+python3 -m dsh_forge catalog sync-plugins
+```
+
+The current feed contains thousands of statically validated `dsh-plugin` topic
+repositories. Forge downloads at most 15 MB over credential-free HTTPS,
+rechecks redirect policy, verifies the feed's logical SHA-256 digest and
+critical identities, and atomically replaces the FTS5 store. It imports
+metadata only. The feed is not signed, no source is executed, and upstream
+installability remains an external claim rather than a Forge authorization.
+
+The collector stays outside the launcher. `scripts/seed_catalog.py` remains a
+manually invoked maintenance tool, not a service or an app-startup scraper. New
+agentic development tool adapters should normalize their registries, fork
+networks, topics, and curated directories into the same snapshot rows. The
+browser and local search store should not contain provider-specific crawlers.
 
 Plugin records remain separate from the top-ten fork ranking with
 `seed_rank: null`. Classify plugins using manifest and provenance evidence, not
 only a repository name, topic, store listing, or the presence of plugin-like
 code. A fork must not enter the ranked ten unless it actually ranks there.
 
-The production registry adapter should import a validated, signed, versioned
-snapshot from the registry transactionally and use its local index. This
-prototype does not implement that backend. Its unsigned status, absent source
-analysis, unknown compatibility, and lack of security verification remain
-visible.
+The production research registry should enrich these candidates, propose
+coherent multi-plugin packages, and publish only curator-approved signed
+snapshots. Its unsigned status, absent source analysis, unknown compatibility,
+and lack of security verification must remain visible until each stage supplies
+evidence.
 
 Metadata is rendered as text. The embedding script rejects noncanonical source
 URLs, checks identity and commit shape, and escapes script delimiters. It will
@@ -106,8 +125,8 @@ with no fake live cells.
 
 Tests cover catalog behavior, metadata safety, session-protected API access,
 scanner false positives, protected ports, process ownership, logs, and stop.
-They also enforce the three browser routes, dedicated package routes, exact
-plugin package pins, deterministic package feed, disabled unsigned acquisition,
+They also enforce the two primary browser routes, backward-compatible package
+routes, exact plugin package pins, deterministic package feed, disabled unsigned acquisition,
 and separation between manifest review and execution.
 Browser layout testing and production runtime adapters remain release tasks.
 This is not a complete production launcher. The bounded Apptainer probe is an

@@ -62,19 +62,18 @@ test('embedded snapshot preserves forks and plugins and adds only schema-generat
   assert(packages.every(r => r.page.route === '#packages/' + r.slug));
   assert(packages.every(r => r.acquisition.enabled === false));
 });
-test('launcher remains default and Community has stable plugin, fork, and package routes', () => {
+test('launcher remains default and Community opens individual plugins and forks', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
   assert.equal(c.renderVals().modeLabel, 'Preview');
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
-  assert.equal(windowStub.location.hash, 'packages');
+  assert.equal(windowStub.location.hash, 'plugins');
   c.renderVals().results[0].select();
-  assert.equal(windowStub.location.hash, 'packages/agent-teams-builder');
+  assert.equal(windowStub.location.hash, 'plugins');
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
   assert.equal(windowStub.location.hash, 'forks');
-  c.renderVals().repoTypes.find(f => f.id === 'package').select();
-  assert.equal(windowStub.location.hash, 'packages');
+  assert.deepEqual(c.renderVals().repoTypes.map(f => f.id), ['plugin', 'fork']);
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
 });
 test('preview contains no personal-name or private-home leakage', () => {
@@ -94,12 +93,11 @@ test('live status replaces preview inventory instead of merging it', () => {
   assert.equal(c.renderVals().modeLabel, 'Local');
   assert.equal(c.renderVals().suggested, 3210);
 });
-test('portable preview has two immutable official pins and no fabricated cells', () => {
+test('portable preview shows no versions or cells that are not locally detected', () => {
   const c = instance(); const values = c.renderVals();
-  assert.equal(values.versions.length, 2);
-  assert.deepEqual(values.versions.map(v => v.version), ['0.1.2-alpha.3', '0.1.2-alpha.2']);
-  assert.deepEqual(values.versions.map(v => v.commit), ['dd6322d', '0a53fb5']);
-  assert(values.versions.every(v => v.disabled));
+  assert.equal(values.versions.length, 0);
+  assert(values.noVersions);
+  assert.equal(values.trees.length, 0);
   assert.equal(values.cells.length, 0);
   assert.match(script, /Isolation ready/);
   assert(!/Fail-closed cell fleet/.test(html));
@@ -257,18 +255,11 @@ test('filtered-out selection never leaves stale detail content', () => {
   assert(c.renderVals().noResults); assert(!c.renderVals().hasDetail);
   assert.deepEqual(c.renderVals().detailRows, []);
 });
-test('package-first browser exposes generated packages, plugins, and captured forks', () => {
+test('community browser exposes plugins and forks without provisional package promotion', () => {
   const c = instance();
   c.renderVals().goCatalog();
-  assert.equal(c.renderVals().results.length, 3);
-  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['package', 3], ['plugin', 7], ['fork', 10]]);
-  const packageDetail = c.renderVals();
-  assert.equal(packageDetail.detail.schema, 'dsh-forge.catalog-package/v1');
-  assert.equal(packageDetail.acquireLabel, 'Acquire verified bytes');
-  assert.equal(packageDetail.isPackageDetail, true);
-  assert(packageDetail.packageComponents.length >= 1);
-  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
   assert.equal(c.renderVals().results.length, 7);
+  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['plugin', 7], ['fork', 10]]);
   assert.equal(windowStub.location.hash, 'plugins');
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
   assert.equal(c.renderVals().results.length, 10);
@@ -409,19 +400,12 @@ test('non-npm plugins get no invented command and forks download a pinned archiv
   assert(values.forkDownloadCommand.includes(fork.head_sha));
 });
 
-test('curated strip surfaces featured non-fork gems in rank order without a security claim', () => {
+test('community browser does not publish provisional curated packages or featured strips', () => {
   const c = instance();
   const values = c.renderVals();
-  assert(values.hasCuratedPicks);
-  assert(values.curatedPicks.length > 0 && values.curatedPicks.length <= 8);
-  assert(values.curatedPicks.every(pick => pick.type !== 'fork'));
-  assert(values.curatedPicks.every(pick => pick.featured));
-  assert(values.curatedPicks.every(pick => ['Curated package', 'Hidden-gem plugin'].includes(pick.kindLabel)));
-  const ranks = values.curatedPicks.map(pick => (pick.rank || (pick.curation && pick.curation.rank)) || 999);
-  assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
-  // Curation is editorial only; it must never imply the artifact was verified.
-  assert.match(html, /Editorial curation, not a security verdict/);
-  assert(values.curatedPicks.every(pick => pick.verification.security_verified === false));
+  assert.deepEqual(values.repoTypes.map(item => item.id), ['plugin', 'fork']);
+  assert(!/Forge picks/.test(html));
+  assert(!/Administrator curated hidden gems/.test(html));
 });
 
 function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
@@ -459,12 +443,15 @@ test('an imported store replaces the embedded inventory and maps records identic
     return { artifacts: [fork], total: 23890, next_cursor: '77.50', generation: 77 };
   };
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
-  connectedStore(c);
+  connectedStore(c, { available: true, artifact_count: 33839, counts: { plugin: 9949, fork: 23890, package: 0 } });
   await c.refreshCatalog();
 
   const values = c.renderVals();
   assert.equal(values.storeActive, true);
   assert.equal(values.catalogSourceLabel, 'Imported catalog store');
+  assert.equal(values.catalogCountLabel, '9,949 plugins · 23,890 forks');
+  assert.equal(values.repoTypes.find(type => type.id === 'plugin').count, 9949);
+  assert.match(values.sortExplanation, /not a Forge quality score/);
   assert.equal(values.results.length, 1);
   // The store hands back snapshot records; the browser applies its one mapping.
   const embedded = CATALOG.find(item => item.id === fork.artifact_id);
@@ -475,6 +462,18 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.match(values.resultCount, /1 of 23,890 forks/);
   assert.equal(values.canLoadMore, true);
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
+});
+
+test('a plugin-only imported store retains the embedded fork snapshot', () => {
+  const c = instance();
+  c.renderVals().repoTypes.find(type => type.id === 'fork').select();
+  connectedStore(c, { available: true, artifact_count: 9949, counts: { plugin: 9949, fork: 0, package: 0 } });
+
+  const values = c.renderVals();
+  assert.equal(values.storeActive, false);
+  assert.equal(values.results.length, 10);
+  assert.equal(values.catalogCountLabel, '9,949 plugins · 10 forks');
+  assert.match(values.catalogSourceLabel, /no imported fork records/);
 });
 
 test('store queries carry the active filters and load more appends by cursor', async () => {
@@ -608,17 +607,12 @@ test('dedicated package route selects the requested metadata page and remains no
   assert.equal(c.lastMessage, 'Copied package page');
 });
 
-test('featured scope is explicit and All in snapshot preserves full inventory', () => {
+test('plugin browsing shows the complete available inventory without a featured filter', () => {
   const c = instance();
   c.renderVals().goCatalog();
-  assert.equal(c.renderVals().results.length, 3);
-  c.renderVals().catalogScopes.find(scope => scope.id === 'featured').select();
-  assert.deepEqual(c.renderVals().results.map(row => row.slug), ['agent-teams-builder', 'code-review-lab']);
-  c.renderVals().repoTypes.find(type => type.id === 'plugin').select();
-  assert.equal(c.renderVals().results.length, 3);
-  c.renderVals().catalogScopes.find(scope => scope.id === 'all').select();
   assert.equal(c.renderVals().results.length, 7);
-  assert.match(script, /All in snapshot/);
+  assert.equal(c.renderVals().catalogScopes, undefined);
+  assert(!/All in snapshot/.test(html));
 });
 
 test('catalog page saves stable selections and signed package identity only when configured', async () => {

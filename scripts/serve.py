@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from dsh_forge.launcher import Launcher, LauncherError  # noqa: E402
+from dsh_forge.marketplace import DEFAULT_CATALOG_URL, MarketplaceError, fetch_catalog  # noqa: E402
 from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError  # noqa: E402
 
 
@@ -322,6 +323,8 @@ def main():
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
     parser.add_argument("--dsh-home", action="append", default=[], help="Scan this DSH home for installed profiles; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
+    parser.add_argument("--sync-plugins", action="store_true", help="Refresh the public plugin catalog once before serving")
+    parser.add_argument("--plugin-catalog-url", default=DEFAULT_CATALOG_URL, help=argparse.SUPPRESS)
     parser.add_argument("--sandbox-image", type=Path, help="Pinned Apptainer SIF required for probes and complete local cells")
     parser.add_argument("--sandbox-image-sha256", help="Expected SHA-256 for --sandbox-image")
     parser.add_argument("--sandbox-binary", help="Apptainer executable name or absolute path")
@@ -350,6 +353,12 @@ def main():
         parser.error(str(error))
     sandbox = ApptainerSandbox(sandbox_config, state_root / "sandbox")
     launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox, dsh_homes=args.dsh_home)
+    if args.sync_plugins:
+        try:
+            imported = launcher.import_catalog(fetch_catalog(args.plugin_catalog_url))
+            print(f"Plugin catalog: {imported['artifact_count']:,} artifacts imported.", flush=True)
+        except (MarketplaceError, LauncherError, OSError) as error:
+            print(f"Plugin catalog refresh failed; keeping the last good local catalog: {error}", file=sys.stderr, flush=True)
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
         server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)

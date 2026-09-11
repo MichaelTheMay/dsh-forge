@@ -12,14 +12,16 @@ the versioned catalog contract and offline client boundary.
 The local fleet launcher, **Community** browser, saved configurations, and an
 isolated **Assistant** surface are available.
 The loopback sidecar discovers configured DSH trees without executing candidate
-code, pins the two current official release installations, and repeatedly starts
+code and repeatedly starts
 trusted local cells with automatic ports, separate writable homes, managed
 workspaces, process groups, recent logs, clone/restart controls, and a live
 inspector. It controls only processes whose PID and process-start identity it
-recorded. Community contains a dated metadata snapshot of ten real community
-forks, seven evidence-ranked plugin candidates, and three curated package
-recipes. Packages are the primary browser; every package has a stable detail
-route and schema-defined metadata, but remains unsigned and non-executable.
+recorded. The front page shows only DSH versions and profiles detected on the
+user's machine; the disconnected demo does not substitute release cards.
+Community contains a small offline snapshot of real plugins and forks. A
+connected launcher can import the integrity-checked public DSH Plugin Marketplace
+feed, currently covering thousands of plugins, into the local search store.
+Provisional generated packages are no longer promoted in the main browser.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
@@ -59,10 +61,13 @@ register one or more source roots at startup when needed:
 
 ```bash
 python3 scripts/serve.py --scan-root ~/src/deepseek-harness
+# refresh the public plugin catalog once before opening the launcher
+python3 scripts/serve.py --sync-plugins
 ```
 
-The disconnected preview shows two immutable official references. A live
-sidecar automatically finds Harness checkouts under `~/dsh-versions` and also
+The disconnected preview shows an empty local-version state rather than sample
+releases. A live sidecar automatically finds Harness checkouts under
+`~/dsh-versions` and also
 lets the user add any other local directory once. Each **Launch** click uses the
 saved safe preset, selects a free loopback port, and creates a separate managed
 home and workspace. **Forget** removes only the saved path and never deletes or
@@ -176,6 +181,7 @@ the only path that scales to the real fork network. The upstream fork endpoint
 captured in the seed reports roughly 24,000 forks; ten are embedded today.
 
 ```bash
+python3 -m dsh_forge catalog sync-plugins
 python3 -m dsh_forge catalog import data/public-repos.seed.json   --package-feed data/package-catalog.seed.json
 python3 -m dsh_forge catalog search "agent teams" --limit 10
 python3 -m dsh_forge catalog search --type fork --sort stars
@@ -191,6 +197,17 @@ rather than collapsing them. Builds are atomic, so a
 failed import leaves the previous store intact. Page size, query length, and
 paging depth are all bounded.
 
+`catalog sync-plugins` (or `scripts/serve.py --sync-plugins`) is the explicit
+networked adapter for the public
+[DSH Plugin Marketplace](https://github.com/w2112515/dsh-plugin-marketplace),
+whose scanner publishes a daily full catalog. Forge bounds the download to 15
+MB, requires credential-free HTTPS, rechecks redirects, validates entry identity
+and the feed's logical SHA-256 digest, and imports metadata only. The upstream
+digest detects corruption but is not a signature or a Forge security verdict.
+The normalized SQLite store is source-neutral: future adapters for other
+agentic development tools can emit the same artifact rows without changing the
+browser or search path.
+
 When a store is imported the Community browser searches it instead of the
 embedded snapshot, pages with a **Load more results** button, and names the
 corpus in use on the result line. Without a sidecar — or with no store imported
@@ -199,23 +216,22 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 
 ## Community browsers
 
-- A curated "Forge picks" strip highlights administrator-selected hidden gems —
-  featured packages and top-ranked plugins — labeled as editorial curation, not
-  a security verdict.
-- Signed packages install in one click through the sandboxed path. Raw plugins
-  hand over an exact-version `dsh plugin add` command targeting a detected local
-  profile, and forks offer a source archive pinned to the captured commit.
+- Raw plugins with a verified npm identity hand over an exact-version
+  `dsh plugin add` command targeting a detected local profile; other entries
+  remain browse-only. Forks offer a source archive pinned to the captured commit.
   Forge copies or downloads; it never extracts or executes community code.
-- Browse Packages, Plugins, and Forks through stable, shareable routes.
+- Browse Plugins and Forks through stable, shareable routes. The package
+  composition and installation contract remains available through the CLI, but
+  provisional package recipes are not promoted in the primary browser.
 - Search names, authors, descriptions, capabilities, and taxonomy labels.
 - Sort by static-review recommendation, GitHub stars, most recent push, or name.
 - Inspect source links, exact package versions and integrity, captured commit
   references, compatibility notes, reported licenses, risk, and provenance.
-- Browse three metadata-only package recipes, seven evidence-ranked plugin
-  records, and ten captured forks without GitHub or registry access. Package
-  detail pages expose exact component versions, integrity pins, source commits,
-  compatibility, provenance, license, and risk. Browser acquisition stays
-  disabled until a package has a trusted DSSE envelope.
+- Browse seven evidence-ranked plugin records and ten captured forks without
+  network access, or explicitly sync the public marketplace into the connected
+  store for full-catalog search. Package publication stays disabled until a
+  research process proposes a coherent combination and a curator reviews and
+  signs its exact components.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive

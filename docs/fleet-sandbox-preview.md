@@ -1,20 +1,25 @@
 # Fleet sandbox preview
 
-The preview pins two immutable official DeepSeek Harness releases:
+The front page lists only Harness installations detected on the user's machine.
+The disconnected preview intentionally shows an empty state; it does not render
+sample release cards as if they were available locally.
+
+These two earlier alpha releases remain useful examples for manually installing
+multiple concrete versions:
 
 | Version | Official tag | Commit |
 | --- | --- | --- |
 | `0.1.2-alpha.3` | `dsh-v0.1.2-alpha.3` | `dd6322d604e00eec1ba5e0c8541159906a21094a` |
 | `0.1.2-alpha.2` | `dsh-v0.1.2-alpha.2` | `0a53fb55bea101816fa226bb964ae2bed71c343b` |
 
-These pins are reference cards in the disconnected preview; they are not
-fabricated live installations. When the loopback sidecar is connected, the
-rail instead shows the actual local versions discovered from saved paths and
-`dsh` on `PATH`. The rail never downloads a moving package. A Launch button
+They do not appear in the rail unless their concrete checkouts are detected.
+When the loopback sidecar is connected, the rail shows actual local versions
+discovered from saved paths and `dsh` on `PATH`. The rail never downloads a
+moving package. A Launch button
 becomes available only when bounded discovery finds a built trusted or personal
 installation and the Apptainer capability probe passes.
 
-## Build the two official installations
+## Optional example: build two official installations
 
 DeepSeek Harness is a developer preview. Read its safety notice and build these
 only in an environment where running the official dependency installation and
