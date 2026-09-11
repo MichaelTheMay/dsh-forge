@@ -1319,6 +1319,8 @@ function mapRepositoryArtifact(a) {
   terms: [
     ...(a.topics || []),
     ...((a.curation && a.curation.taxonomy) || []),
+    ...((a.divergence && a.divergence.changed_paths) || []).slice(0, 64),
+    ...((a.compatibility && a.compatibility.changed_surfaces) || []),
     a.package && a.package.name,
     a.package && a.package.version
   ].filter(Boolean).join(' '),
@@ -2383,6 +2385,21 @@ class Component extends DCLogic {
       { k: 'Default branch', v: detail.default_branch || 'Not reported', color: TXT },
       { k: 'Captured commit', v: detail.base, color: TXT },
       { k: detail.type === 'fork' ? 'Fork source' : 'Source repository', v: detail.source_repository || 'Not reported', color: MUTED },
+      ...(detail.divergence ? [
+        {
+          k: 'Source difference',
+          v: detail.divergence.ahead_by + ' fork-only commit(s) · ' + detail.divergence.behind_by + ' behind · ' + detail.divergence.status,
+          color: detail.divergence.ahead_by > 0 ? BLUE : WARN
+        },
+        {
+          k: 'Changed files',
+          v: detail.divergence.listed_file_count + ' listed' + (detail.divergence.files_truncated ? ' · provider limit reached' : ''),
+          color: detail.divergence.files_truncated ? WARN : MUTED
+        }
+      ] : []),
+      ...((detail.compatibility && detail.compatibility.changed_surfaces && detail.compatibility.changed_surfaces.length) ? [{
+        k: 'Changed surfaces', v: detail.compatibility.changed_surfaces.join(' · '), color: MUTED
+      }] : []),
       ...(detail.package ? [
         { k: 'Package', v: detail.package.name + '@' + detail.package.version, color: BLUE },
         { k: 'Registry', v: detail.package.registry + ' · exact version', color: MUTED },
@@ -2395,25 +2412,28 @@ class Component extends DCLogic {
       }] : []),
       ...(detail.hiddenGem ? [
         { k: 'Hidden-gem score', v: detail.hiddenGem.score + '/100 · rank H' + String(detail.hiddenGem.rank).padStart(2, '0'), color: BLUE },
-        { k: 'Visibility', v: detail.hiddenGem.visibility + ' · metadata-only confidence', color: MUTED }
+        { k: 'Visibility', v: detail.hiddenGem.visibility + ' · ' + detail.hiddenGem.confidence + ' confidence', color: MUTED }
       ] : []),
       ...(detail.installability ? [{ k: 'Installability', v: detail.installability + ' · external catalog claim', color: WARN }] : []),
+      ...(detail.analysis_evidence ? [{ k: 'Evidence', v: detail.analysis_evidence.digest + ' · ' + detail.analysis_evidence.analyzer, color: MUTED }] : []),
       { k: 'Last push', v: detail.pushed_at || 'Not reported', color: MUTED },
       { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
-      { k: 'Trust', v: 'Metadata only · not executed', color: WARN }
+      { k: 'Trust', v: detail.divergence ? 'Commit-pinned source-diff metadata · not executed or security-reviewed' : 'Metadata only · not executed', color: WARN }
     ]);
     const detailCompatibilityText = detail.id
       ? ((detail.compatibility && detail.compatibility.summary) || 'No fork differences or runtime compatibility tests have been computed.')
       : '';
     const detailEvidenceText = detail.catalogPackage
       ? 'Directory inclusion was used only for discovery. Exact registry versions, integrity values, repository commits, and component roles are shown separately; no component combination has been reproduced.'
-      : (detail.hiddenGem
+      : (detail.divergence
+        ? 'Forge compared the exact source and fork commits through GitHub, listed ' + detail.divergence.listed_file_count + ' changed file(s), and extracted static compatibility and risk signals. ' + (detail.divergence.files_truncated ? 'GitHub reached its 300-file response limit, so the path inventory is partial. ' : '') + 'The repository was not cloned or executed; curator and sandbox review are still required.'
+        : (detail.hiddenGem
         ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + detail.hiddenGem.signals.map(signal => signal.id).join(', ') + '. The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
         : (detail.curation
         ? detail.curation.evidence
         : (detail.external_validation
           ? 'The external marketplace classified this entry as ' + detail.external_validation.status + (detail.external_validation.code ? ' (' + detail.external_validation.code + ')' : '') + '. Forge verified the catalog digest but has not executed or security-reviewed the plugin.'
-          : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.')));
+          : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.'))));
     const detailTaxonomy = detail.catalogPackage
       ? detail.taxonomy.join(' / ')
       : (detail.curation ? detail.curation.taxonomy.join(' / ') : ((detail.topics || []).slice(0, 8).join(' / ') || 'Unclassified'));

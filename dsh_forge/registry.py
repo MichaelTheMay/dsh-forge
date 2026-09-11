@@ -121,7 +121,12 @@ def _timestamp(date: str | None) -> str:
     return instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _fork(repo: Mapping[str, Any], upstream: str, parent: str | None = None) -> dict[str, Any]:
+def _fork(
+    repo: Mapping[str, Any],
+    upstream: str,
+    parent: str | None = None,
+    source_branch: str | None = None,
+) -> dict[str, Any]:
     identity = repo.get("id")
     node_id = repo.get("node_id")
     slug = repo.get("full_name")
@@ -180,6 +185,7 @@ def _fork(repo: Mapping[str, Any], upstream: str, parent: str | None = None) -> 
         "head_sha": None,
         "parent_repository": parent,
         "source_repository": upstream,
+        "source_default_branch": source_branch,
         "license": {"spdx": spdx, "status": "github_reported" if spdx else "unknown"},
         "compatibility": {
             "declared_dsh_range": None,
@@ -211,6 +217,12 @@ def fetch_github_fork_network(
     if not isinstance(root_before, Mapping) or root_before.get("full_name", "").casefold() != upstream.casefold():
         raise RegistryError("GitHub root metadata identity does not match the requested upstream")
     expected_before = _count(root_before)
+    source_branch = root_before.get("default_branch")
+    if (
+        not isinstance(source_branch, str) or not source_branch or len(source_branch) > 256
+        or any(ord(character) < 32 for character in source_branch)
+    ):
+        raise RegistryError("GitHub root metadata has no valid default branch")
 
     query = urlencode({"sort": "oldest", "per_page": 100, "page": 1})
     first_page = f"{root_url}/forks?{query}"
@@ -239,7 +251,7 @@ def fetch_github_fork_network(
             for item in payload:
                 if not isinstance(item, Mapping):
                     raise RegistryError("GitHub fork page contains a non-object")
-                record = _fork(item, upstream, parent)
+                record = _fork(item, upstream, parent, source_branch)
                 identity = record["github_id"]
                 if identity in records:
                     raise RegistryError("GitHub recursive pagination returned a duplicate repository ID")
@@ -271,6 +283,8 @@ def fetch_github_fork_network(
     root_after, end_headers = _github_json(root_url, token=token, opener=opener)
     if not isinstance(root_after, Mapping) or root_after.get("id") != root_before.get("id"):
         raise RegistryError("GitHub root identity changed while indexing")
+    if root_after.get("default_branch") != source_branch:
+        raise RegistryError("GitHub root default branch changed while indexing")
     expected_after = _count(root_after)
     stable = expected_before == expected_after
     complete = not truncated and stable and len(direct_ids) == expected_after and not parent_mismatches

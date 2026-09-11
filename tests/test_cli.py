@@ -9,6 +9,7 @@ from unittest import mock
 
 from dsh_forge import cli
 from dsh_forge.launcher import CELL_REGISTRY_SCHEMA_VERSION, Launcher
+from dsh_forge.registry import _fork
 from tests.helpers import FakeCellSandbox
 
 
@@ -107,6 +108,42 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(launch["resources"]["gpu"], "allocated")
         self.assertTrue(launch["open_browser"])
         self.assertEqual(launch["port"], "auto")
+
+    def test_research_evaluate_writes_an_inert_commit_bound_fork_decision(self):
+        raw = {
+            "id": 77, "node_id": "node-77", "full_name": "example/review-gem",
+            "owner": {"login": "example"}, "private": False, "fork": True,
+            "description": "A low-visibility security review workflow for agentic development tools.",
+            "topics": ["security", "review"], "language": "Python",
+            "stargazers_count": 1, "forks_count": 0,
+            "pushed_at": "2026-09-10T00:00:00Z", "archived": False,
+            "default_branch": "main", "license": {"spdx_id": "MIT"},
+        }
+        record = _fork(raw, "deepseek-ai/deepseek-harness", source_branch="main")
+        record.update({
+            "head_sha": "a" * 40,
+            "divergence": {"ahead_by": 2, "listed_file_count": 3, "status": "ahead"},
+            "analysis_evidence": {"digest": "sha256:" + "b" * 64},
+        })
+        self.launcher.import_catalog({
+            "snapshot_id": "cli-analysis", "fetched_at": "2026-09-11T12:00:00Z",
+            "provenance": {"method": "test"}, "coverage": [], "entries": [record],
+            "supplemental_entries": [], "package_entries": [],
+        })
+        output = self.root / "fork-assessment.json"
+        code, result = self.invoke(
+            "research", "evaluate", "--artifact", "github:77",
+            "--decision", "advance", "--reviewer", "Release curator",
+            "--reviewed-at", "2026-09-11T18:00:00Z",
+            "--review-source", "--review-risk", "--review-license", "--review-compatibility",
+            "--notes", "Advance to isolated review.", "--output", str(output),
+        )
+        self.assertEqual(code, 0)
+        self.assertFalse(result["data"]["installation_authorized"])
+        assessment = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(assessment["commit"], "a" * 40)
+        self.assertEqual(assessment["evidence_digest"], "sha256:" + "b" * 64)
+        self.assertFalse(assessment["claims"]["signed"])
 
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))

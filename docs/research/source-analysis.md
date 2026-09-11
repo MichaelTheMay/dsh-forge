@@ -173,6 +173,12 @@ optional Zoekt SSD: ~3.5 x indexed source corpus
 
 ## Recommended delivery order
 
+Current implementation note: Forge now implements a bounded preview of steps 2
+and 3 for the top 100 metadata leads. It resolves immutable source/fork commits
+and records GitHub compare counts and the provider's first 300 changed paths.
+This is explicitly labelled `github_compare_metadata`; it is not the canonical
+Git graph/delta tier described below and it executes no repository code.
+
 1. **Coverage ledger:** fork sweeper, stable IDs, ETags, complete-run publication, tombstones, raw payload retention.
 2. **Revision detector:** default-branch OIDs, deduped jobs, lineage mapping, no source content yet.
 3. **Safe graph tier:** blobless lineage pool, merge bases, ahead/behind, changed-path inventory, exact fingerprints.

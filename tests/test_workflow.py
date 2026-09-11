@@ -31,6 +31,8 @@ class WorkflowPolicyTests(unittest.TestCase):
     def test_catalog_research_indexes_plugins_and_forks_before_ranking(self):
         workflow = (ROOT / ".github/workflows/catalog-research.yml").read_text(encoding="utf-8")
         self.assertIn("scripts/index_registry.py", workflow)
+        self.assertIn("scripts/analyze_registry.py", workflow)
+        self.assertIn("--snapshot dist/registry-raw.json", workflow)
         self.assertIn("--snapshot dist/registry.json", workflow)
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("dist/registry.json", workflow)
