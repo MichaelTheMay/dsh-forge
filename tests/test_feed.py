@@ -52,10 +52,12 @@ def registry():
 
 def queue():
     return {
-        "schema": "dsh-forge.discovery-queue/v1",
+        "schema": "dsh-forge.discovery-queue/v2",
+        "policy": "dsh-forge.hidden-gems/v2",
         "snapshot_id": "registry-feed-test",
         "candidate_count": 1,
-        "candidates": [],
+        "candidates": [{}],
+        "quality": {"selection_policy": "dsh-forge.discovery-diversity/v1"},
     }
 
 

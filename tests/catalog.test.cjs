@@ -487,7 +487,7 @@ test('analyzed forks disclose immutable divergence evidence without claiming exe
   c.api = async () => ({
     artifacts: [analyzed], total: 1, next_cursor: '', generation: 8,
     research: { [fork.artifact_id]: {
-      policy: 'dsh-forge.hidden-gems/v1', candidate: true, score: 91, rank: 1,
+      policy: 'dsh-forge.hidden-gems/v2', candidate: true, score: 91, rank: 1,
       confidence: 'source-diff-metadata', signals: [], gaps: []
     } }
   });
@@ -548,9 +548,10 @@ test('imported research evidence marks only bounded hidden-gem candidates', asyn
   const c = instance();
   const plugin = snapshot.supplemental_entries[0];
   const report = {
-    policy: 'dsh-forge.hidden-gems/v1', artifact_id: plugin.artifact_id,
+    policy: 'dsh-forge.hidden-gems/v2', artifact_id: plugin.artifact_id,
     score: 94, rank: 7, visibility: 'hidden', confidence: 'metadata-only',
-    candidate: true, capabilities: ['orchestration'],
+    candidate: true, capabilities: ['orchestration'], quality_rank: 2,
+    selection: { policy: 'dsh-forge.discovery-diversity/v1', score_window: 5, capability_lane: 'orchestration', owner_exposure_before: 0, capability_exposure_before: 1 },
     signals: [{ id: 'capability', points: 6, evidence: 'orchestration' }],
     gaps: ['compatibility unverified'], security_verified: false, executed: false
   };
@@ -567,6 +568,8 @@ test('imported research evidence marks only bounded hidden-gem candidates', asyn
   values.results[0].select();
   const detail = c.renderVals();
   assert(detail.detailRows.some(row => row.k === 'Hidden-gem score' && /94\/100/.test(row.v)));
+  assert(detail.detailRows.some(row => row.k === 'Quality rank' && /Q02/.test(row.v)));
+  assert(detail.detailRows.some(row => row.k === 'Discovery lane' && /orchestration/.test(row.v)));
   assert.match(detail.detailEvidenceText, /capability/);
   assert.match(detail.sortExplanation, /metadata only, not a security verdict/);
 });

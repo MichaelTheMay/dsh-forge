@@ -434,7 +434,7 @@ class CatalogCliTests(unittest.TestCase):
 
         code, gems = self.invoke("research", "gems", "memory", "--limit", "3")
         self.assertEqual(code, 0)
-        self.assertEqual(gems["policy"], "dsh-forge.hidden-gems/v1")
+        self.assertEqual(gems["policy"], "dsh-forge.hidden-gems/v2")
         self.assertTrue(gems["candidates"])
         self.assertTrue(all(item["hidden_gem"]["candidate"] for item in gems["candidates"]))
 

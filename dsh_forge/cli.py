@@ -32,7 +32,14 @@ from .packages import (
     verify as verify_package,
     write_json,
 )
-from .research import ResearchError, certify_proposal, compose_proposal, create_fork_assessment
+from .research import (
+    ResearchError,
+    benchmark_queue,
+    certify_proposal,
+    compose_proposal,
+    create_fork_assessment,
+    record_judgment,
+)
 from .catalog_store import MAX_SNAPSHOT_BYTES
 
 
@@ -129,6 +136,19 @@ def _parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--force", action="store_true")
     for review in ("source", "risk", "license", "compatibility"):
         evaluate.add_argument(f"--review-{review}", action="store_true", required=True)
+    judge = research_commands.add_parser("judge", help="record snapshot-bound curator relevance feedback")
+    judge.add_argument("--queue", required=True, metavar="JSON")
+    judge.add_argument("--artifact", required=True)
+    judge.add_argument("--rating", required=True, choices=["irrelevant", "weak", "promising", "exceptional"])
+    judge.add_argument("--reviewer", required=True)
+    judge.add_argument("--reviewed-at", required=True, metavar="UTC")
+    judge.add_argument("--notes", default="")
+    judge.add_argument("--output", required=True, metavar="JSON")
+    benchmark = research_commands.add_parser("benchmark", help="measure queue relevance against curator judgments")
+    benchmark.add_argument("--queue", required=True, metavar="JSON")
+    benchmark.add_argument("--judgments", required=True, metavar="JSON")
+    benchmark.add_argument("--output", metavar="JSON")
+    benchmark.add_argument("--force", action="store_true")
     propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
     propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
     propose.add_argument("--package-id", required=True)
@@ -690,6 +710,32 @@ def run(
                     "assessment_digest": assessment["assessment_digest"],
                     "installation_authorized": False,
                 }
+            elif command == "research.judge":
+                output = Path(args.output).expanduser()
+                ledger = read_json(output) if output.exists() else None
+                judgments = record_judgment(
+                    read_json(args.queue, max_bytes=MAX_SNAPSHOT_BYTES),
+                    ledger,
+                    artifact_id=args.artifact,
+                    rating=args.rating,
+                    reviewer=args.reviewer,
+                    reviewed_at=args.reviewed_at,
+                    notes=args.notes,
+                )
+                write_json(output, judgments, force=output.exists())
+                data = {
+                    "output": str(output),
+                    "snapshot_id": judgments["snapshot_id"],
+                    "judgment_count": len(judgments["judgments"]),
+                    "installation_authorized": False,
+                }
+            elif command == "research.benchmark":
+                data = benchmark_queue(
+                    read_json(args.queue, max_bytes=MAX_SNAPSHOT_BYTES),
+                    read_json(args.judgments),
+                )
+                if args.output:
+                    write_json(args.output, data, force=args.force)
             elif command == "profiles.list":
                 status = launcher.status()
                 data = {"profiles": status["profiles"], "dsh_homes": status["dsh_homes"]}

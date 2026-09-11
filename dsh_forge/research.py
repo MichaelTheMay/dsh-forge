@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections import Counter
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -24,14 +26,19 @@ from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
 from .packages import compose, create_trust_root, sign, validate_manifest, verify, write_json
 
 
-POLICY_VERSION = "dsh-forge.hidden-gems/v1"
+POLICY_VERSION = "dsh-forge.hidden-gems/v2"
+SUPPORTED_CERTIFICATION_POLICIES = {"dsh-forge.hidden-gems/v1", POLICY_VERSION}
 PROPOSAL_SCHEMA = "dsh-forge.research-proposal/v1"
 CERTIFICATION_SCHEMA = "dsh-forge.package-certification/v1"
-DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v1"
+DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v2"
 FORK_ASSESSMENT_SCHEMA = "dsh-forge.fork-assessment/v1"
+JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v1"
+BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v1"
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_PROPOSAL_PLUGINS = 8
 MAX_DISCOVERY_QUEUE = 250
+SELECTION_POLICY = "dsh-forge.discovery-diversity/v1"
+DIVERSITY_SCORE_WINDOW = 5
 
 _NPM_NAME = re.compile(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+")
 _VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,63}")
@@ -47,6 +54,7 @@ _CAPABILITIES = {
     "observability": ("observability", "trace", "logging", "metrics"),
     "search": ("search", "retrieval", "index"),
 }
+_RATINGS = {"irrelevant": 0, "weak": 1, "promising": 2, "exceptional": 3}
 
 
 def _mentions(text: str, term: str) -> bool:
@@ -322,8 +330,65 @@ def create_fork_assessment(
     return payload
 
 
+def _owner(record: Mapping[str, Any]) -> str:
+    owner = str(record.get("owner") or "").strip().casefold()
+    if owner:
+        return owner[:256]
+    full_name = str(record.get("full_name") or "")
+    return (full_name.partition("/")[0] or str(record.get("artifact_id") or "unknown"))[:256].casefold()
+
+
+def _diverse_selection(
+    group: list[tuple[Mapping[str, Any], dict[str, Any]]],
+) -> tuple[list[tuple[Mapping[str, Any], dict[str, Any]]], dict[str, dict[str, Any]]]:
+    """Select near-equal candidates across owners and capability lanes."""
+
+    remaining = [item for item in group if item[1]["candidate"]]
+    selected: list[tuple[Mapping[str, Any], dict[str, Any]]] = []
+    selections: dict[str, dict[str, Any]] = {}
+    owner_counts: Counter[str] = Counter()
+    capability_counts: Counter[str] = Counter()
+    while remaining and len(selected) < MAX_DISCOVERY_QUEUE:
+        score_floor = remaining[0][1]["score"] - DIVERSITY_SCORE_WINDOW
+        window = [
+            (index, record, report)
+            for index, (record, report) in enumerate(remaining)
+            if report["score"] >= score_floor
+        ]
+
+        def choice(item: tuple[int, Mapping[str, Any], Mapping[str, Any]]) -> tuple[Any, ...]:
+            _, record, report = item
+            capabilities = report.get("capabilities") or ["other"]
+            lane = min(capabilities, key=lambda value: (capability_counts[str(value)], str(value)))
+            stars = record.get("github_stars")
+            return (
+                owner_counts[_owner(record)],
+                capability_counts[str(lane)],
+                -report["score"],
+                stars if isinstance(stars, int) and not isinstance(stars, bool) else 10**12,
+                str(record.get("artifact_id") or ""),
+            )
+
+        index, record, report = min(window, key=choice)
+        capabilities = report.get("capabilities") or ["other"]
+        lane = str(min(capabilities, key=lambda value: (capability_counts[str(value)], str(value))))
+        owner = _owner(record)
+        identity = str(record["artifact_id"])
+        selections[identity] = {
+            "policy": SELECTION_POLICY,
+            "score_window": DIVERSITY_SCORE_WINDOW,
+            "capability_lane": lane,
+            "owner_exposure_before": owner_counts[owner],
+            "capability_exposure_before": capability_counts[lane],
+        }
+        owner_counts[owner] += 1
+        capability_counts[lane] += 1
+        selected.append(remaining.pop(index))
+    return selected, selections
+
+
 def rank_artifacts(records: Iterable[Mapping[str, Any]], observed_at: Any = None) -> dict[str, dict[str, Any]]:
-    """Rank each artifact type independently with stable tie breakers."""
+    """Rank each artifact type, then diversify near-equal eligible results."""
 
     evaluated: list[tuple[Mapping[str, Any], dict[str, Any]]] = []
     for record in records:
@@ -331,22 +396,50 @@ def rank_artifacts(records: Iterable[Mapping[str, Any]], observed_at: Any = None
             continue
         evaluated.append((record, evaluate_artifact(record, observed_at)))
     result: dict[str, dict[str, Any]] = {}
-    for kind in {str(record.get("artifact_type") or "repository") for record, _ in evaluated}:
+    for kind in sorted({str(record.get("artifact_type") or "repository") for record, _ in evaluated}):
         group = [(record, report) for record, report in evaluated if str(record.get("artifact_type") or "repository") == kind]
         group.sort(key=lambda item: (
             -item[1]["score"],
             item[0].get("github_stars") if isinstance(item[0].get("github_stars"), int) else 10**12,
             str(item[0].get("artifact_id")),
         ))
-        for rank, (record, report) in enumerate(group, 1):
+        quality_ranks = {str(record["artifact_id"]): rank for rank, (record, _) in enumerate(group, 1)}
+        selected, selections = _diverse_selection(group)
+        selected_ids = {str(record["artifact_id"]) for record, _ in selected}
+        ordered = selected + [item for item in group if str(item[0]["artifact_id"]) not in selected_ids]
+        for rank, (record, report) in enumerate(ordered, 1):
+            identity = str(record["artifact_id"])
             result[str(record["artifact_id"])] = {
                 **report,
+                "quality_rank": quality_ranks[identity],
                 "rank": rank,
-                # The searchable corpus stays complete. "Candidate" is a bounded
-                # research queue, not a claim that every schema-valid entry is a gem.
-                "candidate": bool(report["candidate"] and rank <= MAX_DISCOVERY_QUEUE),
+                "candidate": identity in selected_ids,
+                "selection": selections.get(identity),
             }
     return result
+
+
+def _queue_quality(candidates: list[dict[str, Any]]) -> dict[str, Any]:
+    owners = Counter(_owner(item["artifact"]) for item in candidates)
+    capabilities = Counter(
+        str(capability)
+        for item in candidates
+        for capability in item["research"].get("capabilities") or ["other"]
+    )
+    types = Counter(str(item["artifact"].get("artifact_type") or "repository") for item in candidates)
+    visibility = Counter(str(item["research"].get("visibility") or "unknown") for item in candidates)
+    scores = [int(item["research"]["score"]) for item in candidates]
+    return {
+        "selection_policy": SELECTION_POLICY,
+        "score_window": DIVERSITY_SCORE_WINDOW,
+        "by_type": dict(sorted(types.items())),
+        "by_capability": dict(sorted(capabilities.items())),
+        "by_visibility": dict(sorted(visibility.items())),
+        "unique_owners": len(owners),
+        "max_candidates_per_owner": max(owners.values(), default=0),
+        "score_min": min(scores, default=None),
+        "score_max": max(scores, default=None),
+    }
 
 
 def discovery_queue(snapshot: Mapping[str, Any], *, limit: int = MAX_DISCOVERY_QUEUE) -> dict[str, Any]:
@@ -368,10 +461,11 @@ def discovery_queue(snapshot: Mapping[str, Any], *, limit: int = MAX_DISCOVERY_Q
         if reports[str(record["artifact_id"])]["candidate"]
     ]
     candidates.sort(key=lambda item: (
-        str(item["artifact"].get("artifact_type") or "repository"),
         item["research"]["rank"],
+        str(item["artifact"].get("artifact_type") or "repository"),
         str(item["artifact"]["artifact_id"]),
     ))
+    selected = candidates[:limit]
     return {
         "schema": DISCOVERY_QUEUE_SCHEMA,
         "policy": POLICY_VERSION,
@@ -379,13 +473,163 @@ def discovery_queue(snapshot: Mapping[str, Any], *, limit: int = MAX_DISCOVERY_Q
         "fetched_at": str(snapshot.get("fetched_at") or "")[:64],
         "provenance": dict(snapshot.get("provenance")) if isinstance(snapshot.get("provenance"), Mapping) else {},
         "source_count": len(records),
-        "candidate_count": min(len(candidates), limit),
-        "candidates": candidates[:limit],
+        "candidate_count": len(selected),
+        "candidates": selected,
+        "quality": _queue_quality(selected),
         "claims": {
             "metadata_only": True,
             "security_verified": False,
             "executed": False,
         },
+    }
+
+
+def record_judgment(
+    queue: Mapping[str, Any],
+    ledger: Mapping[str, Any] | None,
+    *,
+    artifact_id: str,
+    rating: str,
+    reviewer: str,
+    reviewed_at: str,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Record one unsigned curator relevance label bound to an exact queue snapshot."""
+
+    if queue.get("schema") != DISCOVERY_QUEUE_SCHEMA or queue.get("policy") != POLICY_VERSION:
+        raise ResearchError("Judgment requires the current discovery queue schema and policy")
+    candidates = {
+        str(item.get("artifact", {}).get("artifact_id") or ""): item
+        for item in queue.get("candidates") or []
+        if isinstance(item, Mapping) and isinstance(item.get("artifact"), Mapping)
+    }
+    candidate = candidates.get(str(artifact_id or ""))
+    if candidate is None:
+        raise ResearchError("Judgment artifact is not in this discovery queue")
+    if rating not in _RATINGS:
+        raise ResearchError("Judgment rating must be irrelevant, weak, promising, or exceptional")
+    reviewer = str(reviewer or "").strip()
+    notes = str(notes or "").strip()
+    instant = _instant(reviewed_at)
+    if not 2 <= len(reviewer) <= 128 or any(ord(character) < 32 for character in reviewer):
+        raise ResearchError("Reviewer must contain 2 to 128 printable characters")
+    if instant is None or len(reviewed_at) > 64:
+        raise ResearchError("Judgment reviewed-at must be an ISO 8601 timestamp with a timezone")
+    if len(notes) > 4_000 or any(ord(character) < 9 for character in notes):
+        raise ResearchError("Judgment notes exceed the safe text limit")
+    if ledger:
+        if (
+            ledger.get("schema") != JUDGMENT_SCHEMA
+            or ledger.get("snapshot_id") != queue.get("snapshot_id")
+            or ledger.get("policy") != POLICY_VERSION
+            or not isinstance(ledger.get("judgments"), list)
+            or len(ledger["judgments"]) > MAX_DISCOVERY_QUEUE
+            or any(not isinstance(item, Mapping) for item in ledger["judgments"])
+        ):
+            raise ResearchError("Judgment ledger does not match this discovery snapshot")
+        judgments = [dict(item) for item in ledger["judgments"] if isinstance(item, Mapping)]
+    else:
+        judgments = []
+    research = candidate.get("research") if isinstance(candidate.get("research"), Mapping) else {}
+    subject = research.get("subject")
+    if not isinstance(subject, Mapping):
+        raise ResearchError("Judgment candidate has no stable subject")
+    judgment = {
+        "artifact_id": artifact_id,
+        "subject": dict(subject),
+        "rating": rating,
+        "relevance": _RATINGS[rating],
+        "reviewer": reviewer,
+        "reviewed_at": instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "notes": notes,
+    }
+    judgments = [item for item in judgments if item.get("artifact_id") != artifact_id]
+    judgments.append(judgment)
+    judgments.sort(key=lambda item: str(item.get("artifact_id") or ""))
+    return {
+        "schema": JUDGMENT_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": queue.get("snapshot_id"),
+        "judgments": judgments,
+        "claims": {
+            "signed": False,
+            "executed": False,
+            "security_verified": False,
+            "installation_authorized": False,
+        },
+    }
+
+
+def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict[str, Any]:
+    """Measure ranked relevance using snapshot-bound curator judgments."""
+
+    if (
+        queue.get("schema") != DISCOVERY_QUEUE_SCHEMA
+        or ledger.get("schema") != JUDGMENT_SCHEMA
+        or queue.get("policy") != POLICY_VERSION
+        or ledger.get("policy") != POLICY_VERSION
+        or queue.get("snapshot_id") != ledger.get("snapshot_id")
+    ):
+        raise ResearchError("Benchmark inputs do not describe the same current discovery snapshot")
+    candidates = [
+        item for item in queue.get("candidates") or []
+        if isinstance(item, Mapping) and isinstance(item.get("artifact"), Mapping)
+    ]
+    subjects = {
+        str(item["artifact"].get("artifact_id") or ""): (
+            item.get("research", {}).get("subject")
+            if isinstance(item.get("research"), Mapping) else None
+        )
+        for item in candidates
+    }
+    ratings: dict[str, int] = {}
+    for item in ledger.get("judgments") or []:
+        if not isinstance(item, Mapping):
+            raise ResearchError("Judgment ledger contains an invalid entry")
+        identity = str(item.get("artifact_id") or "")
+        relevance = item.get("relevance")
+        rating = item.get("rating")
+        if (
+            identity in ratings
+            or identity not in subjects
+            or not isinstance(relevance, int)
+            or isinstance(relevance, bool)
+            or rating not in _RATINGS
+            or _RATINGS[rating] != relevance
+            or item.get("subject") != subjects[identity]
+        ):
+            raise ResearchError("Judgment ledger contains duplicate or invalid relevance")
+        ratings[identity] = int(relevance)
+    positions = [ratings.get(str(item["artifact"].get("artifact_id") or "")) for item in candidates]
+
+    def metrics(cutoff: int) -> dict[str, Any]:
+        values = positions[:cutoff]
+        judged = [value for value in values if value is not None]
+        gains = [0 if value is None else 2 ** value - 1 for value in values]
+        dcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
+        ideal = sorted((2 ** value - 1 for value in ratings.values()), reverse=True)[:len(values)]
+        idcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(ideal))
+        relevant = sum(value >= 2 for value in judged)
+        return {
+            "cutoff": cutoff,
+            "judged": len(judged),
+            "judgment_coverage": round(len(judged) / len(values), 4) if values else 0.0,
+            "precision": round(relevant / len(values), 4) if values else 0.0,
+            "precision_among_judged": round(relevant / len(judged), 4) if judged else None,
+            "ndcg": round(dcg / idcg, 4) if idcg else None,
+        }
+
+    cutoffs = sorted({min(value, len(candidates)) for value in (10, 25, 100) if candidates})
+    return {
+        "schema": BENCHMARK_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": queue.get("snapshot_id"),
+        "candidate_count": len(candidates),
+        "judged_count": sum(value is not None for value in positions),
+        "ratings": {name: sum(value == score for value in ratings.values()) for name, score in _RATINGS.items()},
+        "metrics": [metrics(cutoff) for cutoff in cutoffs],
+        "queue_quality": dict(queue.get("quality") or {}),
+        "claims": {"metadata_only": True, "executed": False, "security_verified": False},
     }
 
 
@@ -537,10 +781,12 @@ def compose_proposal(
     }, report_list
 
 
-def signed_review_statement(reviewer: str) -> str:
+def signed_review_statement(reviewer: str, policy: str = POLICY_VERSION) -> str:
     """Return the curator assertion embedded in the signed manifest."""
 
-    return f"{reviewer} | reviewed source, permissions, license, compatibility | {POLICY_VERSION}"
+    if policy not in SUPPORTED_CERTIFICATION_POLICIES:
+        raise ResearchError("Package certification policy is unsupported")
+    return f"{reviewer} | reviewed source, permissions, license, compatibility | {policy}"
 
 
 def certify_proposal(

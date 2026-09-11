@@ -16,7 +16,7 @@ Being in that queue is not a security verdict or an install authorization.
 | Certify | Four explicit reviews plus an Ed25519 key | Signed local recipe and certification receipt | No |
 | Install | Signed recipe plus a saved DSH version | Quarantine, archive inspection, networkless sandbox test, atomic promotion | Yes, only inside Apptainer |
 
-The ranking policy is `dsh-forge.hidden-gems/v1`. It rewards positive static
+The ranking policy is `dsh-forge.hidden-gems/v2`. It rewards positive static
 validation, an exact package version, an immutable commit, a reported license,
 specific documentation, recent maintenance, agentic-development capabilities,
 real fork-only commits, and low visibility. Risk signals and archival status subtract points. An
@@ -25,6 +25,13 @@ commit and at least one fork-only commit before it can enter the recommendation 
 result includes the point-bearing signals and missing evidence. The searchable
 source record stays unchanged; Forge stores research evidence beside it so an
 upstream catalog can never award itself a Forge rank.
+
+Candidate selection applies `dsh-forge.discovery-diversity/v1` after scoring.
+Within a five-point quality window it prefers owners and capability lanes with
+less prior exposure. It never promotes a lower-scoring item outside that window.
+Quality rank, discovery rank, selection reason, owner concentration, capability
+coverage, visibility mix, and score range are included in the queue so ranking
+changes can be evaluated rather than judged by anecdotes.
 
 The first two adapters consume the public DSH Plugin Marketplace's daily full
 feed and paginate a GitHub fork network. The store and ranking module are
@@ -61,6 +68,34 @@ python3 -m dsh_forge catalog sync-plugins
 python3 -m dsh_forge catalog sync
 python3 -m dsh_forge research gems "project memory" --type plugin --type fork --limit 25
 ```
+
+## Curator feedback and ranking benchmarks
+
+Ratings are bound to one queue snapshot and exact artifact subject. They do not
+carry forward silently when a package version, repository commit, or ranking
+snapshot changes:
+
+```bash
+python3 -m dsh_forge research judge \
+  --queue /tmp/hidden-gems.json \
+  --artifact github:1339316901 \
+  --rating exceptional \
+  --reviewer "Release curator" \
+  --reviewed-at 2026-09-11T18:00:00Z \
+  --notes "Unusually capable project-memory workflow." \
+  --output /tmp/discovery-judgments.json
+
+python3 -m dsh_forge research benchmark \
+  --queue /tmp/hidden-gems.json \
+  --judgments /tmp/discovery-judgments.json \
+  --output /tmp/discovery-benchmark.json
+```
+
+The benchmark reports rating counts, judgment coverage, precision, precision
+among judged results, and NDCG at 10, 25, and 100. Unjudged results count as
+non-relevant in overall precision and as zero gain in NDCG; coverage and
+precision among judged results make sparse review explicit. Feedback is
+unsigned, executes nothing, and never authorizes installation.
 
 The current analyzer is a deliberately bounded REST tier. It resolves both
 repositories to immutable commits, asks GitHub to compare those commits, records
@@ -142,7 +177,8 @@ curator review as sandbox proof.
 - Only the final install transaction downloads bytes, inspects the archive,
   disables lifecycle scripts and network in the disposable build, smoke-tests
   the result in Apptainer, and promotes on success.
-- The scheduled workflow cannot sign or publish. It receives no curator key.
+- The scheduled workflow can publish unsigned metadata feed assets, but cannot
+  sign or publish installable packages. It receives no curator key.
 
 These boundaries let additional ecosystems reuse ingestion and ranking without
 weakening DSH Forge's local trust and sandbox requirements.
