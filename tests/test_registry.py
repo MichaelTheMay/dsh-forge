@@ -94,6 +94,26 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(coverage["truncated"])
         self.assertIn("fork-network count changed", " ".join(coverage["incomplete_reasons"]))
 
+    def test_recurses_only_into_forks_that_report_children(self):
+        first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
+        child_url = "https://api.github.com/repos/example/one/forks?sort=oldest&per_page=100&page=1"
+        parent = fork(1, "one")
+        parent["forks_count"] = 1
+        opener = SequenceOpener([
+            (root(2), "https://api.github.com/repos/deepseek-ai/deepseek-harness", None),
+            ([parent, fork(2, "two")], first, None),
+            ([fork(3, "three")], child_url, None),
+            (root(2), "https://api.github.com/repos/deepseek-ai/deepseek-harness", None),
+        ])
+        snapshot = fetch_github_fork_network(opener=opener)
+        coverage = snapshot["coverage"][0]
+        self.assertEqual(coverage["status"], "complete")
+        self.assertEqual(coverage["direct_discovered_count"], 2)
+        self.assertEqual(coverage["descendant_count"], 1)
+        self.assertEqual(coverage["expanded_parents"], 1)
+        child = next(item for item in snapshot["entries"] if item["github_id"] == 3)
+        self.assertEqual(child["parent_repository"], "example/one")
+
     def test_rejects_pagination_to_another_host(self):
         first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
         opener = SequenceOpener([

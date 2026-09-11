@@ -57,10 +57,12 @@ Failed download or validation leaves the previous store untouched.
 `scripts/index_registry.py` assembles that marketplace feed with one or more
 GitHub fork networks. It follows GitHub's `Link` pagination, caps pages and
 records, validates public repository identities, and reads the root network
-count before and after the crawl. Its coverage ledger claims completeness only
-if pagination ends, the root count stayed stable, and that count matches the
-distinct collected IDs. An interrupted or changing crawl is retained as
-`incomplete` rather than being described as every fork. See
+count before and after the crawl. Forks reporting children are recursively
+paginated. Its coverage ledger claims visible completeness only if pagination
+ends, the root count stayed stable, the direct pages reconcile with that root
+count, and every child page reconciles with its parent count. An interrupted,
+changing, or access-limited crawl is retained as `incomplete` rather than being
+described as every fork. See
 [Registry indexing](registry-indexer.md).
 
 Import **never upgrades trust on its own**. Whatever `provenance` the snapshot

@@ -35,8 +35,8 @@ The `Catalog research queue` GitHub Actions workflow runs daily and can also be
 started manually. It fetches the latest integrity-checked external feed,
 paginates the configured fork networks, ranks the assembled corpus, and retains
 `registry.json` plus `hidden-gems.json` as 30-day workflow artifacts. A fork
-snapshot is labelled complete only after stable-count reconciliation; partial
-snapshots remain available with explicit reasons. The queue is metadata-only
+snapshot is labelled complete only after stable root and recursive child-page
+reconciliation; partial snapshots remain available with explicit reasons. The queue is metadata-only
 and carries explicit `executed: false` and `security_verified: false` claims. It
 never commits generated data or publishes a package automatically.
 
