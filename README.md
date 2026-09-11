@@ -215,7 +215,9 @@ without changing the browser, search path, or research policy. A scheduled
 workflow refreshes the neutral registry and a bounded metadata-only review
 queue daily; it cannot sign or publish packages. Fork pagination includes a
 coverage ledger. Forge says `complete` only when pagination ends and the
-distinct repository count reconciles with an unchanged GitHub network count.
+root and recursive child pages reconcile with unchanged reported counts. The
+claim covers visible API results; inaccessible forks can still make it
+incomplete.
 See [Registry indexing](docs/registry-indexer.md) and
 [Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
 

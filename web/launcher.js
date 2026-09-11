@@ -2434,8 +2434,11 @@ class Component extends DCLogic {
     const coverageLabel = s.catalogType === 'fork' && forkCoverage
       ? (forkCoverage.status === 'complete'
         ? ' · complete network verified'
-        : ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
-          + ' of ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ')')
+        : (Number(forkCoverage.descendant_count || 0) > 0
+          ? ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
+            + ' visible · root reports ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ' direct)'
+          : ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
+            + ' of ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ')'))
       : '';
     const emptyCopy = s.catalogType === 'package'
       ? {

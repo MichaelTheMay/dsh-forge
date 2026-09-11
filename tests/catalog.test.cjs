@@ -479,6 +479,20 @@ test('fork coverage is disclosed beside imported results', () => {
   assert.match(c.renderVals().catalogSourceLabel, /incomplete network \(100 of 26,095\)/);
 });
 
+test('recursive fork coverage does not compare descendants to a direct-root count', () => {
+  const c = instance();
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  connectedStore(c, {
+    available: true,
+    counts: { plugin: 9949, fork: 26137, package: 0 },
+    coverage: [{
+      source: 'github-rest/fork-network', status: 'incomplete',
+      discovered_count: 26137, descendant_count: 112, reported_count_after: 26099
+    }]
+  });
+  assert.match(c.renderVals().catalogSourceLabel, /26,137 visible · root reports 26,099 direct/);
+});
+
 test('permanent static deployment preserves the launcher security headers', () => {
   const headers = Object.fromEntries(vercel.headers[0].headers.map(item => [item.key, item.value]));
   assert.match(headers['Content-Security-Policy'], /script-src 'self'/);

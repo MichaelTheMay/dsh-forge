@@ -40,16 +40,21 @@ Provenance stays attached to every source; merging never upgrades trust.
 ## Coverage contract
 
 GitHub's root repository metadata is read before and after `Link` pagination.
-Each network receives one coverage record:
+Every returned fork with a nonzero child-fork count is recursively paginated;
+zero-child forks require no extra request. Each network receives one coverage
+record:
 
-- `complete`: pagination ended, the root count did not change, and the count
-  equals the number of distinct repository IDs;
+- `complete`: pagination ended, the root count did not change, the root pages
+  reconcile with that direct-fork count, and every child page reconciles with
+  its parent count;
 - `incomplete`: a page or record bound was reached, the count changed, or the
   result did not reconcile. Reasons are included in the record.
 
-This is a fail-honest contract. A partial inventory remains searchable, but the
-product must not call it “all forks.” The endpoint response is metadata only:
-the indexer never clones, installs, imports, or executes repository code.
+This is a fail-honest contract. “Complete” means every public result visible to
+the recursive API traversal was reconciled during that run; inaccessible forks
+may still keep a run incomplete. A partial inventory remains searchable, but
+the product must not call it “all forks.” The endpoint response is metadata
+only: the indexer never clones, installs, imports, or executes repository code.
 
 Fork rows initially remain `browse-only` and deliberately omit an immutable
 head commit. The research queue may select promising low-visibility forks for

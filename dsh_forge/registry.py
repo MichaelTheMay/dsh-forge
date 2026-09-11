@@ -121,7 +121,7 @@ def _timestamp(date: str | None) -> str:
     return instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _fork(repo: Mapping[str, Any], upstream: str) -> dict[str, Any]:
+def _fork(repo: Mapping[str, Any], upstream: str, parent: str | None = None) -> dict[str, Any]:
     identity = repo.get("id")
     node_id = repo.get("node_id")
     slug = repo.get("full_name")
@@ -143,6 +143,9 @@ def _fork(repo: Mapping[str, Any], upstream: str) -> dict[str, Any]:
     stars = repo.get("stargazers_count")
     if not isinstance(stars, int) or isinstance(stars, bool) or stars < 0:
         raise RegistryError(f"{slug}: invalid GitHub star count")
+    forks_count = repo.get("forks_count")
+    if not isinstance(forks_count, int) or isinstance(forks_count, bool) or forks_count < 0:
+        raise RegistryError(f"{slug}: invalid GitHub child-fork count")
     topics = repo.get("topics") or []
     if not isinstance(topics, list) or len(topics) > 200 or any(
         not isinstance(item, str) or not item or len(item) > 128 for item in topics
@@ -170,12 +173,12 @@ def _fork(repo: Mapping[str, Any], upstream: str) -> dict[str, Any]:
         "language": repo.get("language") if isinstance(repo.get("language"), str) else None,
         "github_stars": stars,
         "seed_rank": None,
-        "forks_count": repo.get("forks_count") if isinstance(repo.get("forks_count"), int) else 0,
+        "forks_count": forks_count,
         "pushed_at": repo.get("pushed_at") if isinstance(repo.get("pushed_at"), str) else None,
         "archived": bool(repo.get("archived")),
         "default_branch": repo.get("default_branch") if isinstance(repo.get("default_branch"), str) else None,
         "head_sha": None,
-        "parent_repository": None,
+        "parent_repository": parent,
         "source_repository": upstream,
         "license": {"spdx": spdx, "status": "github_reported" if spdx else "unknown"},
         "compatibility": {
@@ -197,7 +200,7 @@ def fetch_github_fork_network(
     max_pages: int = MAX_FORK_PAGES,
     progress: Callable[[int, int], None] | None = None,
 ) -> dict[str, Any]:
-    """Collect a fork endpoint and prove completeness only by stable reconciliation."""
+    """Recursively collect visible forks and record why coverage is or is not proven."""
 
     if not isinstance(upstream, str) or not _SLUG.fullmatch(upstream):
         raise RegistryError("GitHub upstream must be owner/repository")
@@ -210,47 +213,76 @@ def fetch_github_fork_network(
     expected_before = _count(root_before)
 
     query = urlencode({"sort": "oldest", "per_page": 100, "page": 1})
-    next_page: str | None = f"{root_url}/forks?{query}"
+    first_page = f"{root_url}/forks?{query}"
+    frontier: list[tuple[str, int | None, str]] = [(upstream, None, first_page)]
+    queued = {upstream.casefold()}
     seen_pages: set[str] = set()
     records: dict[int, dict[str, Any]] = {}
+    direct_ids: set[int] = set()
+    parent_mismatches: list[dict[str, Any]] = []
     pages = 0
     last_headers: dict[str, str | None] = {}
-    while next_page and pages < max_pages:
-        if next_page in seen_pages:
-            raise RegistryError("GitHub pagination returned a cycle")
-        seen_pages.add(next_page)
-        payload, last_headers = _github_json(next_page, token=token, opener=opener)
-        if not isinstance(payload, list) or len(payload) > 100:
-            raise RegistryError("GitHub fork page is not a bounded list")
-        for item in payload:
-            if not isinstance(item, Mapping):
-                raise RegistryError("GitHub fork page contains a non-object")
-            record = _fork(item, upstream)
-            identity = record["github_id"]
-            if identity in records:
-                raise RegistryError("GitHub fork pagination returned a duplicate repository ID")
-            records[identity] = record
-            if len(records) > MAX_FORKS:
-                raise RegistryError("GitHub fork network exceeds the configured record limit")
-        pages += 1
-        next_page = _next_url(last_headers.get("link"))
-        if progress and (pages == 1 or pages % 10 == 0 or next_page is None):
-            progress(pages, len(records))
+    expanded_parents = 0
+    unfinished_page: str | None = None
+    while frontier and pages < max_pages:
+        parent, expected_children, next_page = frontier.pop(0)
+        parent_seen = 0
+        if parent != upstream:
+            expanded_parents += 1
+        while next_page and pages < max_pages:
+            if next_page in seen_pages:
+                raise RegistryError("GitHub pagination returned a cycle")
+            seen_pages.add(next_page)
+            payload, last_headers = _github_json(next_page, token=token, opener=opener)
+            if not isinstance(payload, list) or len(payload) > 100:
+                raise RegistryError("GitHub fork page is not a bounded list")
+            for item in payload:
+                if not isinstance(item, Mapping):
+                    raise RegistryError("GitHub fork page contains a non-object")
+                record = _fork(item, upstream, parent)
+                identity = record["github_id"]
+                if identity in records:
+                    raise RegistryError("GitHub recursive pagination returned a duplicate repository ID")
+                records[identity] = record
+                parent_seen += 1
+                if parent == upstream:
+                    direct_ids.add(identity)
+                if record["forks_count"] and record["full_name"].casefold() not in queued:
+                    queued.add(record["full_name"].casefold())
+                    child_query = urlencode({"sort": "oldest", "per_page": 100, "page": 1})
+                    frontier.append((
+                        record["full_name"],
+                        record["forks_count"],
+                        f"{GITHUB_API}/repos/{record['full_name']}/forks?{child_query}",
+                    ))
+                if len(records) > MAX_FORKS:
+                    raise RegistryError("GitHub fork network exceeds the configured record limit")
+            pages += 1
+            next_page = _next_url(last_headers.get("link"))
+            if progress and (pages == 1 or pages % 10 == 0 or (next_page is None and not frontier)):
+                progress(pages, len(records))
+        if next_page:
+            unfinished_page = next_page
+            break
+        if expected_children is not None and parent_seen != expected_children:
+            parent_mismatches.append({"repository": parent, "reported": expected_children, "discovered": parent_seen})
 
-    truncated = next_page is not None
+    truncated = unfinished_page is not None or bool(frontier)
     root_after, end_headers = _github_json(root_url, token=token, opener=opener)
     if not isinstance(root_after, Mapping) or root_after.get("id") != root_before.get("id"):
         raise RegistryError("GitHub root identity changed while indexing")
     expected_after = _count(root_after)
     stable = expected_before == expected_after
-    complete = not truncated and stable and len(records) == expected_after
+    complete = not truncated and stable and len(direct_ids) == expected_after and not parent_mismatches
     reasons = []
     if truncated:
         reasons.append("page budget exhausted")
     if not stable:
         reasons.append("fork-network count changed during collection")
-    if len(records) != expected_after:
-        reasons.append("discovered count does not reconcile with GitHub network count")
+    if len(direct_ids) != expected_after:
+        reasons.append("direct visible count does not reconcile with GitHub root fork count")
+    if parent_mismatches:
+        reasons.append("one or more child-fork pages did not reconcile with their reported counts")
     fetched_at = _timestamp(end_headers.get("date") or root_headers.get("date"))
     digest_input = "\n".join(str(value) for value in sorted(records)).encode("ascii")
     digest = hashlib.sha256(digest_input).hexdigest()[:16]
@@ -258,14 +290,18 @@ def fetch_github_fork_network(
         "source": "github-rest/fork-network",
         "upstream": upstream,
         "status": "complete" if complete else "incomplete",
-        "proof": "stable_network_count_reconciliation" if complete else "not_proven",
+        "proof": "stable_recursive_page_reconciliation" if complete else "not_proven",
         "reported_count_before": expected_before,
         "reported_count_after": expected_after,
         "discovered_count": len(records),
+        "direct_discovered_count": len(direct_ids),
+        "descendant_count": len(records) - len(direct_ids),
+        "expanded_parents": expanded_parents,
+        "parent_count_mismatches": parent_mismatches[:100],
         "pages": pages,
         "truncated": truncated,
         "incomplete_reasons": reasons,
-        "note": "Completeness is claimed only when pagination ends and GitHub's stable network count exactly matches distinct repository IDs.",
+        "note": "Completeness covers visible recursive fork pages only and requires stable root and child-count reconciliation; GitHub may include inaccessible forks in reported counts.",
     }
     return {
         "schema_version": 1,
@@ -274,7 +310,7 @@ def fetch_github_fork_network(
         "completed_at": fetched_at,
         "upstream": upstream,
         "source_url": f"{root_url}/forks",
-        "selection": {"method": "github_rest_full_pagination", "sort": "oldest", "limit": MAX_FORKS},
+        "selection": {"method": "github_rest_recursive_pagination", "sort": "oldest", "limit": MAX_FORKS},
         "coverage": [coverage],
         "provenance": {
             "method": "github-rest/fork-network",
