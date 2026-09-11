@@ -12,19 +12,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dsh_forge.marketplace import DEFAULT_CATALOG_URL, fetch_catalog
 from dsh_forge.packages import write_json
+from dsh_forge.packages import read_json
+from dsh_forge.catalog_store import MAX_SNAPSHOT_BYTES
 from dsh_forge.research import MAX_DISCOVERY_QUEUE, discovery_queue
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=DEFAULT_CATALOG_URL)
+    parser.add_argument("--snapshot", metavar="JSON", help="use an assembled registry snapshot instead of fetching one marketplace")
     parser.add_argument("--limit", type=int, default=MAX_DISCOVERY_QUEUE)
     parser.add_argument("--output", required=True, metavar="JSON")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    queue = discovery_queue(fetch_catalog(args.url), limit=args.limit)
-    write_json(args.output, queue, force=args.force)
+    snapshot = read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES) if args.snapshot else fetch_catalog(args.url)
+    queue = discovery_queue(snapshot, limit=args.limit)
+    write_json(args.output, queue, force=args.force, compact=True)
     print(json.dumps({
         "output": str(Path(args.output).expanduser()),
         "snapshot_id": queue["snapshot_id"],

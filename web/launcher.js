@@ -2428,6 +2428,15 @@ class Component extends DCLogic {
     const displayedForkCount = storeCounts && Number(storeCounts.fork || 0) > 0
       ? Number(storeCounts.fork)
       : forkCount;
+    const forkCoverage = Array.isArray(s.catalogStore.coverage)
+      ? s.catalogStore.coverage.find(item => item && item.source === 'github-rest/fork-network')
+      : null;
+    const coverageLabel = s.catalogType === 'fork' && forkCoverage
+      ? (forkCoverage.status === 'complete'
+        ? ' · complete network verified'
+        : ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
+          + ' of ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ')')
+      : '';
     const emptyCopy = s.catalogType === 'package'
       ? {
           title: 'No community packages published yet',
@@ -2646,7 +2655,7 @@ class Component extends DCLogic {
         : String(results.length)
       ) + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
       catalogSourceLabel: storeActive
-        ? 'Imported catalog store'
+        ? 'Imported catalog store' + coverageLabel
         : (s.sidecarConnected && s.catalogStore.available
           ? 'Embedded snapshot · no imported ' + s.catalogType + ' records'
           : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot')),

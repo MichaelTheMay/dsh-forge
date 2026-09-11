@@ -70,14 +70,14 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def read_json(path: str | Path) -> dict[str, Any]:
+def read_json(path: str | Path, *, max_bytes: int = MAX_JSON_BYTES) -> dict[str, Any]:
     source = Path(path).expanduser()
     try:
         raw = source.read_bytes()
     except OSError as error:
         raise PackageError(f"Could not read {source}: {error}", "local_io_error") from error
-    if len(raw) > MAX_JSON_BYTES:
-        raise PackageError(f"JSON input exceeds {MAX_JSON_BYTES} bytes", "input_too_large")
+    if len(raw) > max_bytes:
+        raise PackageError(f"JSON input exceeds {max_bytes} bytes", "input_too_large")
     try:
         value = json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -87,12 +87,24 @@ def read_json(path: str | Path) -> dict[str, Any]:
     return value
 
 
-def write_json(path: str | Path, value: dict[str, Any], *, force: bool = False) -> None:
+def write_json(
+    path: str | Path,
+    value: dict[str, Any],
+    *,
+    force: bool = False,
+    compact: bool = False,
+) -> None:
     destination = Path(path).expanduser()
     if destination.exists() and not force:
         raise PackageError(f"Refusing to overwrite {destination}; pass --force", "output_exists")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    rendered = json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    rendered = json.dumps(
+        value,
+        indent=None if compact else 2,
+        separators=(",", ":") if compact else None,
+        sort_keys=True,
+        ensure_ascii=False,
+    ) + "\n"
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(

@@ -465,6 +465,20 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
 });
 
+test('fork coverage is disclosed beside imported results', () => {
+  const c = instance();
+  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  connectedStore(c, {
+    available: true,
+    counts: { plugin: 9949, fork: 100, package: 0 },
+    coverage: [{
+      source: 'github-rest/fork-network', status: 'incomplete',
+      discovered_count: 100, reported_count_after: 26095
+    }]
+  });
+  assert.match(c.renderVals().catalogSourceLabel, /incomplete network \(100 of 26,095\)/);
+});
+
 test('permanent static deployment preserves the launcher security headers', () => {
   const headers = Object.fromEntries(vercel.headers[0].headers.map(item => [item.key, item.value]));
   assert.match(headers['Content-Security-Policy'], /script-src 'self'/);

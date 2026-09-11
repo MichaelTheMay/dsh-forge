@@ -15,11 +15,15 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Index the external plugin catalog and GitHub fork network
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/index_registry.py --output dist/registry.json
       - name: Build the metadata-only hidden-gem queue
-        run: python3 scripts/research_catalog.py --output dist/hidden-gems.json
+        run: python3 scripts/research_catalog.py --snapshot dist/registry.json --output dist/hidden-gems.json
       - name: Validate the queue contract
         run: |
           python3 - <<'PY'
@@ -27,8 +31,11 @@ jobs:
           from pathlib import Path
 
           queue = json.loads(Path('dist/hidden-gems.json').read_text(encoding='utf-8'))
+          registry = json.loads(Path('dist/registry.json').read_text(encoding='utf-8'))
           assert queue['schema'] == 'dsh-forge.discovery-queue/v1'
           assert queue['source_count'] >= queue['candidate_count'] > 0
+          assert registry['coverage']
+          assert all(item['status'] in {'complete', 'incomplete'} for item in registry['coverage'])
           assert queue['claims'] == {
               'executed': False,
               'metadata_only': True,
@@ -39,6 +46,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: hidden-gem-research-${{ github.run_id }}
-          path: dist/hidden-gems.json
+          path: |
+            dist/registry.json
+            dist/hidden-gems.json
           if-no-files-found: error
           retention-days: 30

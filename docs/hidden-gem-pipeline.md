@@ -23,25 +23,30 @@ result includes the point-bearing signals and missing evidence. The searchable
 source record stays unchanged; Forge stores research evidence beside it so an
 upstream catalog can never award itself a Forge rank.
 
-The first adapter consumes the public DSH Plugin Marketplace's daily full feed.
-The store and ranking module are provider-neutral: another agentic tool needs an
-adapter that emits the same neutral artifact fields, not a new browser or ranker.
+The first two adapters consume the public DSH Plugin Marketplace's daily full
+feed and paginate a GitHub fork network. The store and ranking module are
+provider-neutral: another agentic tool needs an adapter that emits the same
+neutral artifact fields, not a new browser or ranker. Repeating
+`--fork-network OWNER/REPO` indexes additional agentic-tool fork networks.
 
 ## Continuous queue
 
 The `Catalog research queue` GitHub Actions workflow runs daily and can also be
-started manually. It fetches the latest integrity-checked external feed, ranks
-the complete corpus, and retains `hidden-gems.json` as a 30-day workflow
-artifact. The queue is metadata-only and carries explicit `executed: false` and
-`security_verified: false` claims. It never commits generated data or publishes
-a package automatically.
+started manually. It fetches the latest integrity-checked external feed,
+paginates the configured fork networks, ranks the assembled corpus, and retains
+`registry.json` plus `hidden-gems.json` as 30-day workflow artifacts. A fork
+snapshot is labelled complete only after stable-count reconciliation; partial
+snapshots remain available with explicit reasons. The queue is metadata-only
+and carries explicit `executed: false` and `security_verified: false` claims. It
+never commits generated data or publishes a package automatically.
 
 Build the same review artifact locally:
 
 ```bash
-python3 scripts/research_catalog.py --output /tmp/hidden-gems.json
+python3 scripts/index_registry.py --output /tmp/registry.json
+python3 scripts/research_catalog.py --snapshot /tmp/registry.json --output /tmp/hidden-gems.json
 python3 -m dsh_forge catalog sync-plugins
-python3 -m dsh_forge research gems "project memory" --limit 25
+python3 -m dsh_forge research gems "project memory" --type plugin --type fork --limit 25
 ```
 
 ## Propose and certify

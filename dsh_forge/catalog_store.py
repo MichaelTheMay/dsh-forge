@@ -57,7 +57,7 @@ class CatalogStoreError(RuntimeError):
 
 CATALOG_PAYLOAD_TYPE = "application/vnd.dsh-forge.catalog-snapshot.v1+json"
 # A catalog snapshot is orders of magnitude larger than a package manifest.
-MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
+MAX_SNAPSHOT_BYTES = 128 * 1024 * 1024
 
 
 def _canonical_snapshot_value(value: Any, label: str = "snapshot") -> None:
@@ -356,6 +356,7 @@ def build(
                     "counts": json.dumps(counts, sort_keys=True),
                     "snapshot_id": _text(snapshot.get("snapshot_id"), 256),
                     "fetched_at": _text(snapshot.get("fetched_at"), 64),
+                    "coverage": json.dumps(snapshot.get("coverage") or [], sort_keys=True),
                     # Carried through verbatim; importing never upgrades trust.
                     "provenance": json.dumps(provenance or snapshot.get("provenance") or {}, sort_keys=True),
                     # Only a verified envelope may record a signature here.
@@ -461,6 +462,7 @@ class CatalogStore:
             "counts": json.loads(values.get("counts", "{}")),
             "snapshot_id": values.get("snapshot_id", ""),
             "fetched_at": values.get("fetched_at", ""),
+            "coverage": json.loads(values.get("coverage", "[]")),
             "provenance": json.loads(values.get("provenance", "{}")),
             "signature": json.loads(values.get("signature", '{"verified": false}')),
             "research_policy": values.get("research_policy", ""),
@@ -565,6 +567,7 @@ class CatalogStore:
             "generation": meta["generation"],
             "snapshot_id": meta["snapshot_id"],
             "provenance": meta["provenance"],
+            "coverage": meta["coverage"],
             "signature": meta["signature"],
         }
 

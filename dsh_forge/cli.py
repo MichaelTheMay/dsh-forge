@@ -32,6 +32,7 @@ from .packages import (
     write_json,
 )
 from .research import ResearchError, certify_proposal, compose_proposal
+from .catalog_store import MAX_SNAPSHOT_BYTES
 
 
 CLI_API_VERSION = "dsh-forge.cli/v1"
@@ -111,9 +112,10 @@ def _parser() -> argparse.ArgumentParser:
 
     research = commands.add_parser("research", help="rank hidden gems and publish curator-reviewed package proposals")
     research_commands = research.add_subparsers(dest="research_command", required=True)
-    gems = research_commands.add_parser("gems", help="list explainable low-visibility plugin candidates")
+    gems = research_commands.add_parser("gems", help="list explainable low-visibility plugin and fork candidates")
     gems.add_argument("query", nargs="?", default="", help="optional capability or keyword query")
     gems.add_argument("--limit", type=int, default=25)
+    gems.add_argument("--type", action="append", choices=["plugin", "fork"], dest="types")
     propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
     propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
     propose.add_argument("--package-id", required=True)
@@ -577,7 +579,7 @@ def run(
                 if bool(args.snapshot) == bool(args.envelope):
                     raise LauncherError("Provide either a snapshot path or --envelope, not both")
                 data = launcher.import_catalog(
-                    read_json(args.snapshot) if args.snapshot else None,
+                    read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES) if args.snapshot else None,
                     package_feed=read_json(args.package_feed) if args.package_feed else None,
                     envelope=read_json(args.envelope) if args.envelope else None,
                     trust_root=read_json(args.trust_root) if args.trust_root else None,
@@ -588,7 +590,7 @@ def run(
             elif command == "catalog.sign":
                 from .catalog_store import sign_snapshot
 
-                envelope = sign_snapshot(read_json(args.snapshot), args.key)
+                envelope = sign_snapshot(read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES), args.key)
                 write_json(args.output, envelope, force=args.force)
                 data = {
                     "output": str(Path(args.output).expanduser()),
@@ -609,7 +611,7 @@ def run(
             elif command == "research.gems":
                 page = launcher.catalog_search(
                     query=args.query,
-                    types=["plugin"],
+                    types=args.types or ["plugin", "fork"],
                     sort="rank",
                     limit=args.limit,
                     include_archived=False,
