@@ -12,6 +12,7 @@ from dsh_forge.packages import verify
 from dsh_forge.research import (
     POLICY_VERSION,
     ResearchError,
+    benchmark_queue,
     certify_proposal,
     compose_proposal,
     create_fork_assessment,
@@ -19,6 +20,7 @@ from dsh_forge.research import (
     evaluate_artifact,
     fetch_npm_pin,
     rank_artifacts,
+    record_judgment,
     signed_review_statement,
 )
 from tests.test_marketplace import sample_catalog
@@ -144,6 +146,94 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(len(queue["candidates"]), 250)
         self.assertTrue(all(item["research"]["candidate"] for item in queue["candidates"]))
         self.assertFalse(queue["claims"]["security_verified"])
+        self.assertEqual(queue["quality"]["selection_policy"], "dsh-forge.discovery-diversity/v1")
+        self.assertEqual(queue["quality"]["unique_owners"], 1)
+
+    def test_selection_rotates_owners_without_leaving_the_quality_window(self):
+        record = plugin_record()
+        records = []
+        for index, owner in enumerate(("same", "same", "same", "other-a", "other-b")):
+            records.append({
+                **record,
+                "artifact_id": f"github:{index + 1}",
+                "github_id": index + 1,
+                "owner": owner,
+                "full_name": f"{owner}/plugin-{index}",
+            })
+        ranked = rank_artifacts(records, "2026-09-10T08:07:32Z")
+        first_three = sorted(records, key=lambda item: ranked[item["artifact_id"]]["rank"])[:3]
+        self.assertEqual(len({item["owner"] for item in first_three}), 3)
+        self.assertTrue(all(ranked[item["artifact_id"]]["selection"] for item in first_three))
+
+        high = [
+            {**record, "artifact_id": f"github:{index + 20}", "owner": "same"}
+            for index in range(2)
+        ]
+        lower = {
+            **record, "artifact_id": "github:30", "owner": "unique",
+            "risk_signals": ["first", "second", "third", "fourth"],
+        }
+        ranked = rank_artifacts([*high, lower], "2026-09-10T08:07:32Z")
+        self.assertLess(ranked[high[1]["artifact_id"]]["rank"], ranked[lower["artifact_id"]]["rank"])
+        self.assertGreater(
+            ranked[high[1]["artifact_id"]]["score"] - ranked[lower["artifact_id"]]["score"], 5
+        )
+
+    def test_queue_interleaves_artifact_types_and_reports_quality(self):
+        plugin = plugin_record()
+        plugins = [
+            {**plugin, "artifact_id": f"github:{index + 1}", "github_id": index + 1}
+            for index in range(3)
+        ]
+        forks = []
+        for index in range(3):
+            record = _fork(fork(100 + index, f"fork-{index}"), "deepseek-ai/deepseek-harness")
+            record.update({
+                "head_sha": f"{index + 1:040x}",
+                "divergence": {"ahead_by": 2, "listed_file_count": 3, "status": "ahead"},
+                "analysis_evidence": {"digest": "sha256:" + f"{index + 1:064x}"},
+            })
+            forks.append(record)
+        queue = discovery_queue({
+            "snapshot_id": "mixed",
+            "fetched_at": "2026-09-10T08:07:32Z",
+            "entries": forks,
+            "supplemental_entries": plugins,
+        }, limit=4)
+        types = [item["artifact"]["artifact_type"] for item in queue["candidates"]]
+        self.assertEqual(types, ["fork", "plugin", "fork", "plugin"])
+        self.assertEqual(queue["quality"]["by_type"], {"fork": 2, "plugin": 2})
+        self.assertEqual(queue["quality"]["score_window"], 5)
+
+    def test_judgments_are_snapshot_bound_and_produce_rank_metrics(self):
+        record = plugin_record()
+        records = [
+            {**record, "artifact_id": f"github:{index + 1}", "github_id": index + 1}
+            for index in range(3)
+        ]
+        queue = discovery_queue({
+            "snapshot_id": "judged",
+            "fetched_at": "2026-09-10T08:07:32Z",
+            "supplemental_entries": records,
+        }, limit=3)
+        first = queue["candidates"][0]["artifact"]["artifact_id"]
+        second = queue["candidates"][1]["artifact"]["artifact_id"]
+        ledger = record_judgment(
+            queue, None, artifact_id=first, rating="exceptional",
+            reviewer="Test curator", reviewed_at="2026-09-11T18:00:00Z",
+        )
+        ledger = record_judgment(
+            queue, ledger, artifact_id=second, rating="irrelevant",
+            reviewer="Test curator", reviewed_at="2026-09-11T18:01:00Z",
+        )
+        benchmark = benchmark_queue(queue, ledger)
+        self.assertEqual(benchmark["judged_count"], 2)
+        self.assertEqual(benchmark["ratings"]["exceptional"], 1)
+        self.assertEqual(benchmark["metrics"][0]["judgment_coverage"], 0.6667)
+        self.assertEqual(benchmark["metrics"][0]["ndcg"], 1.0)
+        stale = {**queue, "snapshot_id": "new-snapshot"}
+        with self.assertRaisesRegex(ResearchError, "same current discovery snapshot"):
+            benchmark_queue(stale, ledger)
 
     def test_npm_pin_resolution_checks_identity_sri_and_tarball(self):
         metadata = {

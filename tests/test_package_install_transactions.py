@@ -52,7 +52,9 @@ class PackageInstallTransactionTests(unittest.TestCase):
         )
         spec = package_spec()
         spec["package"]["id"] = "agent-teams-builder"
-        spec["provenance"]["created_by"] = signed_review_statement("Test curator")
+        spec["provenance"]["created_by"] = signed_review_statement(
+            "Test curator", "dsh-forge.hidden-gems/v1"
+        )
         self.envelope = sign(compose(spec), self.private)
         self.trust_root = create_trust_root(
             self.public,

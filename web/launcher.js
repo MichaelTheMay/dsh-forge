@@ -2412,6 +2412,8 @@ class Component extends DCLogic {
       }] : []),
       ...(detail.hiddenGem ? [
         { k: 'Hidden-gem score', v: detail.hiddenGem.score + '/100 · rank H' + String(detail.hiddenGem.rank).padStart(2, '0'), color: BLUE },
+        ...(detail.hiddenGem.quality_rank ? [{ k: 'Quality rank', v: 'Q' + String(detail.hiddenGem.quality_rank).padStart(2, '0') + ' before diversity', color: MUTED }] : []),
+        ...(detail.hiddenGem.selection ? [{ k: 'Discovery lane', v: detail.hiddenGem.selection.capability_lane + ' · owner exposure ' + detail.hiddenGem.selection.owner_exposure_before, color: MUTED }] : []),
         { k: 'Visibility', v: detail.hiddenGem.visibility + ' · ' + detail.hiddenGem.confidence + ' confidence', color: MUTED }
       ] : []),
       ...(detail.installability ? [{ k: 'Installability', v: detail.installability + ' · external catalog claim', color: WARN }] : []),
@@ -2428,7 +2430,7 @@ class Component extends DCLogic {
       : (detail.divergence
         ? 'Forge compared the exact source and fork commits through GitHub, listed ' + detail.divergence.listed_file_count + ' changed file(s), and extracted static compatibility and risk signals. ' + (detail.divergence.files_truncated ? 'GitHub reached its 300-file response limit, so the path inventory is partial. ' : '') + 'The repository was not cloned or executed; curator and sandbox review are still required.'
         : (detail.hiddenGem
-        ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + detail.hiddenGem.signals.map(signal => signal.id).join(', ') + '. The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
+        ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + detail.hiddenGem.signals.map(signal => signal.id).join(', ') + '. ' + (detail.hiddenGem.selection ? 'Within a ' + detail.hiddenGem.selection.score_window + '-point quality window, the queue selected its ' + detail.hiddenGem.selection.capability_lane + ' capability lane after ' + detail.hiddenGem.selection.owner_exposure_before + ' prior item(s) from this owner. ' : '') + 'The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
         : (detail.curation
         ? detail.curation.evidence
         : (detail.external_validation

@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from .catalog_store import MAX_SNAPSHOT_BYTES
 from .packages import read_json, write_json
+from .research import DISCOVERY_QUEUE_SCHEMA, POLICY_VERSION, SELECTION_POLICY
 
 
 REGISTRY_FEED_SCHEMA = "dsh-forge.registry-feed/v1"
@@ -179,6 +180,17 @@ def build_feed_assets(
     queue = read_json(queue_path, max_bytes=MAX_SNAPSHOT_BYTES)
     if queue.get("snapshot_id") != registry.get("snapshot_id"):
         raise FeedError("Registry and hidden-gem queue snapshot IDs differ")
+    candidates = queue.get("candidates")
+    quality = queue.get("quality")
+    if (
+        queue.get("schema") != DISCOVERY_QUEUE_SCHEMA
+        or queue.get("policy") != POLICY_VERSION
+        or not isinstance(candidates, list)
+        or queue.get("candidate_count") != len(candidates)
+        or not isinstance(quality, Mapping)
+        or quality.get("selection_policy") != SELECTION_POLICY
+    ):
+        raise FeedError("Hidden-gem queue contract is invalid")
     registry_bytes = registry_path.read_bytes()
     queue_bytes = queue_path.read_bytes()
     registry_gzip = gzip.compress(registry_bytes, compresslevel=9, mtime=0)
@@ -208,7 +220,7 @@ def build_feed_assets(
             "plugins": sum(item.get("artifact_type") == "plugin" for item in entries if isinstance(item, Mapping)),
             "forks": sum(item.get("artifact_type") == "fork" for item in entries if isinstance(item, Mapping)),
             "packages": len(registry.get("package_entries") or []),
-            "candidates": int(queue.get("candidate_count") or 0),
+            "candidates": len(candidates),
         },
         "coverage": list(registry.get("coverage") or []),
         "claims": {"signed": False, "metadata_only": True, "executed": False, "security_verified": False},

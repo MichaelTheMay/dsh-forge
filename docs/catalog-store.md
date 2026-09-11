@@ -35,7 +35,7 @@ Import is offline and inert. It parses metadata, writes rows, and builds a text
 index. It never fetches, unpacks, or executes anything.
 
 Each repository row also gets a separate explainable research report under
-`dsh-forge.hidden-gems/v1`. The source record is preserved verbatim. Ranking the
+`dsh-forge.hidden-gems/v2`. The source record is preserved verbatim. Ranking the
 full corpus selects at most 250 candidates per artifact type for human review;
 all other rows remain searchable. Re-import a store created by schema v1 so it
 can add these reports.

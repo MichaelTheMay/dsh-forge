@@ -43,8 +43,10 @@ jobs:
 
           queue = json.loads(Path('dist/hidden-gems.json').read_text(encoding='utf-8'))
           registry = json.loads(Path('dist/registry.json').read_text(encoding='utf-8'))
-          assert queue['schema'] == 'dsh-forge.discovery-queue/v1'
+          assert queue['schema'] == 'dsh-forge.discovery-queue/v2'
           assert queue['source_count'] >= queue['candidate_count'] > 0
+          assert queue['quality']['selection_policy'] == 'dsh-forge.discovery-diversity/v1'
+          assert queue['quality']['unique_owners'] > 0
           assert registry['coverage']
           assert all(item['status'] in {'complete', 'incomplete'} for item in registry['coverage'])
           analysis = next(item for item in registry['coverage'] if item['source'] == 'github-rest/fork-analysis')

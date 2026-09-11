@@ -1705,7 +1705,7 @@ class Launcher:
         """List only local recipe slots; signatures are rechecked at install time."""
 
         from .packages import read_json
-        from .research import CERTIFICATION_SCHEMA, POLICY_VERSION, signed_review_statement
+        from .research import CERTIFICATION_SCHEMA, SUPPORTED_CERTIFICATION_POLICIES, signed_review_statement
 
         recipes: list[dict[str, Any]] = []
         try:
@@ -1729,9 +1729,11 @@ class Launcher:
                 if (
                     isinstance(certified, dict)
                     and certified.get("schema") == CERTIFICATION_SCHEMA
-                    and certified.get("policy") == POLICY_VERSION
+                    and certified.get("policy") in SUPPORTED_CERTIFICATION_POLICIES
                     and certified.get("package_id") == directory.name
-                    and certified.get("signed_review_statement") == signed_review_statement(str(certified.get("reviewer") or ""))
+                    and certified.get("signed_review_statement") == signed_review_statement(
+                        str(certified.get("reviewer") or ""), str(certified.get("policy") or "")
+                    )
                     and certified.get("attestations") == {
                         "source": True, "permissions": True, "license": True, "compatibility": True
                     }
@@ -1773,7 +1775,7 @@ class Launcher:
         if envelope_path.is_symlink() or trust_path.is_symlink() or certification_path.is_symlink():
             raise LauncherError("Trusted package recipe may not contain symlinked inputs")
         from .packages import read_json, verify
-        from .research import CERTIFICATION_SCHEMA, POLICY_VERSION, signed_review_statement
+        from .research import CERTIFICATION_SCHEMA, SUPPORTED_CERTIFICATION_POLICIES, signed_review_statement
         try:
             envelope = read_json(envelope_path)
             trust_root = read_json(trust_path)
@@ -1786,14 +1788,16 @@ class Launcher:
             raise LauncherError("Signed package identity does not match its catalog route")
         if (
             certification.get("schema") != CERTIFICATION_SCHEMA
-            or certification.get("policy") != POLICY_VERSION
+            or certification.get("policy") not in SUPPORTED_CERTIFICATION_POLICIES
             or certification.get("package_id") != package_slug
             or certification.get("package_name") != manifest["package"]["name"]
             or certification.get("package_version") != manifest["package"]["version"]
             or certification.get("component_count") != len(manifest["plugins"])
             or certification.get("payload_digest") != verified["payload_digest"]
             or certification.get("valid_signers") != verified["valid_signers"]
-            or certification.get("signed_review_statement") != signed_review_statement(str(certification.get("reviewer") or ""))
+            or certification.get("signed_review_statement") != signed_review_statement(
+                str(certification.get("reviewer") or ""), str(certification.get("policy") or "")
+            )
             or manifest["provenance"]["created_by"] != certification.get("signed_review_statement")
             or certification.get("attestations") != {
                 "source": True, "permissions": True, "license": True, "compatibility": True

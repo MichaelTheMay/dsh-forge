@@ -34,6 +34,7 @@ def main() -> int:
         "snapshot_id": queue["snapshot_id"],
         "source_count": queue["source_count"],
         "candidate_count": queue["candidate_count"],
+        "quality": queue["quality"],
         "security_verified": False,
     }, separators=(",", ":")))
     return 0

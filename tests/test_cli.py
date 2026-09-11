@@ -10,6 +10,8 @@ from unittest import mock
 from dsh_forge import cli
 from dsh_forge.launcher import CELL_REGISTRY_SCHEMA_VERSION, Launcher
 from dsh_forge.registry import _fork
+from dsh_forge.research import discovery_queue
+from tests.test_research import plugin_record
 from tests.helpers import FakeCellSandbox
 
 
@@ -166,6 +168,32 @@ class LocalCellCliTests(unittest.TestCase):
         fetch.assert_called_once_with("https://example.com/registry-feed.json")
         self.assertEqual(result["data"]["snapshot_id"], "public-feed-test")
         self.assertFalse(result["data"]["signature"]["verified"])
+
+    def test_research_judge_and_benchmark_round_trip(self):
+        queue = discovery_queue({
+            "snapshot_id": "cli-judgments",
+            "fetched_at": "2026-09-11T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        })
+        queue_path = self.root / "queue.json"
+        judgments_path = self.root / "judgments.json"
+        queue_path.write_text(json.dumps(queue), encoding="utf-8")
+        artifact_id = queue["candidates"][0]["artifact"]["artifact_id"]
+        code, result = self.invoke(
+            "research", "judge", "--queue", str(queue_path), "--artifact", artifact_id,
+            "--rating", "exceptional", "--reviewer", "Test curator",
+            "--reviewed-at", "2026-09-11T18:00:00Z", "--output", str(judgments_path),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["judgment_count"], 1)
+        self.assertFalse(result["data"]["installation_authorized"])
+        code, result = self.invoke(
+            "research", "benchmark", "--queue", str(queue_path),
+            "--judgments", str(judgments_path),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["judged_count"], 1)
+        self.assertEqual(result["data"]["metrics"][0]["ndcg"], 1.0)
 
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))

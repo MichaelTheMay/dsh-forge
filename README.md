@@ -229,6 +229,11 @@ coverage ledger. Forge says `complete` only when pagination ends and the
 root and recursive child pages reconcile with unchanged reported counts. The
 claim covers visible API results; inaccessible forks can still make it
 incomplete.
+Queue v2 preserves the reproducible metadata score, then diversifies only
+within a five-point quality window across owners and capability lanes. Curators
+can record snapshot-bound `irrelevant`, `weak`, `promising`, or `exceptional`
+ratings and benchmark precision, judgment coverage, and NDCG through the
+`research judge` and `research benchmark` commands.
 See [Registry indexing](docs/registry-indexer.md) and
 [Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
 
