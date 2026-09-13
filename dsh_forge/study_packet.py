@@ -182,6 +182,7 @@ h2 { margin: 10px 0 7px; font-size: 28px; letter-spacing: -.025em; }
 .rubric h3, .notes-label { font-size: 13px; }
 .ratings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .rating { padding: 12px 7px; border: 1px solid #b9c2c7; border-radius: 5px; color: #35434d; background: #fff; }
+.rating.abstain { grid-column: 1 / -1; }
 .rating strong { display: block; }
 .rating small { display: block; margin-top: 4px; color: #748089; }
 .rating.selected { border-color: #087e8b; color: #075e68; background: #eaf6f7; box-shadow: inset 0 0 0 1px #087e8b; }
@@ -233,6 +234,7 @@ textarea { width: 100%; min-height: 90px; margin-top: 7px; padding: 11px; resize
         <button class="rating" data-rating="weak" type="button"><strong>1: Weak</strong><small>Plausible, thin evidence</small></button>
         <button class="rating" data-rating="promising" type="button"><strong>2: Promising</strong><small>Merits hands-on review</small></button>
         <button class="rating" data-rating="exceptional" type="button"><strong>3: Exceptional</strong><small>Unusually useful</small></button>
+        <button class="rating abstain" data-rating="abstain" type="button"><strong>Abstain</strong><small>Insufficient evidence or relevant expertise</small></button>
       </div>
       <label class="notes-label" for="notes">Short reason</label>
       <textarea id="notes" maxlength="4000" placeholder="What makes this relevant or irrelevant?"></textarea>
@@ -248,7 +250,7 @@ textarea { width: 100%; min-height: 90px; margin-top: 7px; padding: 11px; resize
 <script>
 "use strict";
 const ballot = JSON.parse(document.getElementById("ballot-data").textContent);
-const relevance = { irrelevant: 0, weak: 1, promising: 2, exceptional: 3 };
+const relevance = { irrelevant: 0, weak: 1, promising: 2, exceptional: 3, abstain: null };
 const storageKey = "dsh-forge-review:" + ballot.snapshot_id;
 let index = 0;
 let saved = {};

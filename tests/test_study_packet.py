@@ -21,13 +21,14 @@ class StudyPacketTests(unittest.TestCase):
     def test_packet_is_self_contained_blinded_and_escapes_embedded_json(self):
         rendered = build_review_packet(self.ballot())
         self.assertIn("connect-src 'none'", rendered)
-        self.assertIn("dsh-forge.discovery-judgments/v2", rendered)
+        self.assertIn("dsh-forge.discovery-judgments/v3", rendered)
         self.assertIn("packet-source", rendered)
         self.assertIn("\\u003c/script\\u003e", rendered)
         self.assertNotIn("</script><script>throw", rendered)
         self.assertNotIn('"github_stars":', rendered)
         self.assertNotIn('"arms":', rendered)
         self.assertIn("Export rated JSON", rendered)
+        self.assertIn("Insufficient evidence or relevant expertise", rendered)
 
     def test_packet_rejects_an_unblinded_queue(self):
         ballot = self.ballot()

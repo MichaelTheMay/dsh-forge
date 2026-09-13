@@ -256,6 +256,7 @@ class ResearchTests(unittest.TestCase):
         self.assertEqual(benchmark["doubly_judged_count"], 1)
         self.assertEqual(benchmark["pairwise_exact_agreement"], 0.0)
         self.assertEqual(benchmark["ratings"]["exceptional"], 1)
+        self.assertEqual(benchmark["abstention_count"], 0)
         self.assertEqual(benchmark["metrics"][0]["judgment_coverage"], 0.6667)
         self.assertEqual(benchmark["metrics"][0]["ndcg"], 1.0)
         self.assertEqual(
@@ -368,7 +369,7 @@ class ResearchTests(unittest.TestCase):
             "supplemental_entries": records,
         })
         ledger = {
-            "schema": "dsh-forge.discovery-judgments/v2",
+            "schema": "dsh-forge.discovery-judgments/v3",
             "policy": POLICY_VERSION,
             "snapshot_id": queue["snapshot_id"],
             "judgments": [],
@@ -404,6 +405,41 @@ class ResearchTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ResearchError, "conflicting judgments"):
             merge_judgment_ledgers(queue, [first, conflict])
+
+    def test_abstention_is_recorded_but_not_counted_as_a_relevance_judgment(self):
+        queue = discovery_queue({
+            "snapshot_id": "abstention-study",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        })
+        identity = queue["candidates"][0]["artifact"]["artifact_id"]
+        ledger = record_judgment(
+            queue, None, artifact_id=identity, rating="abstain",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+            notes="Outside my area of expertise.",
+        )
+        benchmark = benchmark_queue(queue, ledger)
+        self.assertEqual(benchmark["judgment_count"], 1)
+        self.assertEqual(benchmark["judged_count"], 0)
+        self.assertEqual(benchmark["judged_artifact_count"], 0)
+        self.assertEqual(benchmark["abstention_count"], 1)
+        self.assertEqual(benchmark["ratings"]["abstain"], 1)
+
+        ballot, key = create_discovery_study({
+            "snapshot_id": "abstention-confirmatory",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="abstention-seed")
+        study_identity = ballot["candidates"][0]["artifact"]["artifact_id"]
+        study_ledger = record_judgment(
+            ballot, None, artifact_id=study_identity, rating="abstain",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+        )
+        with self.assertRaisesRegex(ResearchError, "study is incomplete"):
+            benchmark_discovery_study(
+                ballot, key, study_ledger,
+                min_reviews_per_artifact=1, bootstrap_samples=100,
+            )
 
     def test_npm_pin_resolution_checks_identity_sri_and_tarball(self):
         metadata = {

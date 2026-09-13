@@ -34,7 +34,7 @@ PROPOSAL_SCHEMA = "dsh-forge.research-proposal/v1"
 CERTIFICATION_SCHEMA = "dsh-forge.package-certification/v1"
 DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v2"
 FORK_ASSESSMENT_SCHEMA = "dsh-forge.fork-assessment/v1"
-JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v2"
+JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v3"
 BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v2"
 STUDY_KEY_SCHEMA = "dsh-forge.discovery-study-key/v1"
 STUDY_BENCHMARK_SCHEMA = "dsh-forge.discovery-study-benchmark/v1"
@@ -63,7 +63,7 @@ _CAPABILITIES = {
     "observability": ("observability", "trace", "logging", "metrics"),
     "search": ("search", "retrieval", "index"),
 }
-_RATINGS = {"irrelevant": 0, "weak": 1, "promising": 2, "exceptional": 3}
+_RATINGS = {"irrelevant": 0, "weak": 1, "promising": 2, "exceptional": 3, "abstain": None}
 
 
 def _mentions(text: str, term: str) -> bool:
@@ -567,7 +567,9 @@ def record_judgment(
     if candidate is None:
         raise ResearchError("Judgment artifact is not in this discovery queue")
     if rating not in _RATINGS:
-        raise ResearchError("Judgment rating must be irrelevant, weak, promising, or exceptional")
+        raise ResearchError(
+            "Judgment rating must be irrelevant, weak, promising, exceptional, or abstain"
+        )
     reviewer = str(reviewer or "").strip()
     notes = str(notes or "").strip()
     instant = _instant(reviewed_at)
@@ -674,10 +676,12 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         if (
             pair in seen
             or identity not in subjects
-            or not isinstance(relevance, int)
-            or isinstance(relevance, bool)
             or rating not in _RATINGS
             or _RATINGS[rating] != relevance
+            or (
+                relevance is not None
+                and (not isinstance(relevance, int) or isinstance(relevance, bool))
+            )
             or item.get("subject") != subjects[identity]
             or not reviewer
         ):
@@ -685,7 +689,8 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         seen.add(pair)
         reviewers.add(reviewer.casefold())
         rating_counts[str(rating)] += 1
-        ratings.setdefault(identity, []).append(int(relevance))
+        if relevance is not None:
+            ratings.setdefault(identity, []).append(int(relevance))
     aggregate = {
         identity: sum(values) / len(values)
         for identity, values in ratings.items()
@@ -754,7 +759,9 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         "policy": POLICY_VERSION,
         "snapshot_id": queue.get("snapshot_id"),
         "candidate_count": len(candidates),
-        "judged_count": len(seen),
+        "judgment_count": len(seen),
+        "judged_count": sum(len(values) for values in ratings.values()),
+        "abstention_count": rating_counts["abstain"],
         "judged_artifact_count": len(ratings),
         "reviewer_count": len(reviewers),
         "doubly_judged_count": sum(len(values) >= 2 for values in ratings.values()),
@@ -1061,7 +1068,10 @@ def benchmark_discovery_study(
     reviewer_ratings: dict[str, dict[str, int]] = {}
     for item in ledger.get("judgments") or []:
         identity = str(item["artifact_id"])
-        relevance = int(item["relevance"])
+        raw_relevance = item["relevance"]
+        if raw_relevance is None:
+            continue
+        relevance = int(raw_relevance)
         reviewer = str(item["reviewer"]).casefold()
         ratings[identity].append(relevance)
         reviewer_ratings.setdefault(reviewer, {})[identity] = relevance

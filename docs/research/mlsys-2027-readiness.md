@@ -95,6 +95,10 @@ The repository now provides:
 - a benchmark that refuses incomplete review coverage and reports bootstrap
   intervals, ranking quality, long-tail yield, diversity, and ordinal agreement.
 
+The [reviewer operations runbook](reviewer-operations.md) defines role
+separation, the pilot-to-confirmatory transition, abstention handling, and the
+freeze record.
+
 This closes the mechanics gap. It does not recruit reviewers, preregister the
 study, generate genuine labels, or run real user tasks. Those human and empirical
 steps now dominate the probability of acceptance.

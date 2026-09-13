@@ -231,8 +231,8 @@ claim covers visible API results; inaccessible forks can still make it
 incomplete.
 Queue v2 preserves the reproducible metadata score, then diversifies only
 within a five-point quality window across owners and capability lanes. Curators
-can record independent snapshot-bound `irrelevant`, `weak`, `promising`, or
-`exceptional` ratings and benchmark precision, judgment coverage, agreement,
+can record independent snapshot-bound `irrelevant`, `weak`, `promising`,
+`exceptional`, or `abstain` decisions and benchmark precision, judgment coverage, agreement,
 and NDCG. The `research study-create` command builds a blinded union of Forge,
 quality, popularity, and recency selections with a separate answer key.
 `research study-power` records the sample-size assumptions, `research

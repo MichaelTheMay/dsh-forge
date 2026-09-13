@@ -144,7 +144,11 @@ def _parser() -> argparse.ArgumentParser:
     judge = research_commands.add_parser("judge", help="record snapshot-bound curator relevance feedback")
     judge.add_argument("--queue", required=True, metavar="JSON")
     judge.add_argument("--artifact", required=True)
-    judge.add_argument("--rating", required=True, choices=["irrelevant", "weak", "promising", "exceptional"])
+    judge.add_argument(
+        "--rating",
+        required=True,
+        choices=["irrelevant", "weak", "promising", "exceptional", "abstain"],
+    )
     judge.add_argument("--reviewer", required=True)
     judge.add_argument("--reviewed-at", required=True, metavar="UTC")
     judge.add_argument("--notes", default="")

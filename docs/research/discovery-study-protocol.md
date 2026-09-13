@@ -89,8 +89,11 @@ development work?
 | Weak, 1 | A use is plausible, but evidence or differentiation is thin. |
 | Promising, 2 | The artifact addresses a concrete workflow and merits hands-on evaluation. |
 | Exceptional, 3 | The artifact appears unusually capable, useful, and difficult to discover through ordinary attention signals. |
+| Abstain | The supplied evidence is insufficient, or the reviewer lacks relevant expertise. |
 
-Each rating should include a short reason. Reviewers should judge potential
+Each rating or abstention should include a short reason. An abstention is
+recorded but does not count toward the minimum number of scored reviews.
+Reviewers should judge potential
 utility, not installation safety. Security and compatibility are separate
 experiments.
 
@@ -130,4 +133,6 @@ negative or inconclusive result is part of the protocol. Do not change the
 ranking policy, eligibility rule, or exclusions after revealing the key.
 
 The command sequence is documented in
-[the hidden-gem pipeline](../hidden-gem-pipeline.md).
+[the hidden-gem pipeline](../hidden-gem-pipeline.md). Study coordination and
+key-handling steps are documented in
+[independent reviewer operations](reviewer-operations.md).
