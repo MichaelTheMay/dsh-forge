@@ -741,10 +741,8 @@ def create_discovery_study(
     artifact_ids = [str(record["artifact_id"]) for record in records]
     if len(set(artifact_ids)) != len(artifact_ids):
         raise ResearchError("Discovery study source contains duplicate artifact IDs")
-    evaluated = [
-        (record, evaluate_artifact(record, snapshot.get("fetched_at")))
-        for record in records
-    ]
+    reports = rank_artifacts(records, snapshot.get("fetched_at"))
+    evaluated = [(record, reports[str(record["artifact_id"])]) for record in records]
 
     def study_admissible(record: Mapping[str, Any]) -> bool:
         validation = record.get("external_validation")
@@ -776,12 +774,14 @@ def create_discovery_study(
         value = _instant(item[0].get("pushed_at"))
         return value.timestamp() if value is not None else None
 
-    pool_ids = {identity(item) for item in study_pool}
-    forge_queue = discovery_queue(snapshot, limit=MAX_DISCOVERY_QUEUE)
     forge_ids = [
-        str(item["artifact"]["artifact_id"])
-        for item in forge_queue["candidates"]
-        if str(item["artifact"]["artifact_id"]) in pool_ids
+        identity(item)
+        for item in sorted(study_pool, key=lambda item: (
+            int(item[1]["rank"]),
+            str(item[0].get("artifact_type") or "repository"),
+            identity(item),
+        ))
+        if item[1]["candidate"]
     ][:per_arm]
     if not forge_ids:
         raise ResearchError("Discovery study source has no Forge-ranked candidates")
