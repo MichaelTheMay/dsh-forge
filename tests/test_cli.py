@@ -231,6 +231,24 @@ class LocalCellCliTests(unittest.TestCase):
             ["forge", "quality", "popularity", "recency"],
         )
 
+    def test_research_study_can_use_checksum_verified_public_feed(self):
+        snapshot = {
+            "snapshot_id": "cli-live-study",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }
+        ballot_path = self.root / "live-ballot.json"
+        key_path = self.root / "live-key.json"
+        with mock.patch("dsh_forge.cli.fetch_catalog_feed", return_value=snapshot) as fetch:
+            code, result = self.invoke(
+                "research", "study-create", "--url", "https://example.com/feed.json",
+                "--per-arm", "1", "--seed", "live-test-seed",
+                "--ballot", str(ballot_path), "--key", str(key_path),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["candidate_count"], 1)
+        fetch.assert_called_once_with("https://example.com/feed.json")
+
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))
         saved_id = added["data"]["saved_versions"][0]["id"]

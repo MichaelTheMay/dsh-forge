@@ -134,6 +134,16 @@ python3 -m dsh_forge research study-benchmark \
   --output /tmp/discovery-study-results.json
 ```
 
+To use the current public catalog instead of a local snapshot, replace the
+`--snapshot` argument with:
+
+```bash
+--url https://github.com/MichaelTheMay/dsh-forge/releases/download/catalog-latest/registry-feed.json
+```
+
+The same catalog-feed client verifies the compressed and expanded checksums
+before study construction.
+
 The separate key binds each method to its ranked arm and binds the arm set to
 the ballot. The benchmark reports precision, NDCG, coverage, reviewer count,
 double-rated coverage, and exact agreement. This command makes the experiment

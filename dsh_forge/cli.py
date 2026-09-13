@@ -155,7 +155,9 @@ def _parser() -> argparse.ArgumentParser:
         "study-create",
         help="create a blinded multi-baseline discovery ballot and a separate answer key",
     )
-    study_create.add_argument("--snapshot", required=True, metavar="JSON")
+    study_source = study_create.add_mutually_exclusive_group(required=True)
+    study_source.add_argument("--snapshot", metavar="JSON")
+    study_source.add_argument("--url", metavar="HTTPS", help="checksum-verified Forge catalog feed")
     study_create.add_argument("--per-arm", type=int, default=25)
     study_create.add_argument("--seed", required=True)
     study_create.add_argument("--ballot", required=True, metavar="JSON")
@@ -764,8 +766,13 @@ def run(
                     raise ResearchError("Study ballot and answer key require different output paths")
                 if not args.force and (ballot_path.exists() or key_path.exists()):
                     raise ResearchError("Study output exists; pass --force to replace both files")
+                snapshot = (
+                    fetch_catalog_feed(args.url)
+                    if args.url
+                    else read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES)
+                )
                 ballot, key = create_discovery_study(
-                    read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES),
+                    snapshot,
                     per_arm=args.per_arm,
                     seed=args.seed,
                 )
