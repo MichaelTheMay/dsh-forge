@@ -1,0 +1,212 @@
+\documentclass[10pt,twocolumn]{article}
+\usepackage{dshforge}
+
+\begin{document}
+
+\title{\sffamily\bfseries DSH Forge: A System Report on Long-Tail Discovery for Agentic Developer Tools}
+\author{Tapisar Singh$^{1,2}$ \qquad Shashwat Sourav$^{1,3}$ \qquad Michael May$^{1,2}$\\[4pt]
+\small $^{1}$DSH Forge \quad $^{2}$The University of Texas at Austin \quad $^{3}$Washington University in St. Louis}
+\date{\small System report: 13 September 2026}
+\maketitle
+
+\begin{abstract}
+Agentic developer tools increasingly depend on community plugins and forks, yet their ecosystems are difficult to inspect. Useful work may sit in a lightly starred repository or in a fork whose meaningful changes are several commits away from its parent. Installing that work introduces a second problem: discovery metadata is not evidence that unfamiliar code is trustworthy or compatible. DSH Forge connects these problems without collapsing them. It continuously ingests plugin and fork metadata, builds a searchable local catalog, produces an explainable and diversity-aware review queue, detects Harness installations already present on a user's machine, and admits reviewed packages through a separate signed and isolated installation path. In the public snapshot observed on 13 September 2026, Forge indexed 10,306 plugin records and 26,430 fork records. Its 250-item review queue represented 250 different owners; 247 items were classified as nearly unseen by the current visibility heuristic. Only 23 priority forks received immutable source-diff analysis, and the fork crawl explicitly reported incomplete coverage. Forge also generates blinded baseline studies, balanced networkless reviewer packets, and uncertainty-aware benchmark reports. Continuous integration at the pinned source revision passed 207 Python and 43 JavaScript tests. These results establish a working architecture and a substantial discovery corpus. They do not establish that the ranking finds more useful extensions than existing search, that arbitrary packages are safe, or that the system generalizes across agent platforms. This report presents the system, the evidence behind its current claims, and the evaluation needed to test its central thesis.
+\end{abstract}
+
+\noindent\textbf{Artifact snapshot.} \repo, revision \href{https://github.com/MichaelTheMay/dsh-forge/commit/bbeb80d375e528181b14f5a9df5a73c8f6b90cbd}{\texttt{bbeb80d375e5}}. Catalog release observed 13 September 2026.
+
+\section{Overview}
+
+Plugins turn a general agentic tool into a personal development environment. They add memory, orchestration, testing, review, navigation, and specialized workflows. The ecosystem around them is growing faster than any one user can evaluate it. Today, attention is concentrated around a small number of projects while potentially valuable extensions remain scattered across package feeds and repository fork networks.
+
+DSH Forge is a local workbench for that ecosystem. It gives users one place to see the Harness versions already installed on their machine, search community work, save configurations, and launch approved environments. Behind the interface, a continuous metadata pipeline collects candidates and prepares a review queue. A separate installation path handles the point where inert metadata becomes executable code.
+
+This separation is the central design decision. Forge should help users find unfamiliar software without suggesting that discovery itself makes the software safe.
+
+\subsection{What readers should take away}
+
+The most important findings from the current release are:
+
+\begin{enumerate}
+\item \textbf{The ecosystem is large enough to require dedicated discovery infrastructure.} The current public snapshot contains 36,736 records drawn from a plugin feed and the visible DeepSeek Harness fork network. A local full-text catalog makes that collection usable without shipping the whole corpus in the browser.\cite{registry,catalogstore,feedrelease}
+
+\item \textbf{Exposure can be diversified without changing the underlying quality score.} Forge preserves a reproducible score, then reorders candidates only within a narrow score window to reduce repeated owners and capability categories. The released queue contains 250 candidates from 250 owners. This demonstrates exposure diversity, not usefulness.\cite{research,feedrelease}
+
+\item \textbf{Discovery and execution remain different claims.} Search results are metadata. Runnable packages require a pinned recipe, curator signatures, exact artifact integrity, archive inspection, isolated installation, and a recorded startup check. Existing local profiles use a separate host-execution path and are labeled accordingly.\cite{signedpackages,installation,profiles}
+
+\item \textbf{The system is functional, but its research thesis is not yet proven.} Automated tests cover the catalog, launcher, policy, and interface contracts. One recorded package case reached installation, composition, and Web startup. The repository now contains a blinded baseline-study workflow, but no completed study yet shows that Forge finds more useful long-tail extensions than popularity ranking or ordinary repository search.\cite{ci,catalogci,agentteams,research}
+\end{enumerate}
+
+\subsection{Contributions}
+
+Forge contributes an end-to-end system design rather than a new ranking model or container runtime. Its contributions are:
+
+\begin{itemize}
+\item a continuously refreshed, provenance-preserving catalog spanning plugin records and recursively discovered fork metadata;
+\item an explainable review queue that treats visibility and diversity as exposure signals rather than evidence of safety, together with a blinded, multi-rater evaluation protocol;
+\item a local launcher that joins detected installations, saved configurations, browser search, CLI access, and bounded agent-facing tools; and
+\item an explicit transition from metadata to execution through signed recipes, immutable artifacts, isolated testing, and promotion receipts.
+\end{itemize}
+
+\section{Problem and design principles}
+
+The user-facing problem looks like a marketplace problem, but it is also a systems problem. Forge must reconcile changing public data, local machine state, persistent processes, curator decisions, untrusted archives, and several execution environments. A useful result must be discoverable, reproducible, and honest about how much has been verified.
+
+We use four design principles.
+
+\paragraph{Breadth with provenance.} Every catalog record should say where it came from and when it was observed. Counts must retain coverage status. If a fork network changes while it is being traversed, Forge publishes the useful partial result but does not call the crawl complete.
+
+\paragraph{Quality before popularity.} Stars and recency are useful context, but neither measures whether an extension solves an important problem. Forge combines documentation, release hygiene, maintenance, license evidence, capability signals, and meaningful fork divergence. Low visibility may raise review priority, but never trust.
+
+\paragraph{Local state is the source of truth.} The launcher's front page reflects installations and profiles found on the user's machine. The public website is a disconnected preview; it cannot discover local software or start a process on a visitor's computer.\cite{readme,profiles}
+
+\paragraph{Authority should increase in stages.} Catalog collection can read public metadata. Curators can turn evidence into signed package recipes. Installation can create a disposable profile and run bounded checks. Only a user can promote or launch that state. Agent-facing tools may search and draft, but cannot approve their own proposal.\cite{configs,installation}
+
+These principles also define a portable architecture for other agentic developer tools. A new integration needs a source adapter, a normalized artifact schema, a capability taxonomy, a local runtime detector, and an installation policy. The ranking and review layers should not depend on one product's UI.
+
+\section{System design}
+
+Forge has three planes: collection, curation, and local use. Data moves freely from collection into search, but code reaches execution only through the curation boundary shown in Figure~\ref{fig:architecture}.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[font=\small\sffamily,box/.style={draw=black!55,fill=ForgeLight,text width=34mm,minimum height=16mm,align=center},flow/.style={-{Stealth[length=2mm]},thick,draw=black!60}]
+\node[box] (sources) {External sources\\Plugin metadata and fork networks};
+\node[box,right=9mm of sources] (catalog) {Collection plane\\Normalized catalog, provenance, coverage};
+\node[box,right=9mm of catalog] (queue) {Curation plane\\Evidence, ranking, human review};
+\node[box,right=9mm of queue] (recipe) {Execution admission\\Signed recipe and exact artifacts};
+\node[box,below=12mm of catalog] (local) {Local workbench\\Detected versions, search, CLI, saved setups};
+\node[box,below=12mm of recipe] (runtime) {Isolated runtime\\Disposable profile, checks, receipt};
+\draw[flow] (sources)--(catalog);
+\draw[flow] (catalog)--(queue);
+\draw[flow] (queue)--(recipe);
+\draw[flow] (catalog)--(local);
+\draw[flow] (local)--(runtime);
+\draw[flow] (recipe)--(runtime);
+\end{tikzpicture}
+\caption{Forge separates broad metadata collection from the narrower path that admits code to execution.}
+\label{fig:architecture}
+\end{figure*}
+
+\subsection{Continuous ecosystem collection}
+
+The indexer combines an external plugin feed with GitHub fork metadata. It normalizes both into a common artifact record while preserving source-specific fields and numeric repository identities. Recursive fork traversal discovers visible descendants, not only direct children of the upstream repository. Each generation records whether pagination ended, whether the network remained stable, and whether visible counts reconciled with the upstream count.\cite{registry}
+
+Collection is metadata-only. The indexer does not clone, import, install, or execute candidates. A bounded analyzer later selects promising forks and compares immutable source and fork commits through the GitHub API. It records divergence, changed paths, and compatibility-relevant surfaces. Those signals can justify inspection; they are not a runtime compatibility verdict.
+
+The published feed is compressed and checksum-verified. Checksums protect transport integrity, but the current public feed is not curator-signed. Forge stores that distinction instead of presenting the feed as trusted installation metadata.\cite{feedrelease}
+
+\subsection{Ranking for review, not automatic endorsement}
+
+The research pipeline scores candidates from observable evidence: documentation specificity, exact releases or commits, license information, maintenance, capability signals, risk indicators, and fork divergence. It then creates an exposure order within a narrow quality window, preferring owners and capability lanes that have appeared less often. Plugin and fork candidates are interleaved rather than placed in separate product silos.\cite{research}
+
+Every queued item carries its score inputs and the reason for its discovery position. Forge exposes two evaluation modes. The first compares quality-only, popularity, and recency orderings over one fixed candidate set. The second selects separate arms from a common admissible pool, takes their union, removes stars, update dates, scores, visibility labels, and arm membership, then places the arm key in a separate file. A planning command records the assumptions behind the requested arm size. The current default assumptions produce 97 candidates per arm, while the protocol reserves smaller arms for a pilot.
+
+Forge assigns each candidate to a fixed number of reviewers while balancing individual and reviewer-pair loads. Each reviewer receives a self-contained HTML file that makes no network requests, stores work locally, and exports a snapshot-bound ledger. Reviewers can abstain when evidence or expertise is insufficient; an abstention is recorded but does not become a negative label or satisfy the minimum scored-review count. The merge step detects conflicting duplicate ratings. The benchmark refuses incomplete review coverage, aggregates independent ratings, and reports per-arm precision with bootstrap intervals, NDCG, low-visibility yield, owner diversity, Forge-minus-baseline differences, exact agreement, and quadratic weighted kappa. This makes a controlled selection study reproducible, although it does not supply the human judgments. Curator feedback never authorizes installation.
+
+\subsection{The local workbench}
+
+The launcher detects real Harness installations and profiles, stores stable local identities, and exposes the same state through the browser and CLI. Users can search the catalog, save a candidate configuration, and return to it later. Saved configurations are deliberately inert when they refer only to a plugin or fork record.\cite{readme,configs}
+
+A bounded MCP surface lets an assistant search, compare, and draft configurations. It cannot alter trust roots, install packages, promote profiles, or launch cells. This keeps agent assistance useful at the point of exploration without letting the same agent approve and execute its own recommendation.
+
+\subsection{From a reviewed package to a running profile}
+
+A runnable package pins its components, sources, integrity values, compatibility statements, permissions, and load order. Curators sign the canonical recipe. During installation, Forge verifies the recipe, acquires exact bytes into quarantine, rejects unsafe archive structures and unsupported install behavior, and builds a disposable profile inside Apptainer with network access disabled for installation and startup checks. Promotion occurs only after the recorded checks succeed.\cite{signedpackages,installation,sandbox}
+
+This boundary is intentionally conservative. It does not claim that JavaScript becomes safe because it started in a container. Apptainer shares the host kernel, and a startup check covers only the observed startup path. Existing profiles are more permissive still: Forge can launch them after explicit confirmation, but discovery does not sandbox software that the user already installed on the host.\cite{profiles,sandbox}
+
+\section{Evaluation}
+
+We evaluate the release as a system snapshot rather than as a completed ranking study. Evidence comes from the public catalog release observed on 13 September 2026, the pinned repository revision, continuous-integration results for that revision, a repository-recorded package case study, and a live bounded smoke test across three other agentic developer tools. Table~\ref{tab:results} summarizes the claims each source supports.
+
+\begin{table*}[t]
+\small\renewcommand{\arraystretch}{1.18}
+\begin{tabularx}{\linewidth}{L{38mm}L{45mm}Y}
+\toprule
+\textbf{Question} & \textbf{Observed result} & \textbf{Interpretation}\\
+\midrule
+How broad is the published catalog? & 10,306 plugin records; 26,430 fork records & Substantial searchable corpus. Fork coverage remains explicitly incomplete.\\
+What source evidence was collected? & 23 selected forks analyzed; 23 completed & Immutable comparison exists for a bounded priority subset, not the whole corpus.\\
+How diverse is the review queue? & 250 candidates; 250 owners; 238 plugins and 12 forks & Owner exposure is maximally diverse under the current queue size. This does not measure usefulness.\\
+Does the queue reach low-visibility work? & 247 ``nearly unseen,'' 2 ``hidden,'' 1 ``well known'' & The visibility heuristic targets the long tail. Labels require external validation.\\
+Does the implementation satisfy its tested contracts? & 207 Python and 43 JavaScript tests passed & Strong regression evidence for covered behavior, not a live multi-platform acceptance test.\\
+Can selection methods be compared without showing rank signals? & Blinded four-arm study, balanced reviewer packets, sealed key, and strict benchmark & The experiment mechanics are implemented and snapshot-bound. Human ratings and statistical results remain outstanding.\\
+Can the fork adapter read other ecosystems? & 100 records each from Codex, Claude Code, and Gemini CLI & The neutral metadata path was reused without code changes. All bounded crawls correctly reported incomplete coverage.\\
+Has a community package crossed the workflow? & AgentTeams installed, composed, appeared in the Web UI, and started & One exact setup reached startup. No model-backed agent task was completed.\\
+\bottomrule
+\end{tabularx}
+\caption{Release evidence and the narrow claim supported by each result.\cite{feedrelease,ci,catalogci,agentteams,crossvalidation}}
+\label{tab:results}
+\end{table*}
+
+\subsection{Discovery breadth and coverage}
+
+The current feed contains 36,736 records. Of the 26,430 fork records, 122 were found as descendants during recursive traversal. The crawl was not truncated by its configured page bound, but the upstream root count changed during collection and did not reconcile with the visible direct count. Forge therefore marked coverage \emph{incomplete}. That negative result matters: the system can publish useful evidence without converting a large number into an unsupported completeness claim.\cite{feedrelease,registry}
+
+Only 23 priority forks were selected for source comparison in this snapshot, and all 23 completed. The analysis layer is therefore much narrower than search. This is appropriate for a staged pipeline, but it means most fork records are leads rather than investigated candidates.
+
+\subsection{Exposure quality}
+
+The review queue achieved one candidate per owner across all 250 positions. It also exposed mostly low-visibility records under its current heuristic. These are direct properties of the published queue. They support the claim that Forge can prevent a few owners from dominating exposure.
+
+They do not support the stronger claim that the queue contains better software. Visibility labels, capability tags, and quality scores are derived from repository metadata and source signals. Establishing usefulness requires independent human judgments. The new study workflow removes direct ranking cues and compares four candidate-selection methods, but it has not yet been run with expert curators.
+
+\subsection{Implemented recommendation study}
+
+The next experiment begins from one immutable catalog snapshot. A source is admissible when it is public, unarchived, not known invalid, and bound to a repository URL and commit. Forge, quality-only, popularity, and recency each select up to $k$ items from that pool. The system shuffles the union deterministically and writes the method membership to a separate answer key. Reviewers see descriptions, topics, package identity, license, and compatibility metadata, but not stars, dates, scores, visibility labels, or method names.
+
+The primary outcome should be independently judged relevance at $k$, with ``promising'' and ``exceptional'' treated as relevant. NDCG captures graded relevance, while review coverage and ordinal agreement expose annotation quality. Under the documented planning assumptions, the initial calculation returns 97 candidates per arm. A separate pilot should refine that calculation before the confirmatory snapshot is frozen. The implemented commands enforce snapshot and subject binding, assign exact review overlap, detect conflicting reviewer exports, reject a modified ballot or answer key, and refuse to benchmark an incomplete ledger. The resulting report includes deterministic artifact-level bootstrap intervals and makes arm overlap explicit. These controls do not prevent a researcher from disclosing the key or choosing a favorable sample after seeing results.\cite{studyprotocol}
+
+\subsection{Operational evidence}
+
+Continuous integration exercises catalog behavior, metadata validation, launcher policy, interface behavior, and preview generation. The pinned successful run reported 207 Python and 43 JavaScript tests. It does not exercise every browser, operating system, real Apptainer deployment, package, or model-backed interaction.\cite{ci,catalogci}
+
+The AgentTeams case study provides one end-to-end data point. An exact plugin version was installed into a disposable profile, appeared in composed configuration and the Web interface, and reached clean startup. No model credential was provided, so the case did not test completion of an agent-team task. We treat it as workflow evidence, not broad compatibility evidence.\cite{agentteams}
+
+\subsection{Preliminary cross-ecosystem reuse}
+
+We also ran the unchanged GitHub fork adapter against \code{openai/codex}, \code{anthropics/claude-code}, and \code{google-gemini/gemini-cli}. A one-page bound collected 100 normalized records from each network and merged all 300 into one snapshot. Each source correctly reported incomplete coverage because the bound prevented reconciliation with the root count. This supports format and policy reuse at the collection layer. It does not test complete coverage, plugin-format adapters, ranking quality, or execution on those tools.\cite{crossvalidation}
+
+\section{Related work and positioning}
+
+Forge sits between repository discovery, software supply-chain systems, and portable execution. ATLAS constructs a hierarchical taxonomy for large software ecosystems and evaluates repository retrieval across tens of thousands of projects.\cite{atlas2026} Recent empirical work on agent-plugin marketplaces shows that these ecosystems mix natural-language instructions, scripts, and configuration files and have maintenance patterns distinct from conventional packages.\cite{hereiz2026} These findings reinforce the need for artifact models and evaluation methods tailored to agent extensions.
+
+On the trust side, in-toto shows how signed statements can preserve software supply-chain integrity across independently operated steps.\cite{intoto2019} Singularity, the predecessor of Apptainer, established portable container execution for scientific and HPC environments.\cite{singularity2017} Forge does not replace these ideas. It applies provenance, signed recipes, and disposable HPC-compatible environments to the transition between discovering an agent extension and deciding to run it.
+
+The distinctive systems contribution is the connection among broad long-tail collection, explainable exposure, local runtime discovery, and staged execution authority. The current work does not claim a new taxonomy algorithm, cryptographic protocol, or isolation primitive.
+
+\section{Limitations and research agenda}
+
+The main limitation is straightforward: Forge's product thesis is ahead of its evaluation. The system can collect and rank a long tail, but current evidence does not show that experts prefer its recommendations or complete tasks more successfully with them.
+
+Before a conference submission, we would evaluate four questions:
+
+\begin{enumerate}
+\item \textbf{Recommendation value.} Run the implemented blinded study with independent expert raters. The current arms compare Forge with quality-only, popularity, and recency selection from one admissible pool. Add query-dependent GitHub search and the upstream plugin browser as separately specified baselines. Report confidence intervals, inter-rater agreement, precision at $k$, recall against a curated pool, and NDCG.
+\item \textbf{Coverage and freshness.} Repeat collection across frozen and changing fork networks, report time to reflect new artifacts, duplicate rates, API cost, and every reason a generation is incomplete.
+\item \textbf{Compatibility and containment.} Test a stratified package corpus across operating systems and HPC environments, including malicious fixtures, dependency failures, startup failures, and rollback. Separate integrity, compatibility, and security outcomes.
+\item \textbf{Generality.} Extend the successful metadata smoke test with plugin-format and runtime adapters for at least two non-DSH tools. Measure how much logic is reused and which assumptions remain DSH-specific.
+\end{enumerate}
+
+Performance results also need controlled hardware, repeated trials, cold and warm measurements, and percentile latency. Repository-recorded engineering timings are useful during development but are not reported here as benchmarks.
+
+Other non-goals remain important. Forge is not a shared cloud execution service. It does not prove that all public forks are visible, perform semantic conflict resolution, learn a ranking model from user behavior, or make arbitrary community code safe. The public preview cannot inspect or control a visitor's machine.
+
+\section{Responsible release}
+
+The public site at \url{https://dsh-forge.vercel.app/} is a disconnected demonstration of the application shell and an embedded catalog snapshot. Operational discovery and execution require the local service. The catalog feed is metadata-only, marks its own coverage and signature status, and carries no installation authority.\cite{readme,feedrelease}
+
+The repository records exact source revisions, generated catalog identities, tests, package receipts, and case-study environments. Future reports should keep those identities together. A new package version, container image, host architecture, or catalog generation is a new result; it should not inherit an earlier verdict.
+
+\section{Conclusion}
+
+DSH Forge addresses a growing problem in agentic development: useful extensions are difficult to discover, while unfamiliar extensions are risky to execute. The system makes a broad ecosystem searchable, deliberately diversifies what curators see, connects the result to real local installations, and increases authority only as evidence accumulates.
+
+The current release demonstrates scale, exposure diversity, tested system contracts, one bounded package workflow, and a reproducible blinded-study path. It does not yet demonstrate recommendation superiority or general compatibility. That distinction is the most important result of this report. Forge now provides the machinery needed to collect the missing evidence rather than merely describing it as future work.
+
+\footnotesize
+\bibliographystyle{plainnat}
+\bibliography{paper}
+
+\end{document}

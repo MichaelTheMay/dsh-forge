@@ -91,11 +91,114 @@ python3 -m dsh_forge research benchmark \
   --output /tmp/discovery-benchmark.json
 ```
 
-The benchmark reports rating counts, judgment coverage, precision, precision
-among judged results, and NDCG at 10, 25, and 100. Unjudged results count as
-non-relevant in overall precision and as zero gain in NDCG; coverage and
-precision among judged results make sparse review explicit. Feedback is
-unsigned, executes nothing, and never authorizes installation.
+Multiple curators can independently rate the same artifact. A later rating from
+the same curator updates that curator's earlier rating without removing other
+reviewers. The benchmark reports reviewer count, double-rated coverage,
+pairwise exact agreement, rating counts, judgment coverage, precision,
+precision among judged results, and NDCG at 10, 25, and 100. It also compares
+the Forge, quality-only, popularity, and recency orderings over the same
+candidate set. This comparison measures ordering only; it does not compare how
+each method selects candidates for the pool.
+
+Unjudged results count as non-relevant in overall precision and as zero gain in
+NDCG. Coverage and precision among judged results make sparse review explicit.
+Feedback is unsigned, executes nothing, and never authorizes installation.
+
+For a selection study, first record a transparent planning estimate for the
+primary precision comparison:
+
+```bash
+python3 -m dsh_forge research study-power \
+  --baseline-precision 0.4 \
+  --minimum-lift 0.2 \
+  --alpha 0.05 \
+  --power 0.8
+```
+
+The default calculation returns 97 candidates per arm. It is a two-proportion
+normal approximation, not a guarantee. Freeze the final sample size after a
+separate pilot accounts for arm overlap, observed variance, reviewer clustering,
+and the chosen primary analysis.
+
+Then generate one blinded union of the Forge, quality-only,
+popularity, and recency arms. All four arms start from the same admissible source
+pool: public, unarchived, not known invalid, and bound to a repository URL and
+immutable commit. The ballot omits stars, update dates, Forge scores, visibility labels, and
+arm membership. Keep the answer key away from curators until all ratings are
+complete:
+
+```bash
+python3 -m dsh_forge research study-create \
+  --snapshot /tmp/registry-analyzed.json \
+  --per-arm 97 \
+  --seed "study-round-2026-09" \
+  --ballot /tmp/discovery-study-ballot.json \
+  --key /secure/discovery-study-key.json
+
+python3 -m dsh_forge research judge \
+  --queue /tmp/discovery-study-ballot.json \
+  --artifact github:1339316901 \
+  --rating exceptional \
+  --reviewer "Curator 1" \
+  --reviewed-at 2026-09-13T18:00:00Z \
+  --output /tmp/discovery-study-judgments.json
+
+```
+
+To use the current public catalog instead of a local snapshot, replace the
+`--snapshot` argument with:
+
+```bash
+--url https://github.com/MichaelTheMay/dsh-forge/releases/download/catalog-latest/registry-feed.json
+```
+
+The same catalog-feed client verifies the compressed and expanded checksums
+before study construction.
+
+Build a separate, deterministically balanced review page for each reviewer.
+This example assigns every candidate to exactly three of nine reviewers:
+
+```bash
+python3 -m dsh_forge research study-packet \
+  --ballot /tmp/discovery-study-ballot.json \
+  --reviewer-index 1 \
+  --reviewer-count 9 \
+  --reviews-per-candidate 3 \
+  --output /tmp/discovery-study-reviewer-01.html
+```
+
+Repeat the packet command with reviewer indices 2 through 9, then send each
+reviewer only their assigned file. Each file makes no network requests, stores
+progress in that browser, and exports a snapshot-bound judgment ledger. It never
+contains the answer key.
+Opening a repository link manually is outside the packet and may reveal the
+reviewer to the repository host.
+
+After review, merge all exports and run the frozen benchmark:
+
+```bash
+python3 -m dsh_forge research study-merge \
+  --ballot /tmp/discovery-study-ballot.json \
+  --judgments /tmp/reviewer-01.json \
+  --judgments /tmp/reviewer-02.json \
+  --judgments /tmp/reviewer-03.json \
+  --output /tmp/discovery-study-judgments.json
+
+python3 -m dsh_forge research study-benchmark \
+  --ballot /tmp/discovery-study-ballot.json \
+  --key /secure/discovery-study-key.json \
+  --judgments /tmp/discovery-study-judgments.json \
+  --min-reviews 3 \
+  --bootstrap-samples 5000 \
+  --output /tmp/discovery-study-results.json
+```
+
+The separate key binds each method to its ranked arm and binds the arm set to
+the ballot. The benchmark fails until every candidate has the required review
+count. It reports per-arm precision with bootstrap intervals, NDCG, low-visibility
+yield, owner diversity, pairwise Forge-versus-baseline differences with intervals,
+exact agreement, and quadratic weighted kappa. These commands make the experiment
+reproducible, but they do not replace preregistration or independent curators.
 
 The current analyzer is a deliberately bounded REST tier. It resolves both
 repositories to immutable commits, asks GitHub to compare those commits, records

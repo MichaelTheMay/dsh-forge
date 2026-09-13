@@ -16,9 +16,11 @@ import json
 import math
 import os
 from pathlib import Path
+import random
 import re
 import shutil
 import tempfile
+from statistics import NormalDist
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
@@ -32,13 +34,20 @@ PROPOSAL_SCHEMA = "dsh-forge.research-proposal/v1"
 CERTIFICATION_SCHEMA = "dsh-forge.package-certification/v1"
 DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v2"
 FORK_ASSESSMENT_SCHEMA = "dsh-forge.fork-assessment/v1"
-JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v1"
-BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v1"
+JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v3"
+BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v2"
+STUDY_KEY_SCHEMA = "dsh-forge.discovery-study-key/v1"
+STUDY_BENCHMARK_SCHEMA = "dsh-forge.discovery-study-benchmark/v1"
+STUDY_POWER_SCHEMA = "dsh-forge.discovery-study-power/v1"
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_PROPOSAL_PLUGINS = 8
 MAX_DISCOVERY_QUEUE = 250
+MAX_DISCOVERY_JUDGMENTS = 5_000
+MAX_STUDY_PER_ARM = 200
 SELECTION_POLICY = "dsh-forge.discovery-diversity/v1"
 DIVERSITY_SCORE_WINDOW = 5
+
+_STUDY_ARMS = ("forge", "quality", "popularity", "recency")
 
 _NPM_NAME = re.compile(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+")
 _VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,63}")
@@ -54,7 +63,7 @@ _CAPABILITIES = {
     "observability": ("observability", "trace", "logging", "metrics"),
     "search": ("search", "retrieval", "index"),
 }
-_RATINGS = {"irrelevant": 0, "weak": 1, "promising": 2, "exceptional": 3}
+_RATINGS = {"irrelevant": 0, "weak": 1, "promising": 2, "exceptional": 3, "abstain": None}
 
 
 def _mentions(text: str, term: str) -> bool:
@@ -63,6 +72,57 @@ def _mentions(text: str, term: str) -> bool:
 
 class ResearchError(ValueError):
     """A ranking, registry-enrichment, or certification input failed closed."""
+
+
+def plan_discovery_study(
+    *,
+    baseline_precision: float = 0.4,
+    minimum_lift: float = 0.2,
+    alpha: float = 0.05,
+    power: float = 0.8,
+) -> dict[str, Any]:
+    """Plan per-arm size with a transparent two-proportion normal approximation."""
+
+    values = (baseline_precision, minimum_lift, alpha, power)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+        raise ResearchError("Study power inputs must be numeric")
+    if (
+        not 0.05 <= baseline_precision <= 0.9
+        or not 0.05 <= minimum_lift <= 0.5
+        or baseline_precision + minimum_lift >= 1
+        or not 0.001 <= alpha <= 0.2
+        or not 0.5 <= power <= 0.99
+    ):
+        raise ResearchError("Study power inputs are outside supported bounds")
+    alternative_precision = round(baseline_precision + minimum_lift, 12)
+    pooled = (baseline_precision + alternative_precision) / 2
+    normal = NormalDist()
+    alpha_z = normal.inv_cdf(1 - alpha / 2)
+    power_z = normal.inv_cdf(power)
+    numerator = (
+        alpha_z * math.sqrt(2 * pooled * (1 - pooled))
+        + power_z * math.sqrt(
+            baseline_precision * (1 - baseline_precision)
+            + alternative_precision * (1 - alternative_precision)
+        )
+    ) ** 2
+    per_arm = math.ceil(numerator / minimum_lift ** 2)
+    return {
+        "schema": STUDY_POWER_SCHEMA,
+        "method": "independent-two-proportion-normal-approximation",
+        "two_sided": True,
+        "baseline_precision": baseline_precision,
+        "alternative_precision": alternative_precision,
+        "minimum_lift": minimum_lift,
+        "alpha": alpha,
+        "power": power,
+        "required_per_arm": per_arm,
+        "supported_by_study_builder": per_arm <= MAX_STUDY_PER_ARM,
+        "caveat": (
+            "Planning approximation only; use pilot variance, arm overlap, reviewer clustering, "
+            "and the frozen primary analysis for the confirmatory calculation."
+        ),
+    }
 
 
 def _instant(value: Any) -> dt.datetime | None:
@@ -507,7 +567,9 @@ def record_judgment(
     if candidate is None:
         raise ResearchError("Judgment artifact is not in this discovery queue")
     if rating not in _RATINGS:
-        raise ResearchError("Judgment rating must be irrelevant, weak, promising, or exceptional")
+        raise ResearchError(
+            "Judgment rating must be irrelevant, weak, promising, exceptional, or abstain"
+        )
     reviewer = str(reviewer or "").strip()
     notes = str(notes or "").strip()
     instant = _instant(reviewed_at)
@@ -523,7 +585,7 @@ def record_judgment(
             or ledger.get("snapshot_id") != queue.get("snapshot_id")
             or ledger.get("policy") != POLICY_VERSION
             or not isinstance(ledger.get("judgments"), list)
-            or len(ledger["judgments"]) > MAX_DISCOVERY_QUEUE
+            or len(ledger["judgments"]) > MAX_DISCOVERY_JUDGMENTS
             or any(not isinstance(item, Mapping) for item in ledger["judgments"])
         ):
             raise ResearchError("Judgment ledger does not match this discovery snapshot")
@@ -543,9 +605,24 @@ def record_judgment(
         "reviewed_at": instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "notes": notes,
     }
-    judgments = [item for item in judgments if item.get("artifact_id") != artifact_id]
+    reviewer_key = reviewer.casefold()
+    replacing = any(
+        item.get("artifact_id") == artifact_id
+        and str(item.get("reviewer") or "").casefold() == reviewer_key
+        for item in judgments
+    )
+    if len(judgments) >= MAX_DISCOVERY_JUDGMENTS and not replacing:
+        raise ResearchError("Judgment ledger reached its entry limit")
+    judgments = [
+        item for item in judgments
+        if item.get("artifact_id") != artifact_id
+        or str(item.get("reviewer") or "").casefold() != reviewer_key
+    ]
     judgments.append(judgment)
-    judgments.sort(key=lambda item: str(item.get("artifact_id") or ""))
+    judgments.sort(key=lambda item: (
+        str(item.get("artifact_id") or ""),
+        str(item.get("reviewer") or "").casefold(),
+    ))
     return {
         "schema": JUDGMENT_SCHEMA,
         "policy": POLICY_VERSION,
@@ -561,7 +638,7 @@ def record_judgment(
 
 
 def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict[str, Any]:
-    """Measure ranked relevance using snapshot-bound curator judgments."""
+    """Measure relevance and compare orderings on one fixed candidate set."""
 
     if (
         queue.get("schema") != DISCOVERY_QUEUE_SCHEMA
@@ -569,6 +646,8 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         or queue.get("policy") != POLICY_VERSION
         or ledger.get("policy") != POLICY_VERSION
         or queue.get("snapshot_id") != ledger.get("snapshot_id")
+        or not isinstance(ledger.get("judgments"), list)
+        or len(ledger["judgments"]) > MAX_DISCOVERY_JUDGMENTS
     ):
         raise ResearchError("Benchmark inputs do not describe the same current discovery snapshot")
     candidates = [
@@ -582,32 +661,50 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         )
         for item in candidates
     }
-    ratings: dict[str, int] = {}
+    ratings: dict[str, list[int]] = {}
+    rating_counts: Counter[str] = Counter()
+    reviewers: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for item in ledger.get("judgments") or []:
         if not isinstance(item, Mapping):
             raise ResearchError("Judgment ledger contains an invalid entry")
         identity = str(item.get("artifact_id") or "")
         relevance = item.get("relevance")
         rating = item.get("rating")
+        reviewer = str(item.get("reviewer") or "").strip()
+        pair = (identity, reviewer.casefold())
         if (
-            identity in ratings
+            pair in seen
             or identity not in subjects
-            or not isinstance(relevance, int)
-            or isinstance(relevance, bool)
             or rating not in _RATINGS
             or _RATINGS[rating] != relevance
+            or (
+                relevance is not None
+                and (not isinstance(relevance, int) or isinstance(relevance, bool))
+            )
             or item.get("subject") != subjects[identity]
+            or not reviewer
         ):
             raise ResearchError("Judgment ledger contains duplicate or invalid relevance")
-        ratings[identity] = int(relevance)
-    positions = [ratings.get(str(item["artifact"].get("artifact_id") or "")) for item in candidates]
+        seen.add(pair)
+        reviewers.add(reviewer.casefold())
+        rating_counts[str(rating)] += 1
+        if relevance is not None:
+            ratings.setdefault(identity, []).append(int(relevance))
+    aggregate = {
+        identity: sum(values) / len(values)
+        for identity, values in ratings.items()
+    }
 
-    def metrics(cutoff: int) -> dict[str, Any]:
-        values = positions[:cutoff]
+    def metrics(ordered: list[Mapping[str, Any]], cutoff: int) -> dict[str, Any]:
+        values = [
+            aggregate.get(str(item["artifact"].get("artifact_id") or ""))
+            for item in ordered[:cutoff]
+        ]
         judged = [value for value in values if value is not None]
         gains = [0 if value is None else 2 ** value - 1 for value in values]
         dcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
-        ideal = sorted((2 ** value - 1 for value in ratings.values()), reverse=True)[:len(values)]
+        ideal = sorted((2 ** value - 1 for value in aggregate.values()), reverse=True)[:len(values)]
         idcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(ideal))
         relevant = sum(value >= 2 for value in judged)
         return {
@@ -619,16 +716,519 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
             "ndcg": round(dcg / idcg, 4) if idcg else None,
         }
 
-    cutoffs = sorted({min(value, len(candidates)) for value in (10, 25, 100) if candidates})
+    def identity(item: Mapping[str, Any]) -> str:
+        return str(item["artifact"].get("artifact_id") or "")
+
+    def quality_key(item: Mapping[str, Any]) -> tuple[int, str]:
+        research = item.get("research") if isinstance(item.get("research"), Mapping) else {}
+        rank = research.get("quality_rank")
+        return (rank if isinstance(rank, int) and not isinstance(rank, bool) and rank > 0 else 10**12, identity(item))
+
+    def popularity_key(item: Mapping[str, Any]) -> tuple[int, int, str]:
+        stars = item["artifact"].get("github_stars")
+        if isinstance(stars, int) and not isinstance(stars, bool) and stars >= 0:
+            return (0, -stars, identity(item))
+        return (1, 0, identity(item))
+
+    def recency_key(item: Mapping[str, Any]) -> tuple[int, float, str]:
+        pushed = _instant(item["artifact"].get("pushed_at"))
+        if pushed is not None:
+            return (0, -pushed.timestamp(), identity(item))
+        return (1, 0.0, identity(item))
+
+    cutoffs = sorted({
+        min(value, len(candidates))
+        for value in (10, 25, 100, len(candidates))
+        if candidates
+    })
+    orderings = {
+        "forge": candidates,
+        "quality": sorted(candidates, key=quality_key),
+        "popularity": sorted(candidates, key=popularity_key),
+        "recency": sorted(candidates, key=recency_key),
+    }
+    agreement_pairs = 0
+    agreement_matches = 0
+    for values in ratings.values():
+        for left in range(len(values)):
+            for right in range(left + 1, len(values)):
+                agreement_pairs += 1
+                agreement_matches += values[left] == values[right]
     return {
         "schema": BENCHMARK_SCHEMA,
         "policy": POLICY_VERSION,
         "snapshot_id": queue.get("snapshot_id"),
         "candidate_count": len(candidates),
-        "judged_count": sum(value is not None for value in positions),
-        "ratings": {name: sum(value == score for value in ratings.values()) for name, score in _RATINGS.items()},
-        "metrics": [metrics(cutoff) for cutoff in cutoffs],
+        "judgment_count": len(seen),
+        "judged_count": sum(len(values) for values in ratings.values()),
+        "abstention_count": rating_counts["abstain"],
+        "judged_artifact_count": len(ratings),
+        "reviewer_count": len(reviewers),
+        "doubly_judged_count": sum(len(values) >= 2 for values in ratings.values()),
+        "pairwise_exact_agreement": round(agreement_matches / agreement_pairs, 4) if agreement_pairs else None,
+        "ratings": {name: rating_counts[name] for name in _RATINGS},
+        "metrics": [metrics(candidates, cutoff) for cutoff in cutoffs],
+        "comparison_scope": "same_candidate_set_reordered",
+        "comparisons": [
+            {
+                "ordering": name,
+                "metrics": [metrics(ordered, cutoff) for cutoff in cutoffs],
+            }
+            for name, ordered in orderings.items()
+        ],
         "queue_quality": dict(queue.get("quality") or {}),
+        "claims": {"metadata_only": True, "executed": False, "security_verified": False},
+    }
+
+
+def merge_judgment_ledgers(
+    queue: Mapping[str, Any],
+    ledgers: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Merge independently exported ledgers, keeping the latest unambiguous revision."""
+
+    selected: dict[tuple[str, str], tuple[dt.datetime, dict[str, Any]]] = {}
+    count = 0
+    for ledger in ledgers:
+        benchmark_queue(queue, ledger)
+        count += 1
+        for item in ledger.get("judgments") or []:
+            judgment = dict(item)
+            reviewed = _instant(judgment.get("reviewed_at"))
+            reviewer = str(judgment.get("reviewer") or "").strip()
+            if reviewed is None:
+                raise ResearchError("Merged judgment has an invalid reviewed-at timestamp")
+            identity = str(judgment.get("artifact_id") or "")
+            key = (identity, reviewer.casefold())
+            previous = selected.get(key)
+            if previous and previous[0] == reviewed and previous[1] != judgment:
+                raise ResearchError("Merged ledgers contain conflicting judgments at the same time")
+            if previous is None or reviewed > previous[0]:
+                selected[key] = (reviewed, judgment)
+    if count < 2:
+        raise ResearchError("Judgment merge requires at least two ledgers")
+    if not selected:
+        raise ResearchError("Judgment merge requires at least one rating")
+    merged: dict[str, Any] | None = None
+    for _, judgment in sorted(selected.values(), key=lambda value: (
+        value[0],
+        str(value[1].get("artifact_id") or ""),
+        str(value[1].get("reviewer") or "").casefold(),
+    )):
+        merged = record_judgment(
+            queue,
+            merged,
+            artifact_id=str(judgment["artifact_id"]),
+            rating=str(judgment["rating"]),
+            reviewer=str(judgment["reviewer"]),
+            reviewed_at=str(judgment["reviewed_at"]),
+            notes=str(judgment.get("notes") or ""),
+        )
+    assert merged is not None
+    return merged
+
+
+def create_discovery_study(
+    snapshot: Mapping[str, Any],
+    *,
+    per_arm: int = 25,
+    seed: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Create a blinded candidate ballot and a separate ranking-arm key."""
+
+    source_snapshot_id = snapshot.get("snapshot_id")
+    if not isinstance(source_snapshot_id, str) or not source_snapshot_id:
+        raise ResearchError("Discovery study requires a stable source snapshot")
+    if not isinstance(per_arm, int) or isinstance(per_arm, bool) or not 1 <= per_arm <= MAX_STUDY_PER_ARM:
+        raise ResearchError(f"Study size per arm must be between 1 and {MAX_STUDY_PER_ARM}")
+    if not isinstance(seed, str) or not 8 <= len(seed) <= 128 or any(ord(character) < 32 for character in seed):
+        raise ResearchError("Discovery study seed must contain 8 to 128 printable characters")
+    records = [
+        record for record in [
+            *(snapshot.get("entries") or []),
+            *(snapshot.get("supplemental_entries") or []),
+        ]
+        if isinstance(record, Mapping) and record.get("artifact_id")
+    ]
+    artifact_ids = [str(record["artifact_id"]) for record in records]
+    if len(set(artifact_ids)) != len(artifact_ids):
+        raise ResearchError("Discovery study source contains duplicate artifact IDs")
+    reports = rank_artifacts(records, snapshot.get("fetched_at"))
+    evaluated = [(record, reports[str(record["artifact_id"])]) for record in records]
+
+    def study_admissible(record: Mapping[str, Any]) -> bool:
+        validation = record.get("external_validation")
+        status = str(validation.get("status") or "") if isinstance(validation, Mapping) else ""
+        return bool(
+            record.get("archived") is not True
+            and status != "invalid"
+            and isinstance(record.get("repository_url"), str)
+            and str(record.get("repository_url") or "").strip()
+            and isinstance(record.get("head_sha"), str)
+            and _COMMIT.fullmatch(str(record.get("head_sha")))
+        )
+
+    study_pool = [
+        (record, report) for record, report in evaluated
+        if study_admissible(record)
+    ]
+    if not study_pool:
+        raise ResearchError("Discovery study source has no admissible candidates")
+
+    def identity(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> str:
+        return str(item[0].get("artifact_id") or "")
+
+    def stars(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> int | None:
+        value = item[0].get("github_stars")
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+    def pushed(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> float | None:
+        value = _instant(item[0].get("pushed_at"))
+        return value.timestamp() if value is not None else None
+
+    forge_ids = [
+        identity(item)
+        for item in sorted(study_pool, key=lambda item: (
+            int(item[1]["rank"]),
+            str(item[0].get("artifact_type") or "repository"),
+            identity(item),
+        ))
+        if item[1]["candidate"]
+    ][:per_arm]
+    if not forge_ids:
+        raise ResearchError("Discovery study source has no Forge-ranked candidates")
+    arms = {
+        "forge": forge_ids,
+        "quality": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            -int(item[1]["score"]),
+            stars(item) if stars(item) is not None else 10**12,
+            identity(item),
+        ))[:per_arm]],
+        "popularity": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            0 if stars(item) is not None else 1,
+            -(stars(item) or 0),
+            -int(item[1]["score"]),
+            identity(item),
+        ))[:per_arm]],
+        "recency": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            0 if pushed(item) is not None else 1,
+            -(pushed(item) or 0.0),
+            -int(item[1]["score"]),
+            identity(item),
+        ))[:per_arm]],
+    }
+    record_by_id = {str(record["artifact_id"]): record for record, _ in evaluated}
+    report_by_id = {str(record["artifact_id"]): report for record, report in evaluated}
+    selected_ids = set().union(*(set(values) for values in arms.values()))
+    seed_digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    study_id = "discovery-study-" + hashlib.sha256(
+        f"{source_snapshot_id}\n{per_arm}\n{seed_digest}".encode("utf-8")
+    ).hexdigest()[:20]
+    ordered_ids = sorted(
+        selected_ids,
+        key=lambda value: hashlib.sha256(f"{study_id}\n{value}".encode("utf-8")).hexdigest(),
+    )
+    visible_fields = (
+        "artifact_id", "name", "full_name", "owner", "artifact_type", "classifications",
+        "repository_url", "description", "topics", "language", "package", "license",
+        "compatibility", "source_repository", "parent_repository", "head_sha",
+    )
+    candidates = [
+        {
+            "artifact": {
+                field: record_by_id[artifact_id][field]
+                for field in visible_fields
+                if field in record_by_id[artifact_id]
+            },
+            "research": {"subject": dict(report_by_id[artifact_id]["subject"])},
+        }
+        for artifact_id in ordered_ids
+    ]
+    ballot = {
+        "schema": DISCOVERY_QUEUE_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": study_id,
+        "fetched_at": str(snapshot.get("fetched_at") or "")[:64],
+        "provenance": {
+            "method": "dsh-forge.blinded-discovery-study/v1",
+            "source_snapshot_id": source_snapshot_id,
+        },
+        "source_count": len(records),
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "quality": {"blinded": True, "arm_count": len(arms), "per_arm": per_arm},
+        "claims": {"metadata_only": True, "security_verified": False, "executed": False},
+    }
+    ballot_digest = "sha256:" + hashlib.sha256(json.dumps(
+        ballot,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")).hexdigest()
+    key = {
+        "schema": STUDY_KEY_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": study_id,
+        "source_snapshot_id": source_snapshot_id,
+        "seed_sha256": seed_digest,
+        "ballot_digest": ballot_digest,
+        "per_arm": per_arm,
+        "pool_size": len(study_pool),
+        "eligibility_policy": "stable-public-source/v1",
+        "arms": arms,
+        "analysis": {
+            artifact_id: {
+                "github_stars": (
+                    record_by_id[artifact_id].get("github_stars")
+                    if isinstance(record_by_id[artifact_id].get("github_stars"), int)
+                    and not isinstance(record_by_id[artifact_id].get("github_stars"), bool)
+                    else None
+                ),
+                "owner": _owner(record_by_id[artifact_id]),
+            }
+            for artifact_id in ordered_ids
+        },
+        "claims": {"metadata_only": True, "security_verified": False, "executed": False},
+    }
+    return ballot, key
+
+
+def benchmark_discovery_study(
+    ballot: Mapping[str, Any],
+    key: Mapping[str, Any],
+    ledger: Mapping[str, Any],
+    *,
+    min_reviews_per_artifact: int = 3,
+    bootstrap_samples: int = 5_000,
+) -> dict[str, Any]:
+    """Score each hidden ranking arm against judgments collected on one ballot."""
+
+    if (
+        not isinstance(min_reviews_per_artifact, int)
+        or isinstance(min_reviews_per_artifact, bool)
+        or not 1 <= min_reviews_per_artifact <= 10
+    ):
+        raise ResearchError("Minimum reviews per artifact must be between 1 and 10")
+    if (
+        not isinstance(bootstrap_samples, int)
+        or isinstance(bootstrap_samples, bool)
+        or not 100 <= bootstrap_samples <= 100_000
+    ):
+        raise ResearchError("Bootstrap samples must be between 100 and 100000")
+
+    candidates = [
+        item for item in ballot.get("candidates") or []
+        if isinstance(item, Mapping) and isinstance(item.get("artifact"), Mapping)
+    ]
+    candidate_by_id = {
+        str(item["artifact"].get("artifact_id") or ""): item
+        for item in candidates
+    }
+    ordered_ids = [str(item["artifact"].get("artifact_id") or "") for item in candidates]
+    ballot_digest = "sha256:" + hashlib.sha256(json.dumps(
+        dict(ballot),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")).hexdigest()
+    arms = key.get("arms")
+    analysis = key.get("analysis")
+    if (
+        ballot.get("schema") != DISCOVERY_QUEUE_SCHEMA
+        or key.get("schema") != STUDY_KEY_SCHEMA
+        or key.get("policy") != POLICY_VERSION
+        or key.get("snapshot_id") != ballot.get("snapshot_id")
+        or key.get("ballot_digest") != ballot_digest
+        or not isinstance(arms, Mapping)
+        or set(arms) != set(_STUDY_ARMS)
+        or not isinstance(analysis, Mapping)
+        or set(analysis) != set(ordered_ids)
+        or any(not isinstance(value, Mapping) for value in analysis.values())
+        or not candidates
+        or any(not identity for identity in ordered_ids)
+        or len(candidate_by_id) != len(ordered_ids)
+    ):
+        raise ResearchError("Discovery study key does not match the ballot")
+    normalized_arms: dict[str, list[str]] = {}
+    for name in _STUDY_ARMS:
+        values = arms.get(name)
+        if (
+            not isinstance(values, list)
+            or not 1 <= len(values) <= MAX_STUDY_PER_ARM
+            or len(set(values)) != len(values)
+            or any(not isinstance(value, str) or value not in candidate_by_id for value in values)
+        ):
+            raise ResearchError("Discovery study key contains an invalid ranking arm")
+        normalized_arms[name] = list(values)
+    if set().union(*(set(values) for values in normalized_arms.values())) != set(ordered_ids):
+        raise ResearchError("Discovery study key does not cover the ballot")
+
+    overall = benchmark_queue(ballot, ledger)
+    ratings: dict[str, list[int]] = {identity: [] for identity in ordered_ids}
+    reviewer_ratings: dict[str, dict[str, int]] = {}
+    for item in ledger.get("judgments") or []:
+        identity = str(item["artifact_id"])
+        raw_relevance = item["relevance"]
+        if raw_relevance is None:
+            continue
+        relevance = int(raw_relevance)
+        reviewer = str(item["reviewer"]).casefold()
+        ratings[identity].append(relevance)
+        reviewer_ratings.setdefault(reviewer, {})[identity] = relevance
+    incomplete = [
+        identity for identity in ordered_ids
+        if len(ratings[identity]) < min_reviews_per_artifact
+    ]
+    if incomplete:
+        raise ResearchError(
+            f"Discovery study is incomplete: {len(incomplete)} candidate(s) have fewer than "
+            f"{min_reviews_per_artifact} review(s)"
+        )
+    aggregate = {
+        identity: sum(values) / len(values)
+        for identity, values in ratings.items()
+    }
+    relevant = {identity: value >= 2 for identity, value in aggregate.items()}
+
+    def percentile(values: list[float], probability: float) -> float:
+        ordered = sorted(values)
+        position = (len(ordered) - 1) * probability
+        lower = int(math.floor(position))
+        upper = int(math.ceil(position))
+        if lower == upper:
+            return ordered[lower]
+        return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+    def precision_interval(name: str, identities: list[str]) -> list[float]:
+        values = [1.0 if relevant[identity] else 0.0 for identity in identities]
+        rng = random.Random(hashlib.sha256(
+            f"{ballot.get('snapshot_id')}\n{name}\nprecision".encode("utf-8")
+        ).digest())
+        samples = [
+            sum(rng.choice(values) for _ in values) / len(values)
+            for _ in range(bootstrap_samples)
+        ]
+        return [round(percentile(samples, 0.025), 4), round(percentile(samples, 0.975), 4)]
+
+    reviewer_names = sorted(reviewer_ratings)
+    kappas: list[tuple[int, float]] = []
+    for left_index, left_name in enumerate(reviewer_names):
+        for right_name in reviewer_names[left_index + 1:]:
+            left = reviewer_ratings[left_name]
+            right = reviewer_ratings[right_name]
+            shared = sorted(set(left) & set(right))
+            if len(shared) < 2:
+                continue
+            observed = sum((left[item] - right[item]) ** 2 / 9 for item in shared) / len(shared)
+            left_counts = Counter(left[item] for item in shared)
+            right_counts = Counter(right[item] for item in shared)
+            expected = sum(
+                left_counts[a] * right_counts[b] * (a - b) ** 2 / 9
+                for a in range(4) for b in range(4)
+            ) / (len(shared) ** 2)
+            if expected:
+                kappas.append((len(shared), 1 - observed / expected))
+            elif observed == 0:
+                kappas.append((len(shared), 1.0))
+
+    arm_results = []
+    for name in _STUDY_ARMS:
+        identities = normalized_arms[name]
+        identity_set = set(identities)
+        arm_queue = {
+            **ballot,
+            "candidate_count": len(identities),
+            "candidates": [candidate_by_id[identity] for identity in identities],
+        }
+        arm_ledger = {
+            **ledger,
+            "judgments": [
+                item for item in ledger.get("judgments") or []
+                if isinstance(item, Mapping) and item.get("artifact_id") in identity_set
+            ],
+        }
+        result = benchmark_queue(arm_queue, arm_ledger)
+        arm_metric = next(item for item in result["metrics"] if item["cutoff"] == len(identities))
+        owners = Counter(str(analysis[identity].get("owner") or "unknown") for identity in identities)
+        low_visibility = [
+            identity for identity in identities
+            if isinstance(analysis[identity].get("github_stars"), int)
+            and analysis[identity]["github_stars"] <= 10
+        ]
+        arm_results.append({
+            "ordering": name,
+            "candidate_count": len(identities),
+            "judged_artifact_count": result["judged_artifact_count"],
+            "metrics": result["metrics"],
+            "primary": {
+                "relevant_count": sum(relevant[identity] for identity in identities),
+                "precision": arm_metric["precision"],
+                "precision_ci_95": precision_interval(name, identities),
+                "mean_relevance": round(sum(aggregate[identity] for identity in identities) / len(identities), 4),
+                "ndcg": arm_metric["ndcg"],
+                "low_visibility_count": len(low_visibility),
+                "relevant_low_visibility_count": sum(relevant[identity] for identity in low_visibility),
+                "unique_owners": len(owners),
+                "max_candidates_per_owner": max(owners.values(), default=0),
+            },
+        })
+    comparisons = []
+    forge = normalized_arms["forge"]
+    union = ordered_ids
+    for name in _STUDY_ARMS[1:]:
+        baseline = normalized_arms[name]
+        forge_set = set(forge)
+        baseline_set = set(baseline)
+        rng = random.Random(hashlib.sha256(
+            f"{ballot.get('snapshot_id')}\nforge-vs-{name}".encode("utf-8")
+        ).digest())
+        differences: list[float] = []
+        for _ in range(bootstrap_samples):
+            sampled = [rng.choice(union) for _ in union]
+            forge_values = [relevant[item] for item in sampled if item in forge_set]
+            baseline_values = [relevant[item] for item in sampled if item in baseline_set]
+            if forge_values and baseline_values:
+                differences.append(
+                    sum(forge_values) / len(forge_values)
+                    - sum(baseline_values) / len(baseline_values)
+                )
+        observed = (
+            sum(relevant[item] for item in forge) / len(forge)
+            - sum(relevant[item] for item in baseline) / len(baseline)
+        )
+        comparisons.append({
+            "comparison": f"forge_minus_{name}",
+            "precision_difference": round(observed, 4),
+            "precision_difference_ci_95": [
+                round(percentile(differences, 0.025), 4),
+                round(percentile(differences, 0.975), 4),
+            ],
+            "overlap_count": len(forge_set & baseline_set),
+        })
+    weighted_kappa = (
+        sum(count * value for count, value in kappas) / sum(count for count, _ in kappas)
+        if kappas else None
+    )
+    return {
+        "schema": STUDY_BENCHMARK_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": ballot.get("snapshot_id"),
+        "source_snapshot_id": key.get("source_snapshot_id"),
+        "candidate_count": len(candidates),
+        "judgment_count": overall["judgment_count"],
+        "judged_count": overall["judged_count"],
+        "abstention_count": overall["abstention_count"],
+        "judged_artifact_count": overall["judged_artifact_count"],
+        "reviewer_count": overall["reviewer_count"],
+        "complete": True,
+        "minimum_reviews_per_artifact": min_reviews_per_artifact,
+        "bootstrap_samples": bootstrap_samples,
+        "doubly_judged_count": overall["doubly_judged_count"],
+        "pairwise_exact_agreement": overall["pairwise_exact_agreement"],
+        "pairwise_quadratic_weighted_kappa": round(weighted_kappa, 4) if weighted_kappa is not None else None,
+        "weighted_kappa_reviewer_pairs": len(kappas),
+        "arms": arm_results,
+        "comparisons": comparisons,
         "claims": {"metadata_only": True, "executed": False, "security_verified": False},
     }
 

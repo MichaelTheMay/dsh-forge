@@ -10,7 +10,7 @@ from unittest import mock
 from dsh_forge import cli
 from dsh_forge.launcher import CELL_REGISTRY_SCHEMA_VERSION, Launcher
 from dsh_forge.registry import _fork
-from dsh_forge.research import discovery_queue
+from dsh_forge.research import create_discovery_study, discovery_queue, record_judgment
 from tests.test_research import plugin_record
 from tests.helpers import FakeCellSandbox
 
@@ -194,6 +194,118 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["data"]["judged_count"], 1)
         self.assertEqual(result["data"]["metrics"][0]["ndcg"], 1.0)
+
+    def test_research_study_cli_creates_blinded_ballot_and_scores_hidden_arms(self):
+        snapshot_path = self.root / "registry.json"
+        ballot_path = self.root / "study-ballot.json"
+        key_path = self.root / "study-key.json"
+        judgments_path = self.root / "study-judgments.json"
+        snapshot_path.write_text(json.dumps({
+            "snapshot_id": "cli-study-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-create", "--snapshot", str(snapshot_path),
+            "--per-arm", "1", "--seed", "cli-test-seed",
+            "--ballot", str(ballot_path), "--key", str(key_path),
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(result["data"]["blinded"])
+        ballot = json.loads(ballot_path.read_text(encoding="utf-8"))
+        self.assertNotIn("github_stars", ballot["candidates"][0]["artifact"])
+        artifact_id = ballot["candidates"][0]["artifact"]["artifact_id"]
+        code, _ = self.invoke(
+            "research", "judge", "--queue", str(ballot_path), "--artifact", artifact_id,
+            "--rating", "exceptional", "--reviewer", "Test curator",
+            "--reviewed-at", "2026-09-13T18:01:00Z", "--output", str(judgments_path),
+        )
+        self.assertEqual(code, 0)
+        code, result = self.invoke(
+            "research", "study-benchmark", "--ballot", str(ballot_path),
+            "--key", str(key_path), "--judgments", str(judgments_path),
+            "--min-reviews", "1", "--bootstrap-samples", "100",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [item["ordering"] for item in result["data"]["arms"]],
+            ["forge", "quality", "popularity", "recency"],
+        )
+
+    def test_research_study_can_use_checksum_verified_public_feed(self):
+        snapshot = {
+            "snapshot_id": "cli-live-study",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }
+        ballot_path = self.root / "live-ballot.json"
+        key_path = self.root / "live-key.json"
+        with mock.patch("dsh_forge.cli.fetch_catalog_feed", return_value=snapshot) as fetch:
+            code, result = self.invoke(
+                "research", "study-create", "--url", "https://example.com/feed.json",
+                "--per-arm", "1", "--seed", "live-test-seed",
+                "--ballot", str(ballot_path), "--key", str(key_path),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["candidate_count"], 1)
+        fetch.assert_called_once_with("https://example.com/feed.json")
+
+    def test_research_study_packet_writes_offline_reviewer_html(self):
+        ballot, _ = create_discovery_study({
+            "snapshot_id": "cli-packet-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="packet-cli-seed")
+        ballot_path = self.root / "packet-ballot.json"
+        output = self.root / "review.html"
+        ballot_path.write_text(json.dumps(ballot), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-packet", "--ballot", str(ballot_path),
+            "--output", str(output),
+        )
+        self.assertEqual(code, 0)
+        self.assertFalse(result["data"]["network_requests"])
+        self.assertFalse(result["data"]["answer_key_included"])
+        self.assertRegex(result["data"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertIn("Export rated JSON", output.read_text(encoding="utf-8"))
+
+    def test_research_study_merge_combines_reviewer_exports(self):
+        ballot, _ = create_discovery_study({
+            "snapshot_id": "cli-merge-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="merge-cli-seed")
+        identity = ballot["candidates"][0]["artifact"]["artifact_id"]
+        ledgers = [
+            record_judgment(
+                ballot, None, artifact_id=identity, rating=rating,
+                reviewer=f"Curator {index}", reviewed_at=f"2026-09-13T18:0{index}:00Z",
+            )
+            for index, rating in ((1, "promising"), (2, "exceptional"))
+        ]
+        ballot_path = self.root / "merge-ballot.json"
+        output = self.root / "merged.json"
+        paths = [self.root / f"review-{index}.json" for index in (1, 2)]
+        ballot_path.write_text(json.dumps(ballot), encoding="utf-8")
+        for path, ledger in zip(paths, ledgers):
+            path.write_text(json.dumps(ledger), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-merge", "--ballot", str(ballot_path),
+            "--judgments", str(paths[0]), "--judgments", str(paths[1]),
+            "--output", str(output),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["reviewer_count"], 2)
+        self.assertEqual(result["data"]["judgment_count"], 2)
+
+    def test_research_study_power_reports_planning_size(self):
+        code, result = self.invoke(
+            "research", "study-power", "--baseline-precision", "0.4",
+            "--minimum-lift", "0.2", "--alpha", "0.05", "--power", "0.8",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["required_per_arm"], 97)
+        self.assertTrue(result["data"]["supported_by_study_builder"])
 
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))

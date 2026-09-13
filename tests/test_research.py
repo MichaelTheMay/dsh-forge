@@ -12,13 +12,17 @@ from dsh_forge.packages import verify
 from dsh_forge.research import (
     POLICY_VERSION,
     ResearchError,
+    benchmark_discovery_study,
     benchmark_queue,
     certify_proposal,
     compose_proposal,
+    create_discovery_study,
     create_fork_assessment,
     discovery_queue,
     evaluate_artifact,
     fetch_npm_pin,
+    merge_judgment_ledgers,
+    plan_discovery_study,
     rank_artifacts,
     record_judgment,
     signed_review_statement,
@@ -60,6 +64,16 @@ def npm_pin(name="@example/dsh-memory", version="0.5.2"):
 
 
 class ResearchTests(unittest.TestCase):
+    def test_power_plan_is_explicit_about_assumptions_and_supported_size(self):
+        plan = plan_discovery_study(
+            baseline_precision=0.4, minimum_lift=0.2, alpha=0.05, power=0.8
+        )
+        self.assertEqual(plan["required_per_arm"], 97)
+        self.assertTrue(plan["supported_by_study_builder"])
+        self.assertIn("Planning approximation only", plan["caveat"])
+        with self.assertRaisesRegex(ResearchError, "outside supported bounds"):
+            plan_discovery_study(baseline_precision=0.9, minimum_lift=0.2)
+
     def test_fork_assessment_binds_curator_decision_to_evidence_and_never_authorizes_install(self):
         record = _fork(fork(7, "review-gem"), "deepseek-ai/deepseek-harness")
         record.update({
@@ -223,17 +237,211 @@ class ResearchTests(unittest.TestCase):
             reviewer="Test curator", reviewed_at="2026-09-11T18:00:00Z",
         )
         ledger = record_judgment(
+            queue, ledger, artifact_id=first, rating="exceptional",
+            reviewer="TEST CURATOR", reviewed_at="2026-09-11T18:00:30Z",
+        )
+        self.assertEqual(len(ledger["judgments"]), 1)
+        ledger = record_judgment(
             queue, ledger, artifact_id=second, rating="irrelevant",
             reviewer="Test curator", reviewed_at="2026-09-11T18:01:00Z",
         )
+        ledger = record_judgment(
+            queue, ledger, artifact_id=first, rating="promising",
+            reviewer="Second curator", reviewed_at="2026-09-11T18:02:00Z",
+        )
         benchmark = benchmark_queue(queue, ledger)
-        self.assertEqual(benchmark["judged_count"], 2)
+        self.assertEqual(benchmark["judged_count"], 3)
+        self.assertEqual(benchmark["judged_artifact_count"], 2)
+        self.assertEqual(benchmark["reviewer_count"], 2)
+        self.assertEqual(benchmark["doubly_judged_count"], 1)
+        self.assertEqual(benchmark["pairwise_exact_agreement"], 0.0)
         self.assertEqual(benchmark["ratings"]["exceptional"], 1)
+        self.assertEqual(benchmark["abstention_count"], 0)
         self.assertEqual(benchmark["metrics"][0]["judgment_coverage"], 0.6667)
         self.assertEqual(benchmark["metrics"][0]["ndcg"], 1.0)
+        self.assertEqual(
+            [item["ordering"] for item in benchmark["comparisons"]],
+            ["forge", "quality", "popularity", "recency"],
+        )
         stale = {**queue, "snapshot_id": "new-snapshot"}
         with self.assertRaisesRegex(ResearchError, "same current discovery snapshot"):
             benchmark_queue(stale, ledger)
+
+    def test_blinded_study_compares_selection_arms_without_leaking_rank_signals(self):
+        record = plugin_record()
+        records = [
+            {
+                **record,
+                "artifact_id": f"github:{index + 1}",
+                "github_id": index + 1,
+                "owner": f"owner-{index}",
+                "full_name": f"owner-{index}/plugin-{index}",
+                "name": f"plugin-{index}",
+                "github_stars": index,
+                "pushed_at": f"2026-09-{index + 1:02d}T00:00:00Z",
+            }
+            for index in range(12)
+        ]
+        ballot, key = create_discovery_study({
+            "snapshot_id": "study-source",
+            "fetched_at": "2026-09-13T12:00:00Z",
+            "supplemental_entries": records,
+        }, per_arm=3, seed="fixed-test-seed")
+        self.assertEqual(set(key["arms"]), {"forge", "quality", "popularity", "recency"})
+        self.assertTrue(all(len(values) == 3 for values in key["arms"].values()))
+        self.assertEqual(key["pool_size"], 12)
+        self.assertEqual(key["arms"]["popularity"][0], "github:12")
+        self.assertEqual(key["arms"]["recency"][0], "github:12")
+        self.assertLessEqual(ballot["candidate_count"], 12)
+        for item in ballot["candidates"]:
+            self.assertNotIn("github_stars", item["artifact"])
+            self.assertNotIn("pushed_at", item["artifact"])
+            self.assertNotIn("score", item["research"])
+            self.assertNotIn("visibility", item["research"])
+            self.assertNotIn("arm", item)
+
+        first_identity = ballot["candidates"][0]["artifact"]["artifact_id"]
+        partial = record_judgment(
+            ballot, None, artifact_id=first_identity, rating="exceptional",
+            reviewer="First curator", reviewed_at="2026-09-13T18:00:00Z",
+        )
+        with self.assertRaisesRegex(ResearchError, "study is incomplete"):
+            benchmark_discovery_study(
+                ballot, key, partial, min_reviews_per_artifact=1, bootstrap_samples=100
+            )
+        ledger = None
+        for index, candidate in enumerate(ballot["candidates"]):
+            identity = candidate["artifact"]["artifact_id"]
+            ledger = record_judgment(
+                ballot, ledger, artifact_id=identity,
+                rating="exceptional" if index % 2 == 0 else "weak",
+                reviewer="First curator", reviewed_at=f"2026-09-13T18:{index:02d}:00Z",
+            )
+            ledger = record_judgment(
+                ballot, ledger, artifact_id=identity,
+                rating="promising" if index % 2 == 0 else "irrelevant",
+                reviewer="Second curator", reviewed_at=f"2026-09-13T19:{index:02d}:00Z",
+            )
+        benchmark = benchmark_discovery_study(
+            ballot, key, ledger, min_reviews_per_artifact=2, bootstrap_samples=100
+        )
+        self.assertTrue(benchmark["complete"])
+        self.assertEqual(benchmark["reviewer_count"], 2)
+        self.assertEqual(benchmark["judgment_count"], 2 * ballot["candidate_count"])
+        self.assertEqual(benchmark["abstention_count"], 0)
+        self.assertEqual(benchmark["doubly_judged_count"], ballot["candidate_count"])
+        self.assertEqual(benchmark["bootstrap_samples"], 100)
+        self.assertEqual(len(benchmark["comparisons"]), 3)
+        self.assertIn("precision_ci_95", benchmark["arms"][0]["primary"])
+        self.assertEqual(benchmark["weighted_kappa_reviewer_pairs"], 1)
+        self.assertEqual(
+            [item["ordering"] for item in benchmark["arms"]],
+            ["forge", "quality", "popularity", "recency"],
+        )
+
+        tampered = json.loads(json.dumps(key))
+        tampered["arms"]["forge"][0] = "github:missing"
+        with self.assertRaisesRegex(ResearchError, "invalid ranking arm"):
+            benchmark_discovery_study(
+                ballot, tampered, ledger, min_reviews_per_artifact=2, bootstrap_samples=100
+            )
+        tampered_ballot = json.loads(json.dumps(ballot))
+        tampered_ballot["candidates"][0]["artifact"]["description"] = "Changed after review"
+        with self.assertRaisesRegex(ResearchError, "does not match the ballot"):
+            benchmark_discovery_study(
+                tampered_ballot, key, ledger, min_reviews_per_artifact=2, bootstrap_samples=100
+            )
+
+    def test_queue_benchmark_includes_the_full_candidate_set_above_one_hundred(self):
+        record = plugin_record()
+        records = [
+            {
+                **record,
+                "artifact_id": f"github:{index + 1}",
+                "github_id": index + 1,
+                "owner": f"owner-{index}",
+                "full_name": f"owner-{index}/plugin-{index}",
+                "name": f"plugin-{index}",
+            }
+            for index in range(101)
+        ]
+        queue = discovery_queue({
+            "snapshot_id": "large-benchmark",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": records,
+        })
+        ledger = {
+            "schema": "dsh-forge.discovery-judgments/v3",
+            "policy": POLICY_VERSION,
+            "snapshot_id": queue["snapshot_id"],
+            "judgments": [],
+        }
+        self.assertEqual(
+            [item["cutoff"] for item in benchmark_queue(queue, ledger)["metrics"]],
+            [10, 25, 100, 101],
+        )
+
+    def test_independent_judgment_ledgers_merge_without_losing_reviewers(self):
+        record = plugin_record()
+        queue = discovery_queue({
+            "snapshot_id": "merge-study",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [record],
+        })
+        identity = queue["candidates"][0]["artifact"]["artifact_id"]
+        first = record_judgment(
+            queue, None, artifact_id=identity, rating="promising",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+        )
+        second = record_judgment(
+            queue, None, artifact_id=identity, rating="exceptional",
+            reviewer="Curator 2", reviewed_at="2026-09-13T18:01:00Z",
+        )
+        merged = merge_judgment_ledgers(queue, [first, second])
+        self.assertEqual(len(merged["judgments"]), 2)
+        self.assertEqual(benchmark_queue(queue, merged)["reviewer_count"], 2)
+
+        conflict = record_judgment(
+            queue, None, artifact_id=identity, rating="irrelevant",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+        )
+        with self.assertRaisesRegex(ResearchError, "conflicting judgments"):
+            merge_judgment_ledgers(queue, [first, conflict])
+
+    def test_abstention_is_recorded_but_not_counted_as_a_relevance_judgment(self):
+        queue = discovery_queue({
+            "snapshot_id": "abstention-study",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        })
+        identity = queue["candidates"][0]["artifact"]["artifact_id"]
+        ledger = record_judgment(
+            queue, None, artifact_id=identity, rating="abstain",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+            notes="Outside my area of expertise.",
+        )
+        benchmark = benchmark_queue(queue, ledger)
+        self.assertEqual(benchmark["judgment_count"], 1)
+        self.assertEqual(benchmark["judged_count"], 0)
+        self.assertEqual(benchmark["judged_artifact_count"], 0)
+        self.assertEqual(benchmark["abstention_count"], 1)
+        self.assertEqual(benchmark["ratings"]["abstain"], 1)
+
+        ballot, key = create_discovery_study({
+            "snapshot_id": "abstention-confirmatory",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="abstention-seed")
+        study_identity = ballot["candidates"][0]["artifact"]["artifact_id"]
+        study_ledger = record_judgment(
+            ballot, None, artifact_id=study_identity, rating="abstain",
+            reviewer="Curator 1", reviewed_at="2026-09-13T18:00:00Z",
+        )
+        with self.assertRaisesRegex(ResearchError, "study is incomplete"):
+            benchmark_discovery_study(
+                ballot, key, study_ledger,
+                min_reviews_per_artifact=1, bootstrap_samples=100,
+            )
 
     def test_npm_pin_resolution_checks_identity_sri_and_tarball(self):
         metadata = {

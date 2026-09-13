@@ -1,0 +1,40 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{dshforge}[2026/09/13 DSH Forge report style]
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{lmodern}
+\RequirePackage[letterpaper,textwidth=7in,textheight=9in,centering]{geometry}
+\RequirePackage{microtype}
+\RequirePackage[table]{xcolor}
+\definecolor{ForgeNavy}{HTML}{173347}
+\definecolor{ForgeLink}{HTML}{1F5A7A}
+\definecolor{ForgeLight}{HTML}{F4F6F7}
+\RequirePackage{graphicx,booktabs,tabularx,array}
+\RequirePackage{enumitem}
+\RequirePackage{titlesec}
+\RequirePackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
+\RequirePackage{listings}
+\RequirePackage[font=small,labelfont=bf]{caption}
+\RequirePackage[numbers,sort&compress]{natbib}
+\RequirePackage{url}
+\RequirePackage[colorlinks=true,linkcolor=ForgeLink,citecolor=ForgeLink,urlcolor=ForgeLink,breaklinks=true]{hyperref}
+\hypersetup{pdftitle={DSH Forge: A System Report on Long-Tail Discovery for Agentic Developer Tools},pdfauthor={Tapisar Singh, Shashwat Sourav, and Michael May},pdfsubject={System design, release evidence, limitations, and research agenda through 13 September 2026}}
+\setlength{\columnsep}{0.33in}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{2em}
+\linespread{1.02}
+\titleformat{\section}{\large\sffamily\bfseries}{\thesection}{0.55em}{}
+\titleformat{\subsection}{\normalsize\sffamily\bfseries}{\thesubsection}{0.55em}{}
+\titlespacing*{\section}{0pt}{2.2ex plus .5ex minus .2ex}{.8ex}
+\titlespacing*{\subsection}{0pt}{1.7ex plus .4ex minus .2ex}{.5ex}
+\setlist{leftmargin=1.35em,itemsep=2pt,topsep=3pt}
+\pagestyle{plain}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\lstset{basicstyle=\footnotesize\ttfamily,backgroundcolor=\color{ForgeLight},frame=single,rulecolor=\color{black!15},breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,xleftmargin=3pt,xrightmargin=3pt,aboveskip=6pt,belowskip=6pt}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\sourcepin}{bbeb80d375e528181b14f5a9df5a73c8f6b90cbd}
+\newcommand{\repo}{\href{https://github.com/MichaelTheMay/dsh-forge}{MichaelTheMay/dsh-forge}}
+\raggedbottom
