@@ -1401,6 +1401,25 @@ const REPOSITORY_CATALOG = [
 ].map(mapRepositoryArtifact);
 const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(mapPackageArtifact);
 const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
+// ponytail: anonymous V1 state; replace with account sync only when authentication ships.
+const FAVORITES_KEY = 'dsh-forge:favorites:v1';
+
+function storedFavorites() {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const value = JSON.parse(window.localStorage.getItem(FAVORITES_KEY) || '[]');
+    return Array.isArray(value)
+      ? value.filter(item => item && typeof item.id === 'string' && ['plugin', 'fork'].includes(item.type)).slice(0, 200)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function artifactRoute(artifact) {
+  if (artifact.type === 'package') return artifact.pageRoute.slice(1);
+  return artifact.type + 's/' + encodeURIComponent(artifact.id);
+}
 
 function catalogRoute(hash) {
   if (hash === '#assistant') return { view: 'assistant', type: 'plugin' };
@@ -1408,7 +1427,18 @@ function catalogRoute(hash) {
   if (hash === '#packages') return { view: 'catalog', type: 'package', packageSlug: null };
   if (hash === '#community') return { view: 'catalog', type: 'plugin' };
   const packageMatch = /^#packages\/([a-z0-9][a-z0-9-]{1,63})$/.exec(hash);
-  if (packageMatch) return { view: 'catalog', type: 'package', packageSlug: packageMatch[1] };
+  if (packageMatch) return { view: 'catalog', type: 'package', packageSlug: packageMatch[1], detailOpen: true };
+  const artifactMatch = /^#(plugins|forks)\/(.+)$/.exec(hash);
+  if (artifactMatch) {
+    try {
+      return {
+        view: 'catalog',
+        type: artifactMatch[1] === 'forks' ? 'fork' : 'plugin',
+        artifactId: decodeURIComponent(artifactMatch[2]),
+        detailOpen: true
+      };
+    } catch {}
+  }
   if (hash === '#plugins') return { view: 'catalog', type: 'plugin' };
   return { view: 'launch', type: 'plugin' };
 }
@@ -1470,9 +1500,12 @@ class Component extends DCLogic {
       catalogType: initialRoute.type,
       catalogSort: 'recommended',
       knownLicenseOnly: false,
-      artifactId: initialRoute.packageSlug
+      artifactId: initialRoute.artifactId || (initialRoute.packageSlug
         ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
-        : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id,
+        : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id),
+      detailOpen: !!initialRoute.detailOpen,
+      detailArtifact: null,
+      favoriteArtifacts: storedFavorites(),
       toast: '',
       cells: [],
       sidecarConnected: false,
@@ -1511,11 +1544,16 @@ class Component extends DCLogic {
       this.setState({
         view: route.view,
         catalogType: route.type,
-        artifactId: packageArtifact ? packageArtifact.id : this.state.artifactId
+        artifactId: route.artifactId || (packageArtifact ? packageArtifact.id : this.state.artifactId),
+        detailOpen: !!route.detailOpen,
+        detailArtifact: route.detailOpen ? this.state.detailArtifact : null
       });
+      if (route.artifactId) this.loadCatalogArtifact(route.artifactId);
     };
     window.addEventListener('hashchange', this.hashListener);
-    this.refreshStatus(true);
+    this.refreshStatus(true).then(() => {
+      if (this.state.detailOpen && this.state.artifactId) this.loadCatalogArtifact(this.state.artifactId);
+    });
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1527,7 +1565,7 @@ class Component extends DCLogic {
   }
 
   navigate(view, type = 'package') {
-    this.setState({ view, catalogType: type });
+    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null });
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
         ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
@@ -1536,12 +1574,59 @@ class Component extends DCLogic {
   }
 
   selectCatalogArtifact(artifact) {
-    this.setState({ artifactId: artifact.id, catalogType: artifact.type, catalogScope: 'all' });
+    const detail = (artifact && artifact.name ? artifact : null) ||
+      CATALOG.find(item => item.id === artifact.id) ||
+      this.state.storeArtifacts.find(item => item.id === artifact.id) ||
+      this.state.favoriteArtifacts.find(item => item.id === artifact.id) || null;
+    this.setState({
+      artifactId: artifact.id,
+      catalogType: artifact.type,
+      catalogScope: 'all',
+      detailOpen: true,
+      detailArtifact: detail
+    });
     if (typeof window !== 'undefined') {
-      window.location.hash = artifact.type === 'package'
-        ? artifact.pageRoute.slice(1)
-        : (artifact.type === 'fork' ? 'forks' : 'plugins');
+      window.location.hash = artifactRoute(artifact);
     }
+  }
+
+  async loadCatalogArtifact(artifactId) {
+    const local = CATALOG.find(item => item.id === artifactId) ||
+      this.state.storeArtifacts.find(item => item.id === artifactId) ||
+      this.state.favoriteArtifacts.find(item => item.id === artifactId);
+    if (local) {
+      this.setState({ detailArtifact: local });
+      return;
+    }
+    if (!this.state.sidecarConnected) return;
+    try {
+      const record = await this.api('/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
+      if (this.state.artifactId === artifactId) this.setState({ detailArtifact: mapCatalogRecord(record) });
+    } catch (error) {
+      if (this.state.artifactId === artifactId) this.setState({ storeError: error.message });
+    }
+  }
+
+  toggleFavorite(detail) {
+    const exists = this.state.favoriteArtifacts.some(item => item.id === detail.id);
+    const favorite = {
+      id: detail.id, type: detail.type, slug: detail.slug, owner: detail.owner, name: detail.name,
+      description: detail.description, url: detail.url, head_sha: detail.head_sha,
+      starsLabel: detail.starsLabel, github_stars: detail.github_stars, language: detail.language,
+      licenseLabel: detail.licenseLabel, licenseOk: detail.licenseOk, pushed_at: detail.pushed_at,
+      topics: detail.topics || [], base: detail.base, commitUrl: detail.commitUrl,
+      source_repository: detail.source_repository, package: detail.package || null
+    };
+    const next = exists
+      ? this.state.favoriteArtifacts.filter(item => item.id !== detail.id)
+      : [favorite, ...this.state.favoriteArtifacts].slice(0, 200);
+    this.setState({ favoriteArtifacts: next });
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+      }
+    } catch {}
+    this.flash(exists ? 'Removed from favorites' : 'Saved to favorites');
   }
 
   async copyRepositoryRef(detail) {
@@ -1594,26 +1679,6 @@ class Component extends DCLogic {
       });
       await this.refreshStatus(true);
       this.flash('Package verified, tested, and saved');
-    } catch (error) {
-      await this.refreshStatus(true);
-      this.flash(error.message);
-    } finally {
-      this.setState({ packageInstallBusy: false });
-    }
-  }
-
-  async installCertifiedPackage(recipe) {
-    const versionId = (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
-    if (!versionId) return this.flash('Save a launch-ready Harness version first');
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
-    this.setState({ packageInstallBusy: true });
-    try {
-      await this.api('/api/v1/packages/install', {
-        method: 'POST',
-        body: JSON.stringify({ package_slug: recipe.slug, version_id: versionId, profile: 'web' })
-      });
-      await this.refreshStatus(true);
-      this.flash('Certified package tested and installed');
     } catch (error) {
       await this.refreshStatus(true);
       this.flash(error.message);
@@ -1800,6 +1865,8 @@ class Component extends DCLogic {
   /** Fetch one page from the imported catalog store. */
   async refreshCatalog({ append = false } = {}) {
     if (!this.usingCatalogStore()) return;
+    if (append && this._catalogAppendPending) return;
+    if (append) this._catalogAppendPending = true;
     const s = this.state;
     const key = this.catalogQueryKey(s);
     const sortMap = { recommended: s.query.trim() ? 'relevance' : 'rank', stars: 'stars', recent: 'recent', name: 'name' };
@@ -1831,6 +1898,8 @@ class Component extends DCLogic {
     } catch (error) {
       if (this.catalogQueryKey() !== key) return;
       this.setState({ storeLoading: false, storeError: error.message, storeArtifacts: append ? this.state.storeArtifacts : [] });
+    } finally {
+      if (append) this._catalogAppendPending = false;
     }
   }
 
@@ -1902,6 +1971,21 @@ class Component extends DCLogic {
       this.applyStatus(status);
       this.setState({ versionPath: '', versionFormOpen: false });
       this.flash('Local version saved; review its detection status');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ versionBusy: false });
+    }
+  }
+
+  async pickLocalVersion() {
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    this.setState({ versionBusy: true });
+    try {
+      const status = await this.api('/api/v1/versions/pick', { method: 'POST', body: '{}' });
+      if (status.cancelled) return;
+      this.applyStatus(status);
+      this.flash('Local version added');
     } catch (error) {
       this.flash(error.message);
     } finally {
@@ -2174,22 +2258,13 @@ class Component extends DCLogic {
         forget: () => saved && this.forgetLocalVersion(saved)
       };
     };
-    const savedCards = s.savedVersions.map(saved => localVersionCard(saved.primary_tree, saved));
+    const savedCards = s.savedVersions
+      .filter(saved => saved.state === 'ready' && saved.primary_tree && saved.primary_tree.launchability === 'ready')
+      .map(saved => localVersionCard(saved.primary_tree, saved));
     const sessionCards = s.trees
-      .filter(tree => tree.trust !== 'foreign' && !savedTreeIds.has(tree.id))
+      .filter(tree => tree.trust !== 'foreign' && tree.launchability === 'ready' && !savedTreeIds.has(tree.id))
       .map(tree => localVersionCard(tree));
     const versions = [...savedCards, ...sessionCards];
-    const installVersion = s.savedVersions.find(item => item.state === 'ready');
-    const certifiedPackages = s.trustedPackageRecipes.map(recipe => ({
-      ...recipe,
-      displayName: recipe.name || recipe.slug,
-      versionLabel: recipe.version ? 'v' + recipe.version : 'signed manifest',
-      componentLabel: recipe.component_count + (recipe.component_count === 1 ? ' component' : ' components'),
-      reviewLabel: recipe.reviewer ? 'Reviewed by ' + recipe.reviewer : 'Curator reviewed',
-      disabled: !s.sidecarConnected || !sandbox.ready || !installVersion || s.packageInstallBusy,
-      buttonLabel: s.packageInstallBusy ? 'Testing…' : 'Verify, test & install',
-      install: () => this.installCertifiedPackage(recipe)
-    }));
     const selectedProfileTree = this.tree(s.treeId);
     const profileTreeReady = !!selectedProfileTree.id && selectedProfileTree.trust !== 'foreign' && selectedProfileTree.launchability === 'ready';
     const localProfiles = s.profiles.map(profile => {
@@ -2338,7 +2413,9 @@ class Component extends DCLogic {
     });
     const filtered = storeActive ? s.storeArtifacts : embeddedFiltered;
     // Never keep an unrelated detail open after search/filter removes it.
-    const detail = filtered.find(a => a.id === s.artifactId) || filtered[0] || {};
+    const selectedDetail = (s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
+      filtered.find(a => a.id === s.artifactId);
+    const detail = selectedDetail || (s.detailOpen ? {} : (filtered[0] || {}));
     const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
       id: item.id,
       label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
@@ -2346,17 +2423,6 @@ class Component extends DCLogic {
     }));
     const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
     const selectedCatalogProfile = s.profiles.find(profile => profile.id === s.catalogProfileId) || s.profiles[0] || null;
-    const pluginInstallable = detail.type === 'plugin' && detail.package && detail.package.registry === 'npm';
-    const pluginInstallCommand = pluginInstallable
-      ? 'dsh plugin --profile ' + (selectedCatalogProfile ? selectedCatalogProfile.name : '<profile>') +
-        ' add ' + detail.package.name + '@' + detail.package.version
-      : '';
-    const forkDownloadUrl = detail.type === 'fork' && detail.head_sha
-      ? 'https://codeload.github.com/' + detail.slug + '/tar.gz/' + detail.head_sha
-      : '';
-    const forkDownloadCommand = forkDownloadUrl
-      ? 'curl --fail --location --output ' + detail.name + '-' + detail.head_sha.slice(0, 12) + '.tar.gz ' + forkDownloadUrl
-      : '';
     const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
       item => item.slug === detail.slug && item.configured
     );
@@ -2364,11 +2430,11 @@ class Component extends DCLogic {
       ? [...s.packageInstallations].reverse().find(item => item.package && item.package.id === detail.slug)
       : null;
     const results = filtered.map(a => ({
-      ...a, selected: a.id === detail.id,
-      featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Featured' : ''),
+      ...a, selected: s.detailOpen && a.id === detail.id,
+      featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
-      border: a.id === detail.id ? SELB : BORDER,
-      bg: a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
+      border: s.detailOpen && a.id === detail.id ? SELB : BORDER,
+      bg: s.detailOpen && a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
       select: () => this.selectCatalogArtifact(a)
     }));
     const detailRows = !detail.id ? [] : (detail.catalogPackage ? [
@@ -2520,14 +2586,18 @@ class Component extends DCLogic {
       hasVersions: versions.length > 0,
       noVersions: versions.length === 0,
       versionCountLabel: versions.length + (versions.length === 1 ? ' version found' : ' versions found'),
-      certifiedPackages,
-      hasCertifiedPackages: certifiedPackages.length > 0,
-      noCertifiedPackages: certifiedPackages.length === 0,
+      favorites: s.favoriteArtifacts.map(item => ({
+        ...item,
+        kindLabel: item.type === 'fork' ? 'Fork' : 'Plugin',
+        view: () => this.selectCatalogArtifact(item)
+      })),
+      hasFavorites: s.favoriteArtifacts.length > 0,
       versionsDirectory: (s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions',
       versionFormOpen: s.versionFormOpen,
       versionPath: s.versionPath,
       versionBusy: s.versionBusy,
       versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
+      pickVersion: () => this.pickLocalVersion(),
       addVersionLabel: s.versionFormOpen ? 'Close' : 'Add',
       toggleVersionForm: () => this.setState({
         versionFormOpen: !s.versionFormOpen,
@@ -2655,7 +2725,7 @@ class Component extends DCLogic {
       closeLogs: () => this.setState({ logCell: null, logLines: [] }),
 
       query: s.query,
-      setQuery: e => { this.setState({ query: e.target.value }); this.scheduleCatalogRefresh(); },
+      setQuery: e => { this.setState({ query: e.target.value, detailOpen: false, detailArtifact: null }); this.scheduleCatalogRefresh(); },
       catalogSort: s.catalogSort,
       setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,
@@ -2691,6 +2761,13 @@ class Component extends DCLogic {
       canLoadMore: storeActive && !!s.storeCursor && !s.storeLoading,
       loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more results',
       loadMore: () => this.refreshCatalog({ append: true }),
+      loadMoreOnScroll: event => {
+        const node = event.currentTarget;
+        if (storeActive && s.storeCursor && !s.storeLoading && node.scrollHeight - node.scrollTop - node.clientHeight < 480) {
+          this.refreshCatalog({ append: true });
+        }
+      },
+      catalogFeedStatus: s.storeLoading ? 'Loading more results…' : (s.storeCursor ? 'Scroll for more' : 'End of results'),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
           ? 'Explainable hidden-gem priority · metadata only, not a security verdict'
@@ -2699,6 +2776,9 @@ class Component extends DCLogic {
       results,
       noResults: results.length === 0,
       hasDetail: !!detail.id,
+      noDetail: !detail.id,
+      showCatalogFeed: !s.detailOpen,
+      showArtifactPage: s.detailOpen,
       detail,
       detailPopularityLabel: detail.catalogPackage ? detail.components.length + ' pinned component(s)' : detail.starsLabel + ' GitHub stars',
       detailRows,
@@ -2715,6 +2795,11 @@ class Component extends DCLogic {
       isRepositoryDetail: !!detail.id && !detail.catalogPackage,
       isPluginDetail: detail.type === 'plugin',
       isForkDetail: detail.type === 'fork',
+      favoriteLabel: s.favoriteArtifacts.some(item => item.id === detail.id) ? 'Favorited' : 'Favorite',
+      toggleFavorite: () => detail.id ? this.toggleFavorite(detail) : undefined,
+      backToCatalog: () => this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin'),
+      installAndRunDisabled: true,
+      installAndRunLabel: 'Sandbox review required',
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
         ...component,
         name: component.package.name,
@@ -2751,18 +2836,12 @@ class Component extends DCLogic {
       setCatalogProfile: event => this.setState({ catalogProfileId: event.target.value }),
       hasCatalogProfiles: s.profiles.length > 0,
       noCatalogProfiles: s.profiles.length === 0,
-      pluginInstallable,
-      pluginCommandUnavailable: detail.type === 'plugin' && !pluginInstallable,
-      pluginInstallCommand,
-      copyPluginInstall: () => pluginInstallCommand
-        ? this.copyText(pluginInstallCommand, 'Copied exact plugin install command')
-        : undefined,
-      forkDownloadUrl,
-      forkDownloadCommand,
-      copyForkDownload: () => forkDownloadCommand
-        ? this.copyText(forkDownloadCommand, 'Copied pinned download command')
-        : undefined,
-      hasForkDownload: !!forkDownloadUrl,
+      pluginInstallable: false,
+      pluginCommandUnavailable: detail.type === 'plugin',
+      pluginInstallCommand: '',
+      forkDownloadUrl: '',
+      forkDownloadCommand: '',
+      hasForkDownload: false,
       hasDiscussionLink: !!detail.discussion_url,
       detailDiscussionUrl: detail.discussion_url || '',
       emptyTitle: emptyCopy.title,

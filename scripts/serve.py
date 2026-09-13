@@ -8,13 +8,17 @@ import json
 import os
 import re
 import secrets
+import shutil
+import subprocess
 import sys
+import threading
+import webbrowser
 from functools import partial
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_ROOT = ROOT / "web"
@@ -25,6 +29,64 @@ from dsh_forge.feed import DEFAULT_FEED_URL, FeedError, fetch_catalog_feed  # no
 from dsh_forge.launcher import Launcher, LauncherError  # noqa: E402
 from dsh_forge.marketplace import DEFAULT_CATALOG_URL, MarketplaceError, fetch_catalog  # noqa: E402
 from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError  # noqa: E402
+
+
+def choose_directory() -> str | None:
+    """Open the operating system folder picker without adding a GUI dependency."""
+    root = None
+    try:
+        import tkinter
+        from tkinter import filedialog
+
+        root = tkinter.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(title="Choose a DeepSeek Harness folder", mustexist=True)
+    except Exception as error:
+        raise LauncherError(f"Directory picker is unavailable: {error}") from error
+    finally:
+        if root is not None:
+            root.destroy()
+    return selected or None
+
+
+def desktop_browser_command(url: str, profile: Path) -> list[str] | None:
+    """Return a Chromium app-window command when one is installed."""
+    configured = os.environ.get("DSH_FORGE_DESKTOP_BROWSER")
+    candidates = [configured] if configured else []
+    candidates.extend(["msedge", "google-chrome", "chromium", "chromium-browser"])
+    if os.name == "nt":
+        for root in filter(None, [os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)"), os.environ.get("LOCALAPPDATA")]):
+            candidates.extend([
+                str(Path(root) / "Microsoft/Edge/Application/msedge.exe"),
+                str(Path(root) / "Google/Chrome/Application/chrome.exe"),
+            ])
+    elif sys.platform == "darwin":
+        candidates.extend([
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ])
+    for candidate in filter(None, candidates):
+        executable = str(Path(candidate).expanduser()) if Path(candidate).is_file() else shutil.which(candidate)
+        if executable:
+            return [
+                executable,
+                f"--app={url}",
+                f"--user-data-dir={profile}",
+                "--no-first-run",
+                "--disable-sync",
+            ]
+    return None
+
+
+def open_desktop_window(url: str, profile: Path) -> subprocess.Popen | None:
+    command = desktop_browser_command(url, profile)
+    if command:
+        profile.mkdir(parents=True, exist_ok=True)
+        return subprocess.Popen(command)
+    webbrowser.open(url, new=1)
+    return None
 
 
 class LauncherHTTPServer(ThreadingHTTPServer):
@@ -156,6 +218,16 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        match = re.fullmatch(r"/api/v1/catalog/artifacts/([^/]+)", path)
+        if match:
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json(self.server.launcher.catalog_artifact(unquote(match.group(1))))
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.NOT_FOUND)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         if path == "/api/v1/cells":
             if self._api_guard() and self._session_ok():
                 self._json({"cells": self.server.launcher.status()["cells"]})
@@ -215,6 +287,13 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                 else:
                     raise LauncherError("roots must be a JSON array")
                 self._json(payload)
+                return
+            if path == "/api/v1/versions/pick":
+                selected = choose_directory()
+                self._json(
+                    self.server.launcher.add_scan_roots([selected])
+                    if selected else {"cancelled": True}
+                )
                 return
             if path == "/api/v1/versions/remove":
                 version_id = body.get("id")
@@ -321,6 +400,7 @@ StaticUIHandler = LauncherUIHandler
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=3090)
+    parser.add_argument("--desktop", action="store_true", help="Open Forge in a dedicated desktop app window")
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
     parser.add_argument("--dsh-home", action="append", default=[], help="Scan this DSH home for installed profiles; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
@@ -387,6 +467,17 @@ def main():
     sandbox_status = status["sandbox"]
     print(f"Cell runner: {sandbox_status['mode']} · {'ready' if sandbox_status['ready'] else sandbox_status['reason']}", flush=True)
     print("The sidecar is loopback-only. Press Ctrl+C to stop it and its owned cells.", flush=True)
+    if args.desktop:
+        def desktop_session():
+            process = open_desktop_window(
+                f"http://127.0.0.1:{args.port}/#launch",
+                state_root / "desktop-browser",
+            )
+            if process:
+                process.wait()
+                server.shutdown()
+
+        threading.Thread(target=desktop_session, daemon=True).start()
     with server:
         try:
             server.serve_forever()

@@ -9,6 +9,7 @@ import threading
 import unittest
 from unittest import mock
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -543,6 +544,19 @@ class LauncherServer(LauncherFixture):
             urllib.request.urlopen(self.url + "/api/v1/catalog/search", timeout=3)
         self.assertEqual(context.exception.code, 403)
 
+    def test_catalog_artifact_endpoint_supports_dedicated_profile_pages(self):
+        snapshot = json.loads((ROOT / "data/public-repos.seed.json").read_text(encoding="utf-8"))
+        self.launcher.import_catalog(snapshot)
+        cookie, _ = self.establish_session()
+        artifact = snapshot["entries"][0]
+        path = "/api/v1/catalog/artifacts/" + urllib.parse.quote(artifact["artifact_id"], safe="")
+        with urllib.request.urlopen(
+            urllib.request.Request(self.url + path, headers={"Cookie": cookie}), timeout=3
+        ) as response:
+            payload = json.load(response)
+        self.assertEqual(payload["artifact_id"], artifact["artifact_id"])
+        self.assertEqual(payload["head_sha"], artifact["head_sha"])
+
     def test_mutations_require_the_launcher_session(self):
         body = {"tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"}
         with self.assertRaises(urllib.error.HTTPError) as context:
@@ -572,6 +586,24 @@ class LauncherServer(LauncherFixture):
             removed = json.load(response)
         self.assertEqual(removed["saved_versions"], [])
         self.assertTrue(self.tree_root.is_dir())
+
+    def test_native_directory_picker_adds_only_its_selected_path(self):
+        cookie, _ = self.establish_session()
+        with mock.patch.object(serve, "choose_directory", return_value=str(self.tree_root)):
+            with self.request("/api/v1/versions/pick", {}, cookie=cookie) as response:
+                payload = json.load(response)
+        self.assertEqual(len(payload["saved_versions"]), 1)
+        self.assertTrue(payload["saved_versions"][0]["path"].replace("\\", "/").endswith("/deepseek-harness"))
+
+    def test_desktop_mode_builds_an_isolated_app_window_command(self):
+        browser = self.root / "browser"
+        browser.write_text("", encoding="utf-8")
+        profile = self.root / "profile"
+        with mock.patch.dict(os.environ, {"DSH_FORGE_DESKTOP_BROWSER": str(browser)}):
+            command = serve.desktop_browser_command("http://127.0.0.1:3090/#launch", profile)
+        self.assertEqual(command[0], str(browser))
+        self.assertIn("--app=http://127.0.0.1:3090/#launch", command)
+        self.assertIn(f"--user-data-dir={profile}", command)
 
     def test_saved_version_settings_endpoint_updates_safe_preferences(self):
         cookie, _ = self.establish_session()
