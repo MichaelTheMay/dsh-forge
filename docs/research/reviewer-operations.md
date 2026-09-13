@@ -52,9 +52,9 @@ Archive these items before distributing a packet:
   secondary-test correction; and
 - planned start and close times.
 
-Hash every reviewer packet after generation. Record which packet number was sent
-to each study code. Do not send the answer key, arm labels, stars, dates, or Forge
-scores with a packet.
+The packet command reports each file's SHA-256 digest. Record that digest and
+which packet number was sent to each study code. Do not send the answer key, arm
+labels, stars, dates, or Forge scores with a packet.
 
 ## Review instructions
 

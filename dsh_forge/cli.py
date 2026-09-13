@@ -851,6 +851,7 @@ def run(
                 output.write_text(rendered, encoding="utf-8", newline="\n")
                 data = {
                     "output": str(output),
+                    "sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
                     "format": "self-contained-html",
                     "network_requests": False,
                     "answer_key_included": False,

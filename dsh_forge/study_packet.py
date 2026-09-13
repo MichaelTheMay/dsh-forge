@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
-from itertools import combinations
 from collections import Counter
 import hashlib
+from itertools import combinations
+import json
 from typing import Any, Mapping
 
 from .research import (
@@ -69,8 +69,8 @@ def build_review_packet(ballot: Mapping[str, Any]) -> str:
         payload = payload.replace(character, chr(92) + escape)
     return (
         _PAGE
-        .replace("__BALLOT_JSON__", payload)
         .replace("__JUDGMENT_SCHEMA__", JUDGMENT_SCHEMA)
+        .replace("__BALLOT_JSON__", payload)
     )
 
 
@@ -251,7 +251,10 @@ textarea { width: 100%; min-height: 90px; margin-top: 7px; padding: 11px; resize
 "use strict";
 const ballot = JSON.parse(document.getElementById("ballot-data").textContent);
 const relevance = { irrelevant: 0, weak: 1, promising: 2, exceptional: 3, abstain: null };
-const storageKey = "dsh-forge-review:" + ballot.snapshot_id;
+const assignmentIndex = ballot.assignment && Number.isInteger(ballot.assignment.reviewer_index)
+  ? ":reviewer-" + ballot.assignment.reviewer_index
+  : ":full-ballot";
+const storageKey = "dsh-forge-review:" + ballot.snapshot_id + assignmentIndex;
 let index = 0;
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (_) { saved = {}; }
@@ -338,7 +341,8 @@ byId("export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(ledger, null, 2) + "\n"], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = ballot.snapshot_id + "-" + reviewer.replaceAll(" ", "-").toLowerCase() + ".json";
+  const safeReviewer = reviewer.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "reviewer";
+  link.download = ballot.snapshot_id + "-" + safeReviewer.toLowerCase() + ".json";
   link.click();
   URL.revokeObjectURL(link.href);
   message.textContent = "Exported " + judgments.length + " ratings. Send the JSON file to the study coordinator.";

@@ -10,7 +10,10 @@ from tests.test_research import plugin_record
 class StudyPacketTests(unittest.TestCase):
     def ballot(self):
         record = plugin_record()
-        record["description"] = "Useful memory workflow </script><script>throw new Error('unsafe')</script>"
+        record["description"] = (
+            "Useful memory workflow </script><script>throw new Error('unsafe')</script> "
+            "__JUDGMENT_SCHEMA__"
+        )
         ballot, _ = create_discovery_study({
             "snapshot_id": "packet-source",
             "fetched_at": "2026-09-13T18:00:00Z",
@@ -29,6 +32,8 @@ class StudyPacketTests(unittest.TestCase):
         self.assertNotIn('"arms":', rendered)
         self.assertIn("Export rated JSON", rendered)
         self.assertIn("Insufficient evidence or relevant expertise", rendered)
+        self.assertIn(":reviewer-", rendered)
+        self.assertEqual(rendered.count("__JUDGMENT_SCHEMA__"), 1)
 
     def test_packet_rejects_an_unblinded_queue(self):
         ballot = self.ballot()

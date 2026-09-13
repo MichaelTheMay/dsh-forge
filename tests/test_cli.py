@@ -266,6 +266,7 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertFalse(result["data"]["network_requests"])
         self.assertFalse(result["data"]["answer_key_included"])
+        self.assertRegex(result["data"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertIn("Export rated JSON", output.read_text(encoding="utf-8"))
 
     def test_research_study_merge_combines_reviewer_exports(self):

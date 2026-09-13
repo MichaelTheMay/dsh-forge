@@ -327,6 +327,8 @@ class ResearchTests(unittest.TestCase):
         )
         self.assertTrue(benchmark["complete"])
         self.assertEqual(benchmark["reviewer_count"], 2)
+        self.assertEqual(benchmark["judgment_count"], 2 * ballot["candidate_count"])
+        self.assertEqual(benchmark["abstention_count"], 0)
         self.assertEqual(benchmark["doubly_judged_count"], ballot["candidate_count"])
         self.assertEqual(benchmark["bootstrap_samples"], 100)
         self.assertEqual(len(benchmark["comparisons"]), 3)
