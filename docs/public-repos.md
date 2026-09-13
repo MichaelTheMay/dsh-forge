@@ -15,9 +15,11 @@ claiming that the current recipes are genuinely useful bundles.
 catalog is presented as the Community page. The application logic is a
 precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
 that class without evaluating the inline design export as JavaScript.
-The page supports search, sort, type routing, details, source/package links, and
-copying a captured commit URL. Stable primary routes are `#plugins` and
-`#forks`; the old `#public-repos` link continues to resolve to Forks. Existing
+The page supports search, sort, infinite paging, local favorites, dedicated
+artifact profiles, source links, and captured provenance. Stable primary routes
+are `#plugins` and `#forks`. Artifact profiles use
+`#plugins/<encoded-artifact-id>` and `#forks/<encoded-artifact-id>`. The old
+`#public-repos` link continues to resolve to Forks. Existing
 `#packages/<slug>` routes remain compatible but are not linked from the primary
 browser.
 
@@ -98,12 +100,12 @@ Metadata is rendered as text. The embedding script rejects noncanonical source
 URLs, checks identity and commit shape, and escapes script delimiters. It will
 not treat a production signature as verified without a real verifier.
 
-## Deferred actions
+## Install boundary
 
-Browser-based composition and public uploads remain disabled. The CLI research
-path can create and certify a local proposal, and the front page can run the
-complete signed acquisition and sandbox-install transaction for that certified
-recipe. Acquisition cannot start from an unsigned browser entry. If a
+Raw plugin and fork profiles do not expose host install commands or unsigned
+archive downloads. Their **Install and run** control remains disabled until an
+exact artifact and reviewed recipe can pass the existing signed acquisition and
+Apptainer transaction. Acquisition cannot start from an unsigned browser entry. If a
 community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
@@ -124,8 +126,8 @@ with no fake live cells.
 
 Tests cover catalog behavior, metadata safety, session-protected API access,
 scanner false positives, protected ports, process ownership, logs, and stop.
-They also enforce the two primary browser routes, backward-compatible package
-routes, exact plugin package pins, deterministic package feed, disabled unsigned acquisition,
+They also enforce the two primary browser routes, dedicated artifact routes,
+local favorites, backward-compatible package routes, deterministic package feed, disabled unsigned acquisition,
 and separation between manifest review and execution.
 Browser layout testing and production runtime adapters remain release tasks.
 This is not a complete production launcher. The bounded Apptainer probe is an

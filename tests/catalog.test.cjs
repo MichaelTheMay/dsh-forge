@@ -15,7 +15,16 @@ class Logic {
   constructor(props) { this.props = props; }
   setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
 }
-const windowStub = { location: { hash: '', href: 'http://127.0.0.1:3090/' }, __dcPrecompiledLogicFactories: {} };
+const stored = new Map();
+const windowStub = {
+  location: { hash: '', href: 'http://127.0.0.1:3090/' },
+  localStorage: {
+    getItem: key => stored.get(key) || null,
+    setItem: (key, value) => stored.set(key, value),
+    removeItem: key => stored.delete(key)
+  },
+  __dcPrecompiledLogicFactories: {}
+};
 const clipboard = [];
 const navigatorStub = { clipboard: { writeText: async value => { clipboard.push(value); } } };
 new Function('window', 'navigator', script)(windowStub, navigatorStub);
@@ -72,8 +81,11 @@ test('launcher remains default and Community opens individual plugins and forks'
   assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
   c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'plugins');
-  c.renderVals().results[0].select();
-  assert.equal(windowStub.location.hash, 'plugins');
+  const plugin = c.renderVals().results[0];
+  plugin.select();
+  assert.equal(windowStub.location.hash, 'plugins/' + encodeURIComponent(plugin.id));
+  assert(c.renderVals().showArtifactPage);
+  c.renderVals().backToCatalog();
   c.renderVals().repoTypes.find(f => f.id === 'fork').select();
   assert.equal(windowStub.location.hash, 'forks');
   assert.deepEqual(c.renderVals().repoTypes.map(f => f.id), ['plugin', 'fork']);
@@ -107,13 +119,12 @@ test('portable preview shows no versions or cells that are not locally detected'
   assert(!/quota unenforced/.test(html));
   assert.match(script, /sandbox test .*network none .*no launcher secrets/);
 });
-test('launcher auto-detects its versions directory and keeps manual add compact', async () => {
-  assert.match(html, />\s*\{\{ addVersionLabel \}\}\s*</i);
-  assert.match(html, /Versions in.*versionsDirectory.*appear automatically/s);
-  assert.match(html, />Add version</);
+test('launcher auto-detects local versions and opens a native directory picker', async () => {
+  assert.match(html, />Add folder</);
+  assert.match(html, /onClick="\{\{ pickVersion \}\}"/);
+  assert(!/placeholder="\/path\/to\/deepseek-harness"/.test(html));
   assert(!/Rescan saved versions/.test(html));
   assert(!/>\s*Scan roots\s*</i.test(html));
-  assert(!/>\s*Add folder(?:…|\.\.\.)?\s*</i.test(html));
   assert(!/window\.prompt\s*\(/.test(script));
   const c = instance(); let request;
   c.api = async (url, options) => {
@@ -124,10 +135,10 @@ test('launcher auto-detects its versions directory and keeps manual add compact'
       }], suggested_port: 3100, coverage_gaps: ['~/dsh · no strong DSH signature'], credentials: []
     };
   };
-  c.setState({ sidecarConnected: true, versionPath: '/tmp/dsh' });
-  await c.saveLocalVersion();
+  c.setState({ sidecarConnected: true });
+  await c.pickLocalVersion();
   assert.deepEqual(request, {
-    url: '/api/v1/scan', method: 'POST', body: { roots: ['/tmp/dsh'] }
+    url: '/api/v1/versions/pick', method: 'POST', body: {}
   });
   assert.equal(c.state.savedVersions.length, 1);
   assert.equal(c.state.versionFormOpen, false);
@@ -356,7 +367,7 @@ test('installed-profile rail one-clicks web and headless and copies the rest', a
   assert.equal(c.renderVals().previewConfirmLabel, 'Run local profile');
 });
 
-test('plugin detail hands over an exact-version command targeting a detected profile', async () => {
+test('plugin detail never exposes a host install command', () => {
   const c = instance();
   c.applyStatus({
     trees: [], cells: [], saved_versions: [], package_installations: [],
@@ -369,22 +380,15 @@ test('plugin detail hands over an exact-version command targeting a detected pro
   });
   const plugin = snapshot.supplemental_entries.find(entry => entry.package.registry === 'npm');
   c.selectCatalogArtifact({ id: plugin.artifact_id, type: 'plugin' });
-  let values = c.renderVals();
+  const values = c.renderVals();
   assert.equal(values.isPluginDetail, true);
-  // The default target is the detected web profile, and the version is pinned exactly.
-  assert.equal(values.pluginInstallCommand,
-    'dsh plugin --profile web add ' + plugin.package.name + '@' + plugin.package.version);
-  assert.match(values.pluginInstallCommand, /@\d+\.\d+\.\d+/);
-  values.setCatalogProfile({ target: { value: 'profile_' + 'b'.repeat(16) } });
-  values = c.renderVals();
-  assert.match(values.pluginInstallCommand, /--profile coding /);
-  // Copying is the only action: the browser never runs the plugin manager itself.
-  await values.copyPluginInstall();
-  assert.equal(clipboard.at(-1), values.pluginInstallCommand);
-  assert(!/\/api\/v1\/plugins\/install/.test(script));
+  assert.equal(values.pluginInstallCommand, '');
+  assert.equal(values.installAndRunDisabled, true);
+  assert.equal(values.installAndRunLabel, 'Sandbox review required');
+  assert(!/Copy exact-version install command/.test(html));
 });
 
-test('non-npm plugins get no invented command and forks download a pinned archive', () => {
+test('raw plugins and forks cannot bypass sandbox acquisition', () => {
   const c = instance();
   const mcpb = snapshot.supplemental_entries.find(entry => entry.package.registry !== 'npm');
   c.selectCatalogArtifact({ id: mcpb.artifact_id, type: 'plugin' });
@@ -397,10 +401,9 @@ test('non-npm plugins get no invented command and forks download a pinned archiv
   c.selectCatalogArtifact({ id: fork.artifact_id, type: 'fork' });
   values = c.renderVals();
   assert.equal(values.isForkDetail, true);
-  assert.equal(values.forkDownloadUrl,
-    'https://codeload.github.com/' + fork.full_name + '/tar.gz/' + fork.head_sha);
-  assert.match(values.forkDownloadCommand, /^curl --fail --location --output /);
-  assert(values.forkDownloadCommand.includes(fork.head_sha));
+  assert.equal(values.forkDownloadUrl, '');
+  assert.equal(values.forkDownloadCommand, '');
+  assert(!/Download \.tar\.gz|Copy command/.test(html));
 });
 
 test('community browser does not publish provisional curated packages or featured strips', () => {
@@ -409,6 +412,54 @@ test('community browser does not publish provisional curated packages or feature
   assert.deepEqual(values.repoTypes.map(item => item.id), ['plugin', 'fork']);
   assert(!/Forge picks/.test(html));
   assert(!/Administrator curated hidden gems/.test(html));
+});
+
+test('plugin and fork cards open stable dedicated pages and favorites persist locally', () => {
+  stored.clear();
+  const c = instance();
+  c.renderVals().goCatalog();
+  const plugin = c.renderVals().results[0];
+  plugin.select();
+  let values = c.renderVals();
+  assert(values.showArtifactPage);
+  assert.equal(values.detail.id, plugin.id);
+  values.toggleFavorite();
+  assert.equal(c.renderVals().favoriteLabel, 'Favorited');
+  assert.equal(c.renderVals().favorites.length, 1);
+
+  const reopened = instance({}, '#plugins/' + encodeURIComponent(plugin.id));
+  values = reopened.renderVals();
+  assert(values.showArtifactPage);
+  assert.equal(values.detail.id, plugin.id);
+  assert.equal(values.favorites.length, 1);
+  stored.clear();
+});
+
+test('home hides saved paths that are missing or not launch ready', () => {
+  const c = instance();
+  const ready = { id: 'ready', trust: 'personal', launchability: 'ready', version: '1.0.0', name: 'DSH' };
+  c.applyStatus({
+    trees: [ready], cells: [], profiles: [], sandbox: { ready: true }, credentials: [], coverage_gaps: [],
+    saved_versions: [
+      { id: 'version_ready000000', state: 'ready', tree_ids: ['ready'], primary_tree: ready },
+      { id: 'version_missing0000', state: 'missing', tree_ids: [], primary_tree: null },
+      { id: 'version_setup000000', state: 'no-harness-found', tree_ids: [], primary_tree: null }
+    ]
+  });
+  assert.deepEqual(c.renderVals().versions.map(item => item.version), ['1.0.0']);
+  assert(!/Certified packages|Detected community trees/.test(html));
+});
+
+test('community feed loads more as its scroll container nears the end', () => {
+  assert.match(html, /onScroll="\{\{ loadMoreOnScroll \}\}"/);
+  assert(!/repo-load-more" onClick/.test(html));
+  const c = instance();
+  let calls = 0;
+  c.refreshCatalog = async (options = {}) => { calls += options.append ? 1 : 0; };
+  connectedStore(c);
+  c.setState({ storeCursor: '1.50', storeLoading: false });
+  c.renderVals().loadMoreOnScroll({ currentTarget: { scrollHeight: 1000, scrollTop: 600, clientHeight: 300 } });
+  assert.equal(calls, 1);
 });
 
 function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
@@ -499,8 +550,7 @@ test('analyzed forks disclose immutable divergence evidence without claiming exe
   assert.match(values.detailRows.find(row => row.k === 'Changed files').v, /provider limit reached/);
   assert.match(values.detailRows.find(row => row.k === 'Trust').v, /not executed or security-reviewed/);
   assert.match(values.detailEvidenceText, /300-file response limit/);
-  assert.equal(values.forkDownloadUrl,
-    'https://codeload.github.com/' + fork.full_name + '/tar.gz/' + fork.head_sha);
+  assert.equal(values.forkDownloadUrl, '');
 });
 
 test('fork coverage is disclosed beside imported results', () => {
@@ -705,36 +755,9 @@ test('package page selects a saved version and posts only stable local identitie
   });
 });
 
-test('front page installs only curator-certified recipes through the sandbox transaction', async () => {
-  const c = instance();
-  const saved = {
-    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
-    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
-  };
-  c.applyStatus({
-    trees: [], cells: [], saved_versions: [saved], package_installations: [],
-    trusted_package_recipes: [{
-      slug: 'memory-lab', name: 'Memory Lab', version: '1.0.0', component_count: 2,
-      configured: true, certified: true, reviewer: 'Release curator'
-    }],
-    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
-  });
-  let request;
-  c.api = async (url, options) => {
-    request = { url, body: JSON.parse(options.body) };
-    return { state: 'ready' };
-  };
-  c.refreshStatus = async () => {};
-
-  const values = c.renderVals();
-  assert.equal(values.certifiedPackages.length, 1);
-  assert.equal(values.certifiedPackages[0].disabled, false);
-  assert.equal(values.certifiedPackages[0].reviewLabel, 'Reviewed by Release curator');
-  await values.certifiedPackages[0].install();
-  assert.deepEqual(request, {
-    url: '/api/v1/packages/install',
-    body: { package_slug: 'memory-lab', version_id: saved.id, profile: 'web' }
-  });
+test('front page omits package promotion in V1', () => {
+  const home = html.slice(html.indexOf('<sc-if value="{{ showLaunch }}"'), html.indexOf('<sc-if value="{{ showCatalog }}"'));
+  assert(!/Certified packages|Verify, test & install/.test(home));
 });
 
 test('dedicated package route selects the requested metadata page and remains non-executable', async () => {

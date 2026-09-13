@@ -22,8 +22,8 @@ Community contains a small offline snapshot of real plugins and forks. A
 connected launcher can sync the continuously refreshed Forge feed, currently
 covering thousands of plugins and tens of thousands of forks, into the local search store.
 Forge adds an explainable, bounded hidden-gem research queue over that full
-inventory. Only curator-reviewed, signed recipes appear as packages on the
-front page; provisional generated packages remain hidden.
+inventory. The V1 browser stays focused on plugins and forks. Package curation
+remains a separate signed CLI workflow.
 
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
@@ -50,15 +50,17 @@ controls remain disabled until the loopback sidecar below is running.
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.
 
-From an existing checkout:
+Open the desktop window from an existing checkout:
 
 ```bash
 cd ~/dsh-forge
-python3 scripts/serve.py
+python3 scripts/serve.py --desktop --sync-catalog
 ```
 
-The launcher automatically detects `dsh` on `PATH`. Use **+ Add version** in
-the Versions rail to save a checkout directory across launcher restarts, or
+`--desktop` opens a dedicated Edge, Chrome, or Chromium app window with an
+isolated browser profile. If none is installed, Forge opens the default browser.
+The launcher automatically detects `dsh` on `PATH`. Use **Add folder** to open
+the operating system directory picker and save a checkout across restarts, or
 register one or more source roots at startup when needed:
 
 ```bash
@@ -248,18 +250,22 @@ implemented mechanics from the human experiments still required for a credible
 conference claim.
 
 When a store is imported the Community browser searches it instead of the
-embedded snapshot, pages with a **Load more results** button, and names the
+embedded snapshot, loads the next page while the user scrolls, and names the
 corpus in use on the result line. Without a sidecar, or with no store imported,
 it reads the embedded snapshot exactly as before, so the portable preview is
 unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 
 ## Community browsers
 
-- Raw plugins with a verified npm identity hand over an exact-version
-  `dsh plugin add` command targeting a detected local profile; other entries
-  remain browse-only. Forks offer a source archive pinned to the captured commit.
-  Forge copies or downloads; it never extracts or executes community code.
-- Browse Plugins and Forks through stable, shareable routes. The package
+- Browse Plugins and Forks in a dynamically loaded card feed. Every artifact
+  opens a stable, shareable profile route with authorship, provenance, activity,
+  compatibility, license, and risk metadata.
+- Favorite an artifact locally and reopen it from the Home page. Authentication,
+  ratings, and cross-device favorites remain post-V1 work.
+- Raw plugins and forks are browse-only. **Install and run** remains disabled
+  until exact bytes and a reviewed sandbox recipe are available. Forge exposes
+  no host install or raw archive shortcut.
+- The package
   composition and installation contract remains available through the CLI, but
   provisional package recipes are not promoted in the primary browser.
 - Search names, authors, descriptions, capabilities, and taxonomy labels.
@@ -272,8 +278,7 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
   network access, or explicitly sync the public marketplace into the connected
   store for full-catalog search. Package publication stays disabled until a
   research process proposes a coherent combination and a curator reviews and
-  signs its exact components. Certified local recipes then appear on the front
-  page with a sandbox-gated **Verify, test & install** action.
+  signs its exact components.
 
 The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=stargazers&per_page=10&page=1).
 It is a **one-time, unsigned development snapshot**, not a complete recursive
@@ -348,7 +353,7 @@ Forge also provides a dependency-free stdio [MCP server](docs/mcp-server.md)
 for catalog search, saved-version inspection, configuration listing, and draft
 creation. It intentionally exposes no install or execution tool.
 
-The second launcher tab starts an [embedded Forge Assistant](docs/forge-assistant.md)
+The **Assistant** tab starts an [embedded Forge Assistant](docs/forge-assistant.md)
 as a disposable DSH Web cell. Its local MCP tools help search and compare
 complementary package, plugin, and fork metadata, while all trust, install,
 promotion, and run decisions remain explicit launcher or CLI actions.

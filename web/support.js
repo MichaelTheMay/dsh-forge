@@ -319,6 +319,7 @@
     onchange: "onChange",
     oninput: "onInput",
     onsubmit: "onSubmit",
+    onscroll: "onScroll",
     onkeydown: "onKeyDown",
     onkeyup: "onKeyUp",
     onkeypress: "onKeyPress",

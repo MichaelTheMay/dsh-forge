@@ -969,11 +969,12 @@ class Launcher:
     def catalog_artifact(self, artifact_id: str) -> dict[str, Any]:
         try:
             record = self.catalog_store.get(artifact_id)
+            research = self.catalog_store.get_research(artifact_id)
         except CatalogStoreError as error:
             raise LauncherError(str(error)) from error
         if record is None:
             raise LauncherError("Unknown catalog artifact")
-        return record
+        return {**record, **({"hidden_gem": research} if research else {})}
 
     def suggested_port(self) -> int:
         with self._lock:
