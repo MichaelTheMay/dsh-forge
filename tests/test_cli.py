@@ -195,6 +195,42 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(result["data"]["judged_count"], 1)
         self.assertEqual(result["data"]["metrics"][0]["ndcg"], 1.0)
 
+    def test_research_study_cli_creates_blinded_ballot_and_scores_hidden_arms(self):
+        snapshot_path = self.root / "registry.json"
+        ballot_path = self.root / "study-ballot.json"
+        key_path = self.root / "study-key.json"
+        judgments_path = self.root / "study-judgments.json"
+        snapshot_path.write_text(json.dumps({
+            "snapshot_id": "cli-study-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-create", "--snapshot", str(snapshot_path),
+            "--per-arm", "1", "--seed", "cli-test-seed",
+            "--ballot", str(ballot_path), "--key", str(key_path),
+        )
+        self.assertEqual(code, 0)
+        self.assertTrue(result["data"]["blinded"])
+        ballot = json.loads(ballot_path.read_text(encoding="utf-8"))
+        self.assertNotIn("github_stars", ballot["candidates"][0]["artifact"])
+        artifact_id = ballot["candidates"][0]["artifact"]["artifact_id"]
+        code, _ = self.invoke(
+            "research", "judge", "--queue", str(ballot_path), "--artifact", artifact_id,
+            "--rating", "exceptional", "--reviewer", "Test curator",
+            "--reviewed-at", "2026-09-13T18:01:00Z", "--output", str(judgments_path),
+        )
+        self.assertEqual(code, 0)
+        code, result = self.invoke(
+            "research", "study-benchmark", "--ballot", str(ballot_path),
+            "--key", str(key_path), "--judgments", str(judgments_path),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [item["ordering"] for item in result["data"]["arms"]],
+            ["forge", "quality", "popularity", "recency"],
+        )
+
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))
         saved_id = added["data"]["saved_versions"][0]["id"]

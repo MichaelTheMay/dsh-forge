@@ -32,13 +32,19 @@ PROPOSAL_SCHEMA = "dsh-forge.research-proposal/v1"
 CERTIFICATION_SCHEMA = "dsh-forge.package-certification/v1"
 DISCOVERY_QUEUE_SCHEMA = "dsh-forge.discovery-queue/v2"
 FORK_ASSESSMENT_SCHEMA = "dsh-forge.fork-assessment/v1"
-JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v1"
-BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v1"
+JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v2"
+BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v2"
+STUDY_KEY_SCHEMA = "dsh-forge.discovery-study-key/v1"
+STUDY_BENCHMARK_SCHEMA = "dsh-forge.discovery-study-benchmark/v1"
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_PROPOSAL_PLUGINS = 8
 MAX_DISCOVERY_QUEUE = 250
+MAX_DISCOVERY_JUDGMENTS = 5_000
+MAX_STUDY_PER_ARM = 50
 SELECTION_POLICY = "dsh-forge.discovery-diversity/v1"
 DIVERSITY_SCORE_WINDOW = 5
+
+_STUDY_ARMS = ("forge", "quality", "popularity", "recency")
 
 _NPM_NAME = re.compile(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+")
 _VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,63}")
@@ -523,7 +529,7 @@ def record_judgment(
             or ledger.get("snapshot_id") != queue.get("snapshot_id")
             or ledger.get("policy") != POLICY_VERSION
             or not isinstance(ledger.get("judgments"), list)
-            or len(ledger["judgments"]) > MAX_DISCOVERY_QUEUE
+            or len(ledger["judgments"]) > MAX_DISCOVERY_JUDGMENTS
             or any(not isinstance(item, Mapping) for item in ledger["judgments"])
         ):
             raise ResearchError("Judgment ledger does not match this discovery snapshot")
@@ -543,9 +549,24 @@ def record_judgment(
         "reviewed_at": instant.astimezone(dt.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "notes": notes,
     }
-    judgments = [item for item in judgments if item.get("artifact_id") != artifact_id]
+    reviewer_key = reviewer.casefold()
+    replacing = any(
+        item.get("artifact_id") == artifact_id
+        and str(item.get("reviewer") or "").casefold() == reviewer_key
+        for item in judgments
+    )
+    if len(judgments) >= MAX_DISCOVERY_JUDGMENTS and not replacing:
+        raise ResearchError("Judgment ledger reached its entry limit")
+    judgments = [
+        item for item in judgments
+        if item.get("artifact_id") != artifact_id
+        or str(item.get("reviewer") or "").casefold() != reviewer_key
+    ]
     judgments.append(judgment)
-    judgments.sort(key=lambda item: str(item.get("artifact_id") or ""))
+    judgments.sort(key=lambda item: (
+        str(item.get("artifact_id") or ""),
+        str(item.get("reviewer") or "").casefold(),
+    ))
     return {
         "schema": JUDGMENT_SCHEMA,
         "policy": POLICY_VERSION,
@@ -561,7 +582,7 @@ def record_judgment(
 
 
 def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict[str, Any]:
-    """Measure ranked relevance using snapshot-bound curator judgments."""
+    """Measure relevance and compare orderings on one fixed candidate set."""
 
     if (
         queue.get("schema") != DISCOVERY_QUEUE_SCHEMA
@@ -569,6 +590,8 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         or queue.get("policy") != POLICY_VERSION
         or ledger.get("policy") != POLICY_VERSION
         or queue.get("snapshot_id") != ledger.get("snapshot_id")
+        or not isinstance(ledger.get("judgments"), list)
+        or len(ledger["judgments"]) > MAX_DISCOVERY_JUDGMENTS
     ):
         raise ResearchError("Benchmark inputs do not describe the same current discovery snapshot")
     candidates = [
@@ -582,32 +605,47 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         )
         for item in candidates
     }
-    ratings: dict[str, int] = {}
+    ratings: dict[str, list[int]] = {}
+    rating_counts: Counter[str] = Counter()
+    reviewers: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     for item in ledger.get("judgments") or []:
         if not isinstance(item, Mapping):
             raise ResearchError("Judgment ledger contains an invalid entry")
         identity = str(item.get("artifact_id") or "")
         relevance = item.get("relevance")
         rating = item.get("rating")
+        reviewer = str(item.get("reviewer") or "").strip()
+        pair = (identity, reviewer.casefold())
         if (
-            identity in ratings
+            pair in seen
             or identity not in subjects
             or not isinstance(relevance, int)
             or isinstance(relevance, bool)
             or rating not in _RATINGS
             or _RATINGS[rating] != relevance
             or item.get("subject") != subjects[identity]
+            or not reviewer
         ):
             raise ResearchError("Judgment ledger contains duplicate or invalid relevance")
-        ratings[identity] = int(relevance)
-    positions = [ratings.get(str(item["artifact"].get("artifact_id") or "")) for item in candidates]
+        seen.add(pair)
+        reviewers.add(reviewer.casefold())
+        rating_counts[str(rating)] += 1
+        ratings.setdefault(identity, []).append(int(relevance))
+    aggregate = {
+        identity: sum(values) / len(values)
+        for identity, values in ratings.items()
+    }
 
-    def metrics(cutoff: int) -> dict[str, Any]:
-        values = positions[:cutoff]
+    def metrics(ordered: list[Mapping[str, Any]], cutoff: int) -> dict[str, Any]:
+        values = [
+            aggregate.get(str(item["artifact"].get("artifact_id") or ""))
+            for item in ordered[:cutoff]
+        ]
         judged = [value for value in values if value is not None]
         gains = [0 if value is None else 2 ** value - 1 for value in values]
         dcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
-        ideal = sorted((2 ** value - 1 for value in ratings.values()), reverse=True)[:len(values)]
+        ideal = sorted((2 ** value - 1 for value in aggregate.values()), reverse=True)[:len(values)]
         idcg = sum(gain / math.log2(index + 2) for index, gain in enumerate(ideal))
         relevant = sum(value >= 2 for value in judged)
         return {
@@ -619,16 +657,304 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
             "ndcg": round(dcg / idcg, 4) if idcg else None,
         }
 
+    def identity(item: Mapping[str, Any]) -> str:
+        return str(item["artifact"].get("artifact_id") or "")
+
+    def quality_key(item: Mapping[str, Any]) -> tuple[int, str]:
+        research = item.get("research") if isinstance(item.get("research"), Mapping) else {}
+        rank = research.get("quality_rank")
+        return (rank if isinstance(rank, int) and not isinstance(rank, bool) and rank > 0 else 10**12, identity(item))
+
+    def popularity_key(item: Mapping[str, Any]) -> tuple[int, int, str]:
+        stars = item["artifact"].get("github_stars")
+        if isinstance(stars, int) and not isinstance(stars, bool) and stars >= 0:
+            return (0, -stars, identity(item))
+        return (1, 0, identity(item))
+
+    def recency_key(item: Mapping[str, Any]) -> tuple[int, float, str]:
+        pushed = _instant(item["artifact"].get("pushed_at"))
+        if pushed is not None:
+            return (0, -pushed.timestamp(), identity(item))
+        return (1, 0.0, identity(item))
+
     cutoffs = sorted({min(value, len(candidates)) for value in (10, 25, 100) if candidates})
+    orderings = {
+        "forge": candidates,
+        "quality": sorted(candidates, key=quality_key),
+        "popularity": sorted(candidates, key=popularity_key),
+        "recency": sorted(candidates, key=recency_key),
+    }
+    agreement_pairs = 0
+    agreement_matches = 0
+    for values in ratings.values():
+        for left in range(len(values)):
+            for right in range(left + 1, len(values)):
+                agreement_pairs += 1
+                agreement_matches += values[left] == values[right]
     return {
         "schema": BENCHMARK_SCHEMA,
         "policy": POLICY_VERSION,
         "snapshot_id": queue.get("snapshot_id"),
         "candidate_count": len(candidates),
-        "judged_count": sum(value is not None for value in positions),
-        "ratings": {name: sum(value == score for value in ratings.values()) for name, score in _RATINGS.items()},
-        "metrics": [metrics(cutoff) for cutoff in cutoffs],
+        "judged_count": len(seen),
+        "judged_artifact_count": len(ratings),
+        "reviewer_count": len(reviewers),
+        "doubly_judged_count": sum(len(values) >= 2 for values in ratings.values()),
+        "pairwise_exact_agreement": round(agreement_matches / agreement_pairs, 4) if agreement_pairs else None,
+        "ratings": {name: rating_counts[name] for name in _RATINGS},
+        "metrics": [metrics(candidates, cutoff) for cutoff in cutoffs],
+        "comparison_scope": "same_candidate_set_reordered",
+        "comparisons": [
+            {
+                "ordering": name,
+                "metrics": [metrics(ordered, cutoff) for cutoff in cutoffs],
+            }
+            for name, ordered in orderings.items()
+        ],
         "queue_quality": dict(queue.get("quality") or {}),
+        "claims": {"metadata_only": True, "executed": False, "security_verified": False},
+    }
+
+
+def create_discovery_study(
+    snapshot: Mapping[str, Any],
+    *,
+    per_arm: int = 25,
+    seed: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Create a blinded candidate ballot and a separate ranking-arm key."""
+
+    source_snapshot_id = snapshot.get("snapshot_id")
+    if not isinstance(source_snapshot_id, str) or not source_snapshot_id:
+        raise ResearchError("Discovery study requires a stable source snapshot")
+    if not isinstance(per_arm, int) or isinstance(per_arm, bool) or not 1 <= per_arm <= MAX_STUDY_PER_ARM:
+        raise ResearchError(f"Study size per arm must be between 1 and {MAX_STUDY_PER_ARM}")
+    if not isinstance(seed, str) or not 8 <= len(seed) <= 128 or any(ord(character) < 32 for character in seed):
+        raise ResearchError("Discovery study seed must contain 8 to 128 printable characters")
+    records = [
+        record for record in [
+            *(snapshot.get("entries") or []),
+            *(snapshot.get("supplemental_entries") or []),
+        ]
+        if isinstance(record, Mapping) and record.get("artifact_id")
+    ]
+    artifact_ids = [str(record["artifact_id"]) for record in records]
+    if len(set(artifact_ids)) != len(artifact_ids):
+        raise ResearchError("Discovery study source contains duplicate artifact IDs")
+    evaluated = [
+        (record, evaluate_artifact(record, snapshot.get("fetched_at")))
+        for record in records
+    ]
+
+    def study_admissible(record: Mapping[str, Any]) -> bool:
+        validation = record.get("external_validation")
+        status = str(validation.get("status") or "") if isinstance(validation, Mapping) else ""
+        return bool(
+            record.get("archived") is not True
+            and status != "invalid"
+            and isinstance(record.get("repository_url"), str)
+            and str(record.get("repository_url") or "").strip()
+            and isinstance(record.get("head_sha"), str)
+            and _COMMIT.fullmatch(str(record.get("head_sha")))
+        )
+
+    study_pool = [
+        (record, report) for record, report in evaluated
+        if study_admissible(record)
+    ]
+    if not study_pool:
+        raise ResearchError("Discovery study source has no admissible candidates")
+
+    def identity(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> str:
+        return str(item[0].get("artifact_id") or "")
+
+    def stars(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> int | None:
+        value = item[0].get("github_stars")
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+    def pushed(item: tuple[Mapping[str, Any], Mapping[str, Any]]) -> float | None:
+        value = _instant(item[0].get("pushed_at"))
+        return value.timestamp() if value is not None else None
+
+    pool_ids = {identity(item) for item in study_pool}
+    forge_queue = discovery_queue(snapshot, limit=MAX_DISCOVERY_QUEUE)
+    forge_ids = [
+        str(item["artifact"]["artifact_id"])
+        for item in forge_queue["candidates"]
+        if str(item["artifact"]["artifact_id"]) in pool_ids
+    ][:per_arm]
+    if not forge_ids:
+        raise ResearchError("Discovery study source has no Forge-ranked candidates")
+    arms = {
+        "forge": forge_ids,
+        "quality": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            -int(item[1]["score"]),
+            stars(item) if stars(item) is not None else 10**12,
+            identity(item),
+        ))[:per_arm]],
+        "popularity": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            0 if stars(item) is not None else 1,
+            -(stars(item) or 0),
+            -int(item[1]["score"]),
+            identity(item),
+        ))[:per_arm]],
+        "recency": [identity(item) for item in sorted(study_pool, key=lambda item: (
+            0 if pushed(item) is not None else 1,
+            -(pushed(item) or 0.0),
+            -int(item[1]["score"]),
+            identity(item),
+        ))[:per_arm]],
+    }
+    record_by_id = {str(record["artifact_id"]): record for record, _ in evaluated}
+    report_by_id = {str(record["artifact_id"]): report for record, report in evaluated}
+    selected_ids = set().union(*(set(values) for values in arms.values()))
+    seed_digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    study_id = "discovery-study-" + hashlib.sha256(
+        f"{source_snapshot_id}\n{per_arm}\n{seed_digest}".encode("utf-8")
+    ).hexdigest()[:20]
+    ordered_ids = sorted(
+        selected_ids,
+        key=lambda value: hashlib.sha256(f"{study_id}\n{value}".encode("utf-8")).hexdigest(),
+    )
+    visible_fields = (
+        "artifact_id", "name", "full_name", "owner", "artifact_type", "classifications",
+        "repository_url", "description", "topics", "language", "package", "license",
+        "compatibility", "source_repository", "parent_repository", "head_sha",
+    )
+    candidates = [
+        {
+            "artifact": {
+                field: record_by_id[artifact_id][field]
+                for field in visible_fields
+                if field in record_by_id[artifact_id]
+            },
+            "research": {"subject": dict(report_by_id[artifact_id]["subject"])},
+        }
+        for artifact_id in ordered_ids
+    ]
+    ballot = {
+        "schema": DISCOVERY_QUEUE_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": study_id,
+        "fetched_at": str(snapshot.get("fetched_at") or "")[:64],
+        "provenance": {
+            "method": "dsh-forge.blinded-discovery-study/v1",
+            "source_snapshot_id": source_snapshot_id,
+        },
+        "source_count": len(records),
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "quality": {"blinded": True, "arm_count": len(arms), "per_arm": per_arm},
+        "claims": {"metadata_only": True, "security_verified": False, "executed": False},
+    }
+    ballot_digest = "sha256:" + hashlib.sha256(json.dumps(
+        ballot,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")).hexdigest()
+    key = {
+        "schema": STUDY_KEY_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": study_id,
+        "source_snapshot_id": source_snapshot_id,
+        "seed_sha256": seed_digest,
+        "ballot_digest": ballot_digest,
+        "per_arm": per_arm,
+        "pool_size": len(study_pool),
+        "eligibility_policy": "stable-public-source/v1",
+        "arms": arms,
+        "claims": {"metadata_only": True, "security_verified": False, "executed": False},
+    }
+    return ballot, key
+
+
+def benchmark_discovery_study(
+    ballot: Mapping[str, Any],
+    key: Mapping[str, Any],
+    ledger: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Score each hidden ranking arm against judgments collected on one ballot."""
+
+    candidates = [
+        item for item in ballot.get("candidates") or []
+        if isinstance(item, Mapping) and isinstance(item.get("artifact"), Mapping)
+    ]
+    candidate_by_id = {
+        str(item["artifact"].get("artifact_id") or ""): item
+        for item in candidates
+    }
+    ordered_ids = [str(item["artifact"].get("artifact_id") or "") for item in candidates]
+    ballot_digest = "sha256:" + hashlib.sha256(json.dumps(
+        dict(ballot),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")).hexdigest()
+    arms = key.get("arms")
+    if (
+        ballot.get("schema") != DISCOVERY_QUEUE_SCHEMA
+        or key.get("schema") != STUDY_KEY_SCHEMA
+        or key.get("policy") != POLICY_VERSION
+        or key.get("snapshot_id") != ballot.get("snapshot_id")
+        or key.get("ballot_digest") != ballot_digest
+        or not isinstance(arms, Mapping)
+        or set(arms) != set(_STUDY_ARMS)
+        or not candidates
+        or any(not identity for identity in ordered_ids)
+        or len(candidate_by_id) != len(ordered_ids)
+    ):
+        raise ResearchError("Discovery study key does not match the ballot")
+    normalized_arms: dict[str, list[str]] = {}
+    for name in _STUDY_ARMS:
+        values = arms.get(name)
+        if (
+            not isinstance(values, list)
+            or not 1 <= len(values) <= MAX_STUDY_PER_ARM
+            or len(set(values)) != len(values)
+            or any(not isinstance(value, str) or value not in candidate_by_id for value in values)
+        ):
+            raise ResearchError("Discovery study key contains an invalid ranking arm")
+        normalized_arms[name] = list(values)
+    if set().union(*(set(values) for values in normalized_arms.values())) != set(ordered_ids):
+        raise ResearchError("Discovery study key does not cover the ballot")
+
+    overall = benchmark_queue(ballot, ledger)
+    arm_results = []
+    for name in _STUDY_ARMS:
+        identities = normalized_arms[name]
+        identity_set = set(identities)
+        arm_queue = {
+            **ballot,
+            "candidate_count": len(identities),
+            "candidates": [candidate_by_id[identity] for identity in identities],
+        }
+        arm_ledger = {
+            **ledger,
+            "judgments": [
+                item for item in ledger.get("judgments") or []
+                if isinstance(item, Mapping) and item.get("artifact_id") in identity_set
+            ],
+        }
+        result = benchmark_queue(arm_queue, arm_ledger)
+        arm_results.append({
+            "ordering": name,
+            "candidate_count": len(identities),
+            "judged_artifact_count": result["judged_artifact_count"],
+            "metrics": result["metrics"],
+        })
+    return {
+        "schema": STUDY_BENCHMARK_SCHEMA,
+        "policy": POLICY_VERSION,
+        "snapshot_id": ballot.get("snapshot_id"),
+        "source_snapshot_id": key.get("source_snapshot_id"),
+        "candidate_count": len(candidates),
+        "judged_count": overall["judged_count"],
+        "judged_artifact_count": overall["judged_artifact_count"],
+        "reviewer_count": overall["reviewer_count"],
+        "doubly_judged_count": overall["doubly_judged_count"],
+        "pairwise_exact_agreement": overall["pairwise_exact_agreement"],
+        "arms": arm_results,
         "claims": {"metadata_only": True, "executed": False, "security_verified": False},
     }
 

@@ -91,11 +91,54 @@ python3 -m dsh_forge research benchmark \
   --output /tmp/discovery-benchmark.json
 ```
 
-The benchmark reports rating counts, judgment coverage, precision, precision
-among judged results, and NDCG at 10, 25, and 100. Unjudged results count as
-non-relevant in overall precision and as zero gain in NDCG; coverage and
-precision among judged results make sparse review explicit. Feedback is
-unsigned, executes nothing, and never authorizes installation.
+Multiple curators can independently rate the same artifact. A later rating from
+the same curator updates that curator's earlier rating without removing other
+reviewers. The benchmark reports reviewer count, double-rated coverage,
+pairwise exact agreement, rating counts, judgment coverage, precision,
+precision among judged results, and NDCG at 10, 25, and 100. It also compares
+the Forge, quality-only, popularity, and recency orderings over the same
+candidate set. This comparison measures ordering only; it does not compare how
+each method selects candidates for the pool.
+
+Unjudged results count as non-relevant in overall precision and as zero gain in
+NDCG. Coverage and precision among judged results make sparse review explicit.
+Feedback is unsigned, executes nothing, and never authorizes installation.
+
+For a selection study, generate one blinded union of the Forge, quality-only,
+popularity, and recency arms. All four arms start from the same admissible source
+pool: public, unarchived, not known invalid, and bound to a repository URL and
+immutable commit. The ballot omits stars, update dates, Forge scores, visibility labels, and
+arm membership. Keep the answer key away from curators until all ratings are
+complete:
+
+```bash
+python3 -m dsh_forge research study-create \
+  --snapshot /tmp/registry-analyzed.json \
+  --per-arm 25 \
+  --seed "study-round-2026-09" \
+  --ballot /tmp/discovery-study-ballot.json \
+  --key /secure/discovery-study-key.json
+
+python3 -m dsh_forge research judge \
+  --queue /tmp/discovery-study-ballot.json \
+  --artifact github:1339316901 \
+  --rating exceptional \
+  --reviewer "Curator 1" \
+  --reviewed-at 2026-09-13T18:00:00Z \
+  --output /tmp/discovery-study-judgments.json
+
+python3 -m dsh_forge research study-benchmark \
+  --ballot /tmp/discovery-study-ballot.json \
+  --key /secure/discovery-study-key.json \
+  --judgments /tmp/discovery-study-judgments.json \
+  --output /tmp/discovery-study-results.json
+```
+
+The separate key binds each method to its ranked arm and binds the arm set to
+the ballot. The benchmark reports precision, NDCG, coverage, reviewer count,
+double-rated coverage, and exact agreement. This command makes the experiment
+reproducible, but it does not replace preregistering the protocol, recruiting
+independent curators, or reporting uncertainty.
 
 The current analyzer is a deliberately bounded REST tier. It resolves both
 repositories to immutable commits, asks GitHub to compare those commits, records

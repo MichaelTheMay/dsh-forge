@@ -180,8 +180,8 @@ otherwise. See [docs/local-profiles.md](docs/local-profiles.md).
 
 The embedded snapshot in `web/launcher.js` stays the corpus for the
 disconnected preview, which must remain a single self-contained file. A
-connected sidecar reads from an imported FTS5-indexed SQLite store instead —
-the only path that scales to a fork network with tens of thousands of entries.
+connected sidecar reads from an imported FTS5-indexed SQLite store instead.
+This is the only path that scales to a fork network with tens of thousands of entries.
 Ten forks remain embedded for disconnected preview use.
 
 ```bash
@@ -231,16 +231,19 @@ claim covers visible API results; inaccessible forks can still make it
 incomplete.
 Queue v2 preserves the reproducible metadata score, then diversifies only
 within a five-point quality window across owners and capability lanes. Curators
-can record snapshot-bound `irrelevant`, `weak`, `promising`, or `exceptional`
-ratings and benchmark precision, judgment coverage, and NDCG through the
-`research judge` and `research benchmark` commands.
+can record independent snapshot-bound `irrelevant`, `weak`, `promising`, or
+`exceptional` ratings and benchmark precision, judgment coverage, agreement,
+and NDCG. The `research study-create` command builds a blinded union of Forge,
+quality, popularity, and recency selections with a separate answer key.
 See [Registry indexing](docs/registry-indexer.md) and
-[Hidden-gem research and publication](docs/hidden-gem-pipeline.md).
+[Hidden-gem research and publication](docs/hidden-gem-pipeline.md). The
+confirmatory design is specified in the
+[discovery study protocol](docs/research/discovery-study-protocol.md).
 
 When a store is imported the Community browser searches it instead of the
 embedded snapshot, pages with a **Load more results** button, and names the
-corpus in use on the result line. Without a sidecar — or with no store imported
-— it reads the embedded snapshot exactly as before, so the portable preview is
+corpus in use on the result line. Without a sidecar, or with no store imported,
+it reads the embedded snapshot exactly as before, so the portable preview is
 unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 
 ## Community browsers
@@ -269,8 +272,8 @@ The seed comes from the upstream [GitHub forks endpoint, sorted by stars](https:
 It is a **one-time, unsigned development snapshot**, not a complete recursive
 fork-network crawl or a production-verified catalog. GitHub stars indicate
 popularity, not compatibility or security. Plugin recommendation order uses
-static evidence, compatibility, maintenance, license, and risk—not stars. No
-community source code is included or executed. The browser never contacts
+static evidence, compatibility, maintenance, license, and risk rather than
+stars. No community source code is included or executed. The browser never contacts
 GitHub, npm, or the community catalog itself.
 
 ## Signed plugin packages

@@ -34,9 +34,11 @@ from .packages import (
 )
 from .research import (
     ResearchError,
+    benchmark_discovery_study,
     benchmark_queue,
     certify_proposal,
     compose_proposal,
+    create_discovery_study,
     create_fork_assessment,
     record_judgment,
 )
@@ -149,6 +151,25 @@ def _parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--judgments", required=True, metavar="JSON")
     benchmark.add_argument("--output", metavar="JSON")
     benchmark.add_argument("--force", action="store_true")
+    study_create = research_commands.add_parser(
+        "study-create",
+        help="create a blinded multi-baseline discovery ballot and a separate answer key",
+    )
+    study_create.add_argument("--snapshot", required=True, metavar="JSON")
+    study_create.add_argument("--per-arm", type=int, default=25)
+    study_create.add_argument("--seed", required=True)
+    study_create.add_argument("--ballot", required=True, metavar="JSON")
+    study_create.add_argument("--key", required=True, metavar="JSON")
+    study_create.add_argument("--force", action="store_true")
+    study_benchmark = research_commands.add_parser(
+        "study-benchmark",
+        help="compare hidden discovery arms after curator judgments are complete",
+    )
+    study_benchmark.add_argument("--ballot", required=True, metavar="JSON")
+    study_benchmark.add_argument("--key", required=True, metavar="JSON")
+    study_benchmark.add_argument("--judgments", required=True, metavar="JSON")
+    study_benchmark.add_argument("--output", metavar="JSON")
+    study_benchmark.add_argument("--force", action="store_true")
     propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
     propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
     propose.add_argument("--package-id", required=True)
@@ -732,6 +753,36 @@ def run(
             elif command == "research.benchmark":
                 data = benchmark_queue(
                     read_json(args.queue, max_bytes=MAX_SNAPSHOT_BYTES),
+                    read_json(args.judgments),
+                )
+                if args.output:
+                    write_json(args.output, data, force=args.force)
+            elif command == "research.study-create":
+                ballot_path = Path(args.ballot).expanduser()
+                key_path = Path(args.key).expanduser()
+                if ballot_path.resolve() == key_path.resolve():
+                    raise ResearchError("Study ballot and answer key require different output paths")
+                if not args.force and (ballot_path.exists() or key_path.exists()):
+                    raise ResearchError("Study output exists; pass --force to replace both files")
+                ballot, key = create_discovery_study(
+                    read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES),
+                    per_arm=args.per_arm,
+                    seed=args.seed,
+                )
+                write_json(ballot_path, ballot, force=args.force)
+                write_json(key_path, key, force=args.force)
+                data = {
+                    "snapshot_id": ballot["snapshot_id"],
+                    "candidate_count": ballot["candidate_count"],
+                    "per_arm": key["per_arm"],
+                    "ballot": str(ballot_path),
+                    "key": str(key_path),
+                    "blinded": True,
+                }
+            elif command == "research.study-benchmark":
+                data = benchmark_discovery_study(
+                    read_json(args.ballot, max_bytes=MAX_SNAPSHOT_BYTES),
+                    read_json(args.key, max_bytes=MAX_SNAPSHOT_BYTES),
                     read_json(args.judgments),
                 )
                 if args.output:
