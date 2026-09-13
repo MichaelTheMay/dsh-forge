@@ -14,8 +14,8 @@ because they require a task or query distribution.
 
 ## Hypotheses
 
-- H1: Forge has higher expert-rated precision at 25 than popularity.
-- H2: Forge has higher expert-rated NDCG at 25 than popularity.
+- H1: Forge has higher expert-rated precision at the frozen arm size than popularity.
+- H2: Forge has higher expert-rated NDCG at the frozen arm size than popularity.
 - H3: Forge returns more relevant artifacts with at most 10 stars.
 - H4: Forge reduces owner concentration without reducing expert-rated
   relevance.
@@ -41,7 +41,15 @@ candidate threshold. All ranking arms draw from the same admissible pool.
 
 ## Candidate construction and blinding
 
-Use `research study-create` with 25 candidates per arm. It constructs separate
+Use `research study-power` before the confirmatory run. Under the documented
+planning assumptions of 0.40 baseline precision, a minimum detectable lift of
+0.20, a two-sided alpha of 0.05, and 80 percent power, the independent
+two-proportion approximation returns 97 candidates per arm. Use 25 candidates
+per arm only for a separate pilot. Update the confirmatory calculation once,
+using the pilot variance and observed arm overlap, then freeze it before labels
+from the confirmatory snapshot are collected.
+
+Use `research study-create` with the frozen arm size. It constructs separate
 Forge, quality-only, popularity, and recency selections, takes their union, and
 shuffles that union deterministically. A candidate can belong to more than one
 arm.
@@ -58,14 +66,16 @@ Recruit practitioners who have built or operated agentic developer tooling.
 Report their experience criteria and conflicts of interest. Authors may pilot
 the rubric but should not provide labels used in the primary analysis.
 
-Collect at least three independent ratings per artifact. Randomize assignments
-with balanced overlap so every pair of reviewers shares some artifacts. Do not
-show prior ratings or permit discussion until the ledger is frozen. Record
-abstentions separately from low relevance.
+Collect at least three independent ratings per artifact. Use `research
+study-packet` with a reviewer index and reviewer count to produce deterministic,
+balanced assignments. The assignment algorithm minimizes reviewer load and
+pair-load imbalance. Verify exact candidate coverage before distributing the
+files. Do not show prior ratings or permit discussion until the ledger is frozen.
+Record abstentions separately from low relevance.
 
 The target sample size must come from a power analysis before the confirmatory
-run. A 25-item arm is suitable for a pilot, not automatically sufficient for a
-conference claim.
+run. The current 97-item result is a planning estimate, not a final guarantee of
+power under overlapping selections and clustered reviewer judgments.
 
 ## Rating rubric
 
@@ -89,18 +99,20 @@ experiments.
 Treat the mean rating for an artifact as graded relevance. Treat a mean of at
 least 2 as relevant for precision. Report:
 
-- precision at 10 and 25;
-- NDCG at 10 and 25;
-- relevant low-visibility yield at 25;
+- precision at 10, 25, 100, and the full arm size;
+- NDCG at 10, 25, 100, and the full arm size;
+- relevant low-visibility yield at the full arm size;
 - unique owners and maximum items per owner;
 - rating coverage and abstention rate;
 - exact agreement plus an ordinal inter-rater statistic;
-- paired differences for artifacts shared by two arms; and
-- 95 percent confidence intervals from an artifact-level bootstrap.
+- Forge-minus-baseline precision differences with arm overlap reported; and
+- 95 percent confidence intervals from a deterministic artifact-level bootstrap.
 
-Report every arm, every overlap, and the complete rating distribution. Correct
-secondary hypothesis tests and include effect sizes. Unjudged artifacts should
-not silently become negative labels in the confirmatory analysis.
+Use `research study-merge` to combine independent exports. The benchmark must
+fail if any artifact has fewer than the frozen minimum number of reviews. Report
+every arm, every overlap, and the complete rating distribution. Correct secondary
+hypothesis tests and include effect sizes. Unjudged artifacts must not silently
+become negative labels in the confirmatory analysis.
 
 ## Follow-up utility study
 

@@ -40,9 +40,12 @@ from .research import (
     compose_proposal,
     create_discovery_study,
     create_fork_assessment,
+    merge_judgment_ledgers,
+    plan_discovery_study,
     record_judgment,
 )
 from .catalog_store import MAX_SNAPSHOT_BYTES
+from .study_packet import assign_review_ballot, build_review_packet
 
 
 CLI_API_VERSION = "dsh-forge.cli/v1"
@@ -170,8 +173,36 @@ def _parser() -> argparse.ArgumentParser:
     study_benchmark.add_argument("--ballot", required=True, metavar="JSON")
     study_benchmark.add_argument("--key", required=True, metavar="JSON")
     study_benchmark.add_argument("--judgments", required=True, metavar="JSON")
+    study_benchmark.add_argument("--min-reviews", type=int, default=3)
+    study_benchmark.add_argument("--bootstrap-samples", type=int, default=5_000)
     study_benchmark.add_argument("--output", metavar="JSON")
     study_benchmark.add_argument("--force", action="store_true")
+    study_packet = research_commands.add_parser(
+        "study-packet",
+        help="build a self-contained offline HTML reviewer packet from a blinded ballot",
+    )
+    study_packet.add_argument("--ballot", required=True, metavar="JSON")
+    study_packet.add_argument("--output", required=True, metavar="HTML")
+    study_packet.add_argument("--reviewer-index", type=int)
+    study_packet.add_argument("--reviewer-count", type=int)
+    study_packet.add_argument("--reviews-per-candidate", type=int, default=3)
+    study_packet.add_argument("--force", action="store_true")
+    study_merge = research_commands.add_parser(
+        "study-merge",
+        help="merge independent reviewer ledgers for one blinded ballot",
+    )
+    study_merge.add_argument("--ballot", required=True, metavar="JSON")
+    study_merge.add_argument("--judgments", required=True, action="append", metavar="JSON")
+    study_merge.add_argument("--output", required=True, metavar="JSON")
+    study_merge.add_argument("--force", action="store_true")
+    study_power = research_commands.add_parser(
+        "study-power",
+        help="estimate a planning sample size for the primary precision comparison",
+    )
+    study_power.add_argument("--baseline-precision", type=float, default=0.4)
+    study_power.add_argument("--minimum-lift", type=float, default=0.2)
+    study_power.add_argument("--alpha", type=float, default=0.05)
+    study_power.add_argument("--power", type=float, default=0.8)
     propose = research_commands.add_parser("propose", help="compose exact npm pins from catalog artifact IDs")
     propose.add_argument("--artifact", action="append", required=True, dest="artifacts")
     propose.add_argument("--package-id", required=True)
@@ -791,9 +822,58 @@ def run(
                     read_json(args.ballot, max_bytes=MAX_SNAPSHOT_BYTES),
                     read_json(args.key, max_bytes=MAX_SNAPSHOT_BYTES),
                     read_json(args.judgments),
+                    min_reviews_per_artifact=args.min_reviews,
+                    bootstrap_samples=args.bootstrap_samples,
                 )
                 if args.output:
                     write_json(args.output, data, force=args.force)
+            elif command == "research.study-packet":
+                output = Path(args.output).expanduser()
+                if output.exists() and not args.force:
+                    raise ResearchError("Review packet output exists; pass --force to replace it")
+                output.parent.mkdir(parents=True, exist_ok=True)
+                ballot = read_json(args.ballot, max_bytes=MAX_SNAPSHOT_BYTES)
+                assignment_requested = args.reviewer_index is not None or args.reviewer_count is not None
+                if assignment_requested:
+                    if args.reviewer_index is None or args.reviewer_count is None:
+                        raise ResearchError("Reviewer assignment requires both index and count")
+                    ballot = assign_review_ballot(
+                        ballot,
+                        reviewer_index=args.reviewer_index,
+                        reviewer_count=args.reviewer_count,
+                        reviews_per_candidate=args.reviews_per_candidate,
+                    )
+                rendered = build_review_packet(ballot)
+                output.write_text(rendered, encoding="utf-8", newline="\n")
+                data = {
+                    "output": str(output),
+                    "format": "self-contained-html",
+                    "network_requests": False,
+                    "answer_key_included": False,
+                    "candidate_count": ballot["candidate_count"],
+                    "assignment": ballot.get("assignment"),
+                }
+            elif command == "research.study-merge":
+                merged = merge_judgment_ledgers(
+                    read_json(args.ballot, max_bytes=MAX_SNAPSHOT_BYTES),
+                    [read_json(path) for path in args.judgments],
+                )
+                write_json(args.output, merged, force=args.force)
+                data = {
+                    "output": str(Path(args.output).expanduser()),
+                    "snapshot_id": merged["snapshot_id"],
+                    "judgment_count": len(merged["judgments"]),
+                    "reviewer_count": len({
+                        str(item["reviewer"]).casefold() for item in merged["judgments"]
+                    }),
+                }
+            elif command == "research.study-power":
+                data = plan_discovery_study(
+                    baseline_precision=args.baseline_precision,
+                    minimum_lift=args.minimum_lift,
+                    alpha=args.alpha,
+                    power=args.power,
+                )
             elif command == "profiles.list":
                 status = launcher.status()
                 data = {"profiles": status["profiles"], "dsh_homes": status["dsh_homes"]}

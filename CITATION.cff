@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use DSH Forge in research, please cite this software and its system report."
+title: "DSH Forge"
+type: software
+authors:
+  - family-names: Singh
+    given-names: Tapisar
+    affiliation: "The University of Texas at Austin"
+  - family-names: Sourav
+    given-names: Shashwat
+    affiliation: "Washington University in St. Louis"
+  - family-names: May
+    given-names: Michael
+    affiliation: "The University of Texas at Austin"
+repository-code: "https://github.com/MichaelTheMay/dsh-forge"
+url: "https://dsh-forge.vercel.app/"
+abstract: >-
+  DSH Forge is a local workbench and research pipeline for discovering,
+  evaluating, and safely staging community extensions for agentic developer
+  tools.

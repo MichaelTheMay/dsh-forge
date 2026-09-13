@@ -1,6 +1,6 @@
 # DSH Forge
 
-DSH Forge is the open-source local launcher and catalog client for discovering,
+DSH Forge is a public-source local launcher and catalog client for discovering,
 inspecting, and running trusted DeepSeek Harness installations.
 
 The source-neutral crawler publishes a checksum-verified, compressed public
@@ -235,10 +235,17 @@ can record independent snapshot-bound `irrelevant`, `weak`, `promising`, or
 `exceptional` ratings and benchmark precision, judgment coverage, agreement,
 and NDCG. The `research study-create` command builds a blinded union of Forge,
 quality, popularity, and recency selections with a separate answer key.
+`research study-power` records the sample-size assumptions, `research
+study-packet` creates balanced networkless reviewer files, `research study-merge`
+combines independent exports, and `research study-benchmark` refuses an
+incompletely reviewed confirmatory study.
 See [Registry indexing](docs/registry-indexer.md) and
 [Hidden-gem research and publication](docs/hidden-gem-pipeline.md). The
 confirmatory design is specified in the
-[discovery study protocol](docs/research/discovery-study-protocol.md).
+[discovery study protocol](docs/research/discovery-study-protocol.md). The
+[MLSys 2027 readiness plan](docs/research/mlsys-2027-readiness.md) separates
+implemented mechanics from the human experiments still required for a credible
+conference claim.
 
 When a store is imported the Community browser searches it instead of the
 embedded snapshot, pages with a **Load more results** button, and names the

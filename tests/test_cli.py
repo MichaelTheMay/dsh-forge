@@ -10,7 +10,7 @@ from unittest import mock
 from dsh_forge import cli
 from dsh_forge.launcher import CELL_REGISTRY_SCHEMA_VERSION, Launcher
 from dsh_forge.registry import _fork
-from dsh_forge.research import discovery_queue
+from dsh_forge.research import create_discovery_study, discovery_queue, record_judgment
 from tests.test_research import plugin_record
 from tests.helpers import FakeCellSandbox
 
@@ -224,6 +224,7 @@ class LocalCellCliTests(unittest.TestCase):
         code, result = self.invoke(
             "research", "study-benchmark", "--ballot", str(ballot_path),
             "--key", str(key_path), "--judgments", str(judgments_path),
+            "--min-reviews", "1", "--bootstrap-samples", "100",
         )
         self.assertEqual(code, 0)
         self.assertEqual(
@@ -248,6 +249,62 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["data"]["candidate_count"], 1)
         fetch.assert_called_once_with("https://example.com/feed.json")
+
+    def test_research_study_packet_writes_offline_reviewer_html(self):
+        ballot, _ = create_discovery_study({
+            "snapshot_id": "cli-packet-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="packet-cli-seed")
+        ballot_path = self.root / "packet-ballot.json"
+        output = self.root / "review.html"
+        ballot_path.write_text(json.dumps(ballot), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-packet", "--ballot", str(ballot_path),
+            "--output", str(output),
+        )
+        self.assertEqual(code, 0)
+        self.assertFalse(result["data"]["network_requests"])
+        self.assertFalse(result["data"]["answer_key_included"])
+        self.assertIn("Export rated JSON", output.read_text(encoding="utf-8"))
+
+    def test_research_study_merge_combines_reviewer_exports(self):
+        ballot, _ = create_discovery_study({
+            "snapshot_id": "cli-merge-source",
+            "fetched_at": "2026-09-13T18:00:00Z",
+            "supplemental_entries": [plugin_record()],
+        }, per_arm=1, seed="merge-cli-seed")
+        identity = ballot["candidates"][0]["artifact"]["artifact_id"]
+        ledgers = [
+            record_judgment(
+                ballot, None, artifact_id=identity, rating=rating,
+                reviewer=f"Curator {index}", reviewed_at=f"2026-09-13T18:0{index}:00Z",
+            )
+            for index, rating in ((1, "promising"), (2, "exceptional"))
+        ]
+        ballot_path = self.root / "merge-ballot.json"
+        output = self.root / "merged.json"
+        paths = [self.root / f"review-{index}.json" for index in (1, 2)]
+        ballot_path.write_text(json.dumps(ballot), encoding="utf-8")
+        for path, ledger in zip(paths, ledgers):
+            path.write_text(json.dumps(ledger), encoding="utf-8")
+        code, result = self.invoke(
+            "research", "study-merge", "--ballot", str(ballot_path),
+            "--judgments", str(paths[0]), "--judgments", str(paths[1]),
+            "--output", str(output),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["reviewer_count"], 2)
+        self.assertEqual(result["data"]["judgment_count"], 2)
+
+    def test_research_study_power_reports_planning_size(self):
+        code, result = self.invoke(
+            "research", "study-power", "--baseline-precision", "0.4",
+            "--minimum-lift", "0.2", "--alpha", "0.05", "--power", "0.8",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["required_per_arm"], 97)
+        self.assertTrue(result["data"]["supported_by_study_builder"])
 
     def test_configurations_save_list_and_run_use_stable_ids(self):
         _, added = self.invoke("versions", "add", str(self.tree))

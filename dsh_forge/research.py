@@ -16,9 +16,11 @@ import json
 import math
 import os
 from pathlib import Path
+import random
 import re
 import shutil
 import tempfile
+from statistics import NormalDist
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPSHandler, ProxyHandler, Request, build_opener
@@ -36,11 +38,12 @@ JUDGMENT_SCHEMA = "dsh-forge.discovery-judgments/v2"
 BENCHMARK_SCHEMA = "dsh-forge.discovery-benchmark/v2"
 STUDY_KEY_SCHEMA = "dsh-forge.discovery-study-key/v1"
 STUDY_BENCHMARK_SCHEMA = "dsh-forge.discovery-study-benchmark/v1"
+STUDY_POWER_SCHEMA = "dsh-forge.discovery-study-power/v1"
 MAX_REGISTRY_BYTES = 1_048_576
 MAX_PROPOSAL_PLUGINS = 8
 MAX_DISCOVERY_QUEUE = 250
 MAX_DISCOVERY_JUDGMENTS = 5_000
-MAX_STUDY_PER_ARM = 50
+MAX_STUDY_PER_ARM = 200
 SELECTION_POLICY = "dsh-forge.discovery-diversity/v1"
 DIVERSITY_SCORE_WINDOW = 5
 
@@ -69,6 +72,57 @@ def _mentions(text: str, term: str) -> bool:
 
 class ResearchError(ValueError):
     """A ranking, registry-enrichment, or certification input failed closed."""
+
+
+def plan_discovery_study(
+    *,
+    baseline_precision: float = 0.4,
+    minimum_lift: float = 0.2,
+    alpha: float = 0.05,
+    power: float = 0.8,
+) -> dict[str, Any]:
+    """Plan per-arm size with a transparent two-proportion normal approximation."""
+
+    values = (baseline_precision, minimum_lift, alpha, power)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+        raise ResearchError("Study power inputs must be numeric")
+    if (
+        not 0.05 <= baseline_precision <= 0.9
+        or not 0.05 <= minimum_lift <= 0.5
+        or baseline_precision + minimum_lift >= 1
+        or not 0.001 <= alpha <= 0.2
+        or not 0.5 <= power <= 0.99
+    ):
+        raise ResearchError("Study power inputs are outside supported bounds")
+    alternative_precision = round(baseline_precision + minimum_lift, 12)
+    pooled = (baseline_precision + alternative_precision) / 2
+    normal = NormalDist()
+    alpha_z = normal.inv_cdf(1 - alpha / 2)
+    power_z = normal.inv_cdf(power)
+    numerator = (
+        alpha_z * math.sqrt(2 * pooled * (1 - pooled))
+        + power_z * math.sqrt(
+            baseline_precision * (1 - baseline_precision)
+            + alternative_precision * (1 - alternative_precision)
+        )
+    ) ** 2
+    per_arm = math.ceil(numerator / minimum_lift ** 2)
+    return {
+        "schema": STUDY_POWER_SCHEMA,
+        "method": "independent-two-proportion-normal-approximation",
+        "two_sided": True,
+        "baseline_precision": baseline_precision,
+        "alternative_precision": alternative_precision,
+        "minimum_lift": minimum_lift,
+        "alpha": alpha,
+        "power": power,
+        "required_per_arm": per_arm,
+        "supported_by_study_builder": per_arm <= MAX_STUDY_PER_ARM,
+        "caveat": (
+            "Planning approximation only; use pilot variance, arm overlap, reviewer clustering, "
+            "and the frozen primary analysis for the confirmatory calculation."
+        ),
+    }
 
 
 def _instant(value: Any) -> dt.datetime | None:
@@ -677,7 +731,11 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
             return (0, -pushed.timestamp(), identity(item))
         return (1, 0.0, identity(item))
 
-    cutoffs = sorted({min(value, len(candidates)) for value in (10, 25, 100) if candidates})
+    cutoffs = sorted({
+        min(value, len(candidates))
+        for value in (10, 25, 100, len(candidates))
+        if candidates
+    })
     orderings = {
         "forge": candidates,
         "quality": sorted(candidates, key=quality_key),
@@ -714,6 +772,53 @@ def benchmark_queue(queue: Mapping[str, Any], ledger: Mapping[str, Any]) -> dict
         "queue_quality": dict(queue.get("quality") or {}),
         "claims": {"metadata_only": True, "executed": False, "security_verified": False},
     }
+
+
+def merge_judgment_ledgers(
+    queue: Mapping[str, Any],
+    ledgers: Iterable[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Merge independently exported ledgers, keeping the latest unambiguous revision."""
+
+    selected: dict[tuple[str, str], tuple[dt.datetime, dict[str, Any]]] = {}
+    count = 0
+    for ledger in ledgers:
+        benchmark_queue(queue, ledger)
+        count += 1
+        for item in ledger.get("judgments") or []:
+            judgment = dict(item)
+            reviewed = _instant(judgment.get("reviewed_at"))
+            reviewer = str(judgment.get("reviewer") or "").strip()
+            if reviewed is None:
+                raise ResearchError("Merged judgment has an invalid reviewed-at timestamp")
+            identity = str(judgment.get("artifact_id") or "")
+            key = (identity, reviewer.casefold())
+            previous = selected.get(key)
+            if previous and previous[0] == reviewed and previous[1] != judgment:
+                raise ResearchError("Merged ledgers contain conflicting judgments at the same time")
+            if previous is None or reviewed > previous[0]:
+                selected[key] = (reviewed, judgment)
+    if count < 2:
+        raise ResearchError("Judgment merge requires at least two ledgers")
+    if not selected:
+        raise ResearchError("Judgment merge requires at least one rating")
+    merged: dict[str, Any] | None = None
+    for _, judgment in sorted(selected.values(), key=lambda value: (
+        value[0],
+        str(value[1].get("artifact_id") or ""),
+        str(value[1].get("reviewer") or "").casefold(),
+    )):
+        merged = record_judgment(
+            queue,
+            merged,
+            artifact_id=str(judgment["artifact_id"]),
+            rating=str(judgment["rating"]),
+            reviewer=str(judgment["reviewer"]),
+            reviewed_at=str(judgment["reviewed_at"]),
+            notes=str(judgment.get("notes") or ""),
+        )
+    assert merged is not None
+    return merged
 
 
 def create_discovery_study(
@@ -864,6 +969,18 @@ def create_discovery_study(
         "pool_size": len(study_pool),
         "eligibility_policy": "stable-public-source/v1",
         "arms": arms,
+        "analysis": {
+            artifact_id: {
+                "github_stars": (
+                    record_by_id[artifact_id].get("github_stars")
+                    if isinstance(record_by_id[artifact_id].get("github_stars"), int)
+                    and not isinstance(record_by_id[artifact_id].get("github_stars"), bool)
+                    else None
+                ),
+                "owner": _owner(record_by_id[artifact_id]),
+            }
+            for artifact_id in ordered_ids
+        },
         "claims": {"metadata_only": True, "security_verified": False, "executed": False},
     }
     return ballot, key
@@ -873,8 +990,24 @@ def benchmark_discovery_study(
     ballot: Mapping[str, Any],
     key: Mapping[str, Any],
     ledger: Mapping[str, Any],
+    *,
+    min_reviews_per_artifact: int = 3,
+    bootstrap_samples: int = 5_000,
 ) -> dict[str, Any]:
     """Score each hidden ranking arm against judgments collected on one ballot."""
+
+    if (
+        not isinstance(min_reviews_per_artifact, int)
+        or isinstance(min_reviews_per_artifact, bool)
+        or not 1 <= min_reviews_per_artifact <= 10
+    ):
+        raise ResearchError("Minimum reviews per artifact must be between 1 and 10")
+    if (
+        not isinstance(bootstrap_samples, int)
+        or isinstance(bootstrap_samples, bool)
+        or not 100 <= bootstrap_samples <= 100_000
+    ):
+        raise ResearchError("Bootstrap samples must be between 100 and 100000")
 
     candidates = [
         item for item in ballot.get("candidates") or []
@@ -892,6 +1025,7 @@ def benchmark_discovery_study(
         sort_keys=True,
     ).encode("utf-8")).hexdigest()
     arms = key.get("arms")
+    analysis = key.get("analysis")
     if (
         ballot.get("schema") != DISCOVERY_QUEUE_SCHEMA
         or key.get("schema") != STUDY_KEY_SCHEMA
@@ -900,6 +1034,9 @@ def benchmark_discovery_study(
         or key.get("ballot_digest") != ballot_digest
         or not isinstance(arms, Mapping)
         or set(arms) != set(_STUDY_ARMS)
+        or not isinstance(analysis, Mapping)
+        or set(analysis) != set(ordered_ids)
+        or any(not isinstance(value, Mapping) for value in analysis.values())
         or not candidates
         or any(not identity for identity in ordered_ids)
         or len(candidate_by_id) != len(ordered_ids)
@@ -920,6 +1057,70 @@ def benchmark_discovery_study(
         raise ResearchError("Discovery study key does not cover the ballot")
 
     overall = benchmark_queue(ballot, ledger)
+    ratings: dict[str, list[int]] = {identity: [] for identity in ordered_ids}
+    reviewer_ratings: dict[str, dict[str, int]] = {}
+    for item in ledger.get("judgments") or []:
+        identity = str(item["artifact_id"])
+        relevance = int(item["relevance"])
+        reviewer = str(item["reviewer"]).casefold()
+        ratings[identity].append(relevance)
+        reviewer_ratings.setdefault(reviewer, {})[identity] = relevance
+    incomplete = [
+        identity for identity in ordered_ids
+        if len(ratings[identity]) < min_reviews_per_artifact
+    ]
+    if incomplete:
+        raise ResearchError(
+            f"Discovery study is incomplete: {len(incomplete)} candidate(s) have fewer than "
+            f"{min_reviews_per_artifact} review(s)"
+        )
+    aggregate = {
+        identity: sum(values) / len(values)
+        for identity, values in ratings.items()
+    }
+    relevant = {identity: value >= 2 for identity, value in aggregate.items()}
+
+    def percentile(values: list[float], probability: float) -> float:
+        ordered = sorted(values)
+        position = (len(ordered) - 1) * probability
+        lower = int(math.floor(position))
+        upper = int(math.ceil(position))
+        if lower == upper:
+            return ordered[lower]
+        return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+    def precision_interval(name: str, identities: list[str]) -> list[float]:
+        values = [1.0 if relevant[identity] else 0.0 for identity in identities]
+        rng = random.Random(hashlib.sha256(
+            f"{ballot.get('snapshot_id')}\n{name}\nprecision".encode("utf-8")
+        ).digest())
+        samples = [
+            sum(rng.choice(values) for _ in values) / len(values)
+            for _ in range(bootstrap_samples)
+        ]
+        return [round(percentile(samples, 0.025), 4), round(percentile(samples, 0.975), 4)]
+
+    reviewer_names = sorted(reviewer_ratings)
+    kappas: list[tuple[int, float]] = []
+    for left_index, left_name in enumerate(reviewer_names):
+        for right_name in reviewer_names[left_index + 1:]:
+            left = reviewer_ratings[left_name]
+            right = reviewer_ratings[right_name]
+            shared = sorted(set(left) & set(right))
+            if len(shared) < 2:
+                continue
+            observed = sum((left[item] - right[item]) ** 2 / 9 for item in shared) / len(shared)
+            left_counts = Counter(left[item] for item in shared)
+            right_counts = Counter(right[item] for item in shared)
+            expected = sum(
+                left_counts[a] * right_counts[b] * (a - b) ** 2 / 9
+                for a in range(4) for b in range(4)
+            ) / (len(shared) ** 2)
+            if expected:
+                kappas.append((len(shared), 1 - observed / expected))
+            elif observed == 0:
+                kappas.append((len(shared), 1.0))
+
     arm_results = []
     for name in _STUDY_ARMS:
         identities = normalized_arms[name]
@@ -937,12 +1138,67 @@ def benchmark_discovery_study(
             ],
         }
         result = benchmark_queue(arm_queue, arm_ledger)
+        arm_metric = next(item for item in result["metrics"] if item["cutoff"] == len(identities))
+        owners = Counter(str(analysis[identity].get("owner") or "unknown") for identity in identities)
+        low_visibility = [
+            identity for identity in identities
+            if isinstance(analysis[identity].get("github_stars"), int)
+            and analysis[identity]["github_stars"] <= 10
+        ]
         arm_results.append({
             "ordering": name,
             "candidate_count": len(identities),
             "judged_artifact_count": result["judged_artifact_count"],
             "metrics": result["metrics"],
+            "primary": {
+                "relevant_count": sum(relevant[identity] for identity in identities),
+                "precision": arm_metric["precision"],
+                "precision_ci_95": precision_interval(name, identities),
+                "mean_relevance": round(sum(aggregate[identity] for identity in identities) / len(identities), 4),
+                "ndcg": arm_metric["ndcg"],
+                "low_visibility_count": len(low_visibility),
+                "relevant_low_visibility_count": sum(relevant[identity] for identity in low_visibility),
+                "unique_owners": len(owners),
+                "max_candidates_per_owner": max(owners.values(), default=0),
+            },
         })
+    comparisons = []
+    forge = normalized_arms["forge"]
+    union = ordered_ids
+    for name in _STUDY_ARMS[1:]:
+        baseline = normalized_arms[name]
+        forge_set = set(forge)
+        baseline_set = set(baseline)
+        rng = random.Random(hashlib.sha256(
+            f"{ballot.get('snapshot_id')}\nforge-vs-{name}".encode("utf-8")
+        ).digest())
+        differences: list[float] = []
+        for _ in range(bootstrap_samples):
+            sampled = [rng.choice(union) for _ in union]
+            forge_values = [relevant[item] for item in sampled if item in forge_set]
+            baseline_values = [relevant[item] for item in sampled if item in baseline_set]
+            if forge_values and baseline_values:
+                differences.append(
+                    sum(forge_values) / len(forge_values)
+                    - sum(baseline_values) / len(baseline_values)
+                )
+        observed = (
+            sum(relevant[item] for item in forge) / len(forge)
+            - sum(relevant[item] for item in baseline) / len(baseline)
+        )
+        comparisons.append({
+            "comparison": f"forge_minus_{name}",
+            "precision_difference": round(observed, 4),
+            "precision_difference_ci_95": [
+                round(percentile(differences, 0.025), 4),
+                round(percentile(differences, 0.975), 4),
+            ],
+            "overlap_count": len(forge_set & baseline_set),
+        })
+    weighted_kappa = (
+        sum(count * value for count, value in kappas) / sum(count for count, _ in kappas)
+        if kappas else None
+    )
     return {
         "schema": STUDY_BENCHMARK_SCHEMA,
         "policy": POLICY_VERSION,
@@ -952,9 +1208,15 @@ def benchmark_discovery_study(
         "judged_count": overall["judged_count"],
         "judged_artifact_count": overall["judged_artifact_count"],
         "reviewer_count": overall["reviewer_count"],
+        "complete": True,
+        "minimum_reviews_per_artifact": min_reviews_per_artifact,
+        "bootstrap_samples": bootstrap_samples,
         "doubly_judged_count": overall["doubly_judged_count"],
         "pairwise_exact_agreement": overall["pairwise_exact_agreement"],
+        "pairwise_quadratic_weighted_kappa": round(weighted_kappa, 4) if weighted_kappa is not None else None,
+        "weighted_kappa_reviewer_pairs": len(kappas),
         "arms": arm_results,
+        "comparisons": comparisons,
         "claims": {"metadata_only": True, "executed": False, "security_verified": False},
     }
 
