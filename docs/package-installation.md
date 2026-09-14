@@ -29,10 +29,10 @@ checklist; the signature is rechecked when installation starts. See
 [Hidden-gem research and publication](hidden-gem-pipeline.md) for proposal
 creation and the full trust boundary.
 
-Restart the loopback launcher, open `#packages/agent-teams-builder`, choose a
-saved Harness version, and select **Verify, test & install**. The browser sends
-only the stable package slug and saved-version ID; it cannot choose filesystem
-paths, keys, URLs, commands, or sandbox flags.
+Restart the loopback launcher, open the certified package page, choose a saved
+Harness version, and select **Verify, test & install**. The browser sends only
+the stable package slug and saved-version ID; it cannot choose filesystem paths,
+keys, URLs, commands, or sandbox flags.
 
 The equivalent CLI transaction is:
 
@@ -43,6 +43,31 @@ python3 -m dsh_forge packages install \
   --version version_REPLACE_WITH_SAVED_ID \
   --profile web
 ```
+
+## One-plugin artifact pages
+
+A plugin profile page exposes **Install and run in sandbox** only when one local
+certified recipe contains exactly one plugin and its signed npm name, version,
+integrity, repository URL, and commit all match the current catalog record. A
+large confirmation dialog explains the residual risk and requires a fresh
+acknowledgment for each attempt. Forge then runs the same installation
+transaction above, saves a reviewed configuration, and clones the promoted
+profile into a disposable Apptainer cell. The installation receipt registry
+records the artifact ID and that the acknowledgment occurred, without storing
+browser text or credentials.
+
+The equivalent CLI command has the same acknowledgment gate:
+
+```bash
+python3 -m dsh_forge catalog install-run github:REPLACE_WITH_ARTIFACT_ID \
+  --version version_REPLACE_WITH_SAVED_ID \
+  --acknowledge-risk
+```
+
+The web and CLI routes accept only the artifact ID and saved-version ID. They
+resolve the catalog record, recipe, signature, trust root, source URL, and
+sandbox policy locally. Forks stay browse-only in V1 because installing a full
+Harness fork requires a distinct signed build recipe and compatibility boundary.
 
 ## Enforced transaction
 
@@ -68,4 +93,6 @@ error code and retain bounded logs under `package-profiles/failed/`; the current
 profile pointer is not changed.
 
 This boundary still does not claim kernel exploit immunity, a per-profile disk
-quota, or safe execution of arbitrary native code. Host fallback is absent.
+quota, or safe execution of arbitrary native code. Apptainer shares the host
+kernel, and a web cell uses host networking for its loopback port. The host DSH
+home and launcher secrets remain excluded. Host installation fallback is absent.

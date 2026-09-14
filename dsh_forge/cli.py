@@ -124,6 +124,17 @@ def _parser() -> argparse.ArgumentParser:
     search_catalog.add_argument("--featured", action="store_true", help="only administrator-curated entries")
     search_catalog.add_argument("--licensed", action="store_true", help="only entries reporting a license")
     search_catalog.add_argument("--no-archived", action="store_true", help="exclude archived repositories")
+    install_run_artifact = catalog_commands.add_parser(
+        "install-run",
+        help="install an exact reviewed plugin recipe and run it in a disposable Apptainer cell",
+    )
+    install_run_artifact.add_argument("artifact_id")
+    install_run_artifact.add_argument("--version", required=True, dest="version_id")
+    install_run_artifact.add_argument(
+        "--acknowledge-risk",
+        action="store_true",
+        help="acknowledge that sandboxing reduces but does not eliminate community-code risk",
+    )
 
     research = commands.add_parser("research", help="rank hidden gems and publish curator-reviewed package proposals")
     research_commands = research.add_subparsers(dest="research_command", required=True)
@@ -701,6 +712,12 @@ def run(
                     featured_only=args.featured,
                     licensed_only=args.licensed,
                     include_archived=not args.no_archived,
+                )
+            elif command == "catalog.install-run":
+                data = launcher.install_and_run_catalog_artifact(
+                    artifact_id=args.artifact_id,
+                    version_id=args.version_id,
+                    acknowledge_risk=args.acknowledge_risk,
                 )
             elif command == "research.gems":
                 page = launcher.catalog_search(

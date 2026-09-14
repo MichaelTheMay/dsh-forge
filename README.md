@@ -262,9 +262,12 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
   compatibility, license, and risk metadata.
 - Favorite an artifact locally and reopen it from the Home page. Authentication,
   ratings, and cross-device favorites remain post-V1 work.
-- Raw plugins and forks are browse-only. **Install and run** remains disabled
-  until exact bytes and a reviewed sandbox recipe are available. Forge exposes
-  no host install or raw archive shortcut.
+- A plugin's **Install and run** action becomes available only when a local
+  curator-signed, single-plugin recipe matches its exact npm package, integrity,
+  repository, and commit. Every attempt requires a risk acknowledgment, runs
+  the existing offline Apptainer transaction, and starts a disposable clone.
+  Unmatched plugins and all V1 forks remain browse-only. Forge exposes no host
+  install or raw archive shortcut.
 - The package
   composition and installation contract remains available through the CLI, but
   provisional package recipes are not promoted in the primary browser.
@@ -340,6 +343,19 @@ composition and DeepSeek Web startup inside Apptainer, and atomically promotes a
 versioned profile pointer. A failed transaction leaves the current profile
 unchanged and retains bounded evidence. See
 [Sandbox package installation](docs/package-installation.md).
+
+An exact one-plugin recipe also enables the same transaction from that plugin's
+profile page. The equivalent CLI action is explicit about residual risk:
+
+```bash
+python3 -m dsh_forge catalog install-run github:ARTIFACT_ID \
+  --version version_SAVED_ID \
+  --acknowledge-risk
+```
+
+Neither route accepts a download URL, command, key path, or sandbox override.
+Fork execution remains out of scope for V1 because it needs a separate signed
+build and Harness-compatibility policy.
 
 ## Configurations and Forge Assistant
 

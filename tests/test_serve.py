@@ -649,6 +649,32 @@ class LauncherServer(LauncherFixture):
         self.assertEqual(payload["id"], "cell_assistant")
         start.assert_called_once_with(saved_id)
 
+    def test_artifact_install_run_endpoint_accepts_only_stable_ids_and_acknowledgment(self):
+        cookie, _ = self.establish_session()
+        with mock.patch.object(
+            self.launcher,
+            "install_and_run_catalog_artifact",
+            return_value={"artifact_id": "github:42", "cell": {"id": "cell_plugin"}},
+        ) as start:
+            with self.request(
+                "/api/v1/catalog/install-run",
+                {
+                    "artifact_id": "github:42",
+                    "version_id": "version_123456789abc",
+                    "acknowledge_risk": True,
+                    "url": "https://attacker.invalid/plugin.tgz",
+                    "command": "ignored",
+                },
+                cookie=cookie,
+            ) as response:
+                payload = json.load(response)
+        self.assertEqual(payload["cell"]["id"], "cell_plugin")
+        start.assert_called_once_with(
+            artifact_id="github:42",
+            version_id="version_123456789abc",
+            acknowledge_risk=True,
+        )
+
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()
         self.assertEqual(payload["mode"], "live-local-sidecar")

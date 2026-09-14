@@ -81,5 +81,6 @@ for the stable `dsh-forge.cli/v1` envelope, and `--dsh-home` to add a home.
 `discovery_executes_code: false`. Detecting a profile is not a security review
 of the plugins inside it, and running one grants that code the user's own
 access. Community artifacts that are *not* already installed keep the stricter
-boundary: signed packages install through the sandbox, raw plugins hand over an
-exact-version install command, and forks download a pinned archive.
+boundary: an exact curator-signed plugin recipe may install and run through the
+Apptainer transaction, while unsigned plugins and all V1 forks remain
+browse-only. Forge exposes no raw host command or archive shortcut.

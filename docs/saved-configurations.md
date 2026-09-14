@@ -7,7 +7,9 @@ credentials, arbitrary commands, source paths, package URLs, or unverified code.
 Browse Packages, Plugins, or Forks and choose **Save configuration**. A package
 with a locally configured signed recipe can be saved as a package-backed
 configuration. A raw plugin or fork is saved as an inert draft because catalog
-metadata is not executable trust.
+metadata is not executable trust. The plugin-page install-and-run action creates
+a package-backed configuration only after an exact one-plugin recipe completes
+the signed sandbox transaction.
 
 The same workflow is available through the versioned CLI:
 

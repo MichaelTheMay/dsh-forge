@@ -103,10 +103,12 @@ not treat a production signature as verified without a real verifier.
 ## Install boundary
 
 Raw plugin and fork profiles do not expose host install commands or unsigned
-archive downloads. Their **Install and run** control remains disabled until an
-exact artifact and reviewed recipe can pass the existing signed acquisition and
-Apptainer transaction. Acquisition cannot start from an unsigned browser entry. If a
-community checkout is already present in an
+archive downloads. A plugin's **Install and run** control is enabled only when
+one locally trusted single-plugin recipe matches its signed package name,
+version, integrity, repository, and commit. The action requires an explicit risk
+acknowledgment, passes the existing acquisition and Apptainer transaction, and
+starts a disposable clone. Forks remain disabled in V1. Acquisition cannot
+start from an unsigned browser entry. If a community checkout is already present in an
 explicit scan root, the launcher can run only its captured CLI help probe in the
 separate, pinned, networkless Apptainer sandbox. Passing does not promote it or
 enable host launch. An isolated port or writable home alone is not a security

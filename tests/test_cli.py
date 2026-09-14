@@ -169,6 +169,24 @@ class LocalCellCliTests(unittest.TestCase):
         self.assertEqual(result["data"]["snapshot_id"], "public-feed-test")
         self.assertFalse(result["data"]["signature"]["verified"])
 
+    def test_catalog_install_run_exposes_the_same_acknowledged_artifact_boundary(self):
+        with mock.patch.object(
+            self.launcher,
+            "install_and_run_catalog_artifact",
+            return_value={"artifact_id": "github:42", "cell": {"id": "cell_plugin"}},
+        ) as start:
+            code, result = self.invoke(
+                "catalog", "install-run", "github:42",
+                "--version", "version_123456789abc", "--acknowledge-risk",
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["data"]["cell"]["id"], "cell_plugin")
+        start.assert_called_once_with(
+            artifact_id="github:42",
+            version_id="version_123456789abc",
+            acknowledge_risk=True,
+        )
+
     def test_research_judge_and_benchmark_round_trip(self):
         queue = discovery_queue({
             "snapshot_id": "cli-judgments",

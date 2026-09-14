@@ -637,8 +637,12 @@
             <p class="repo-muted">{{ installStatus }}. Installation verifies trust, acquires exact bytes, rejects unsafe archives, uses an offline disposable profile, boots it in Apptainer, and promotes only after both smoke checks pass.</p>
           </div></sc-if>
           <sc-if value="{{ isRepositoryDetail }}" hint-placeholder-val="true"><div class="repo-detail-section"><h3>Install and run <span class="repo-label">Sandbox only</span></h3>
-            <button class="repo-button repo-button-primary" disabled="{{ installAndRunDisabled }}" style="width:100%;">{{ installAndRunLabel }}</button>
-            <p class="repo-muted">Forge will enable this only after it can verify exact source bytes and run a reviewed install recipe inside the sandbox. It never falls back to host installation.</p>
+            <label class="repo-muted" for="artifact-version">Harness version</label>
+            <select id="artifact-version" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}" style="width:100%; margin:7px 0 9px; padding:8px; border:1px solid oklch(0.34 0.012 255); border-radius:6px; background:oklch(0.19 0.008 255); color:oklch(0.88 0.012 255); font-size:10px;">
+              <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+            </select>
+            <button class="repo-button repo-button-primary" onClick="{{ installAndRun }}" disabled="{{ installAndRunDisabled }}" style="width:100%;">{{ installAndRunLabel }}</button>
+            <p class="repo-muted">{{ installAndRunReason }}. Forge only enables this path for a single-plugin recipe whose signed package identity, version, integrity, repository, and commit match the catalog record. There is no host installation fallback.</p>
           </div></sc-if>
         </sc-if>
         <sc-if value="{{ noDetail }}" hint-placeholder-val="{{ false }}"><div class="repo-detail-empty"><h2>Artifact not found</h2><p>This item is not present in the current local catalog.</p><button class="repo-button" onClick="{{ backToCatalog }}">Back to results</button></div></sc-if>
@@ -671,6 +675,24 @@
       <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="repo-empty" style="margin:auto;"><div class="repo-empty-icon" aria-hidden="true">◇</div><h2>Start the isolated assistant</h2><p>The embedded Harness will appear here after its authenticated loopback URL is ready.</p></div></sc-if>
     </section>
   </main>
+  </sc-if>
+
+  <sc-if value="{{ artifactRunConfirmationOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; padding:24px; background:oklch(0.10 0.008 255 / 0.82);">
+      <section role="dialog" aria-modal="true" aria-labelledby="artifact-run-title" style="width:min(620px, 100%); border:1px solid oklch(0.42 0.035 255); border-radius:10px; background:oklch(0.19 0.01 255); box-shadow:0 24px 80px oklch(0.05 0.01 255 / 0.7); overflow:hidden;">
+        <header style="padding:20px 22px 16px; border-bottom:1px solid oklch(0.3 0.012 255);">
+          <div class="repo-eyebrow">COMMUNITY CODE / EXPLICIT APPROVAL</div>
+          <h2 id="artifact-run-title" style="margin:7px 0 5px; font-size:20px;">Install and run {{ artifactRunArtifact.name }}?</h2>
+          <p class="repo-muted" style="margin:0;">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p>
+        </header>
+        <div style="padding:18px 22px;">
+          <p style="margin-top:0; color:oklch(0.9 0.012 255);">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p>
+          <div style="padding:12px 14px; border:1px solid oklch(0.54 0.10 72); border-radius:7px; background:oklch(0.24 0.035 72); color:oklch(0.9 0.06 80); font-size:11px; line-height:1.55;">Sandboxing reduces risk but does not eliminate it. Apptainer shares the host kernel, and the running web surface uses host networking for its loopback port. Forge does not mount your host DSH home or forward launcher secrets.</div>
+          <label style="display:flex; gap:10px; align-items:flex-start; margin-top:16px; color:oklch(0.9 0.012 255); font-size:11px; line-height:1.45;"><input type="checkbox" checked="{{ artifactRiskAcknowledged }}" onChange="{{ toggleArtifactRisk }}" style="margin-top:2px;" /> <span>I understand that this is community code and that isolation is not a guarantee of safety.</span></label>
+        </div>
+        <footer style="display:flex; justify-content:flex-end; gap:8px; padding:14px 22px; border-top:1px solid oklch(0.3 0.012 255);"><button class="repo-button" onClick="{{ cancelArtifactRun }}" disabled="{{ artifactRunBusy }}">Cancel</button><button class="repo-button repo-button-primary" onClick="{{ startArtifactRun }}" disabled="{{ artifactRunConfirmDisabled }}">{{ artifactRunConfirmLabel }}</button></footer>
+      </section>
+    </div>
   </sc-if>
 
 
