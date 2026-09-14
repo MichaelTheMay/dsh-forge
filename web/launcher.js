@@ -8,8 +8,19 @@ const BAD = 'oklch(0.7 0.16 25)';
 const BLUE = 'oklch(0.74 0.12 235)';
 const MUTED = 'oklch(0.62 0.01 255)';
 const TXT = 'oklch(0.86 0.01 255)';
-const BORDER = 'oklch(0.31 0.012 255)';
-const SELB = 'oklch(0.58 0.11 235)';
+const RISK_LEVELS = ['low', 'medium', 'medium-high', 'high', 'critical'];
+const RISK_COLORS = {
+  low: 'oklch(0.74 0.14 155)', medium: 'oklch(0.8 0.11 85)', 'medium-high': 'oklch(0.78 0.12 65)',
+  high: 'oklch(0.74 0.13 45)', critical: 'oklch(0.7 0.15 25)'
+};
+
+// Only a plain `a || b || c` list of exact versions is checked; real semver
+// ranges and prose qualifiers are shown verbatim and never evaluated.
+function exactVersionList(range) {
+  if (typeof range !== 'string') return null;
+  const versions = range.split('||').map(item => item.trim());
+  return versions.every(item => /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(item)) ? versions : null;
+}
 
 // CATALOG_SNAPSHOT_START
 const CATALOG_SNAPSHOT = {
@@ -1443,8 +1454,6 @@ function catalogRoute(hash) {
   return { view: 'launch', type: 'plugin' };
 }
 
-const COLUMNS = ['Cell / state', 'Tree', 'Surface', 'URL', 'Process identity', 'Uptime', 'Home / isolation', 'Workspace', 'Trust', 'Health', 'Actions'];
-
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
 class Component extends DCLogic {
@@ -1463,46 +1472,32 @@ class Component extends DCLogic {
       profileTask: '',
       profileBusy: false,
       pendingProfile: null,
-      catalogProfileId: '',
       packageVersionId: '',
       packageInstallBusy: false,
       artifactRunBusy: false,
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
       configurationBusy: false,
-      catalogScope: 'all',
       catalogStore: { available: false },
       storeArtifacts: [],
       storeTotal: 0,
       storeCursor: '',
       storeLoading: false,
       storeError: '',
-      storeGeneration: 0,
       assistantVersionId: '',
       assistantBusy: false,
       assistantCellId: null,
       assistantUrl: '',
       versionsDirectory: { path: '~/dsh-versions', available: false, auto_scan: true },
-      versionFormOpen: false,
-      versionPath: '',
       versionBusy: false,
       versionSettingsId: null,
-      surface: 'web',
-      profile: 'tui-min',
-      task: '',
-      port: String(props.defaultPort ?? 3100),
-      openBrowser: true,
-      homeMode: 'fresh',
-      cloneSource: '~/.dsh',
-      excludeSessions: true,
-      workspace: 'managed',
-      advancedOpen: false,
       preview: null,
       logCell: null,
       query: '',
       catalogType: initialRoute.type,
       catalogSort: 'recommended',
       knownLicenseOnly: false,
+      favoritesOnly: false,
       artifactId: initialRoute.artifactId || (initialRoute.packageSlug
         ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
         : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id),
@@ -1512,18 +1507,12 @@ class Component extends DCLogic {
       toast: '',
       cells: [],
       sidecarConnected: false,
-      statusLoaded: false,
-      suggestedPort: Number(props.defaultPort ?? 3100),
-      coverageGaps: [],
-      credentials: [],
       sandbox: {
         mode: 'unavailable', ready: false, hostile_code_isolation: false,
         reason: 'Start the sidecar with a pinned Apptainer image to enable complete cells.'
       },
-      sandboxTesting: null,
       previewData: null,
       logLines: [],
-      selectedCell: null,
       inspectorTab: 'logs',
       artifacts: []
     };
@@ -1536,7 +1525,7 @@ class Component extends DCLogic {
       if (this.state.sidecarConnected && !this.state.versionBusy) this.rescanVersions(true);
     }, 30000);
     this.inspectorTimer = setInterval(() => {
-      const cell = this.state.view === 'launch' && this.state.cells.find(item => item.id === this.state.selectedCell);
+      const cell = this.state.view === 'launch' && this.state.cells.find(item => item.id === this.state.logCell);
       if (cell) this.inspectCell(cell, this.state.inspectorTab);
     }, 3000);
     this.hashListener = () => {
@@ -1576,6 +1565,11 @@ class Component extends DCLogic {
     }
   }
 
+  openBrowser(type) {
+    this.navigate('catalog', type);
+    this.scheduleCatalogRefresh();
+  }
+
   selectCatalogArtifact(artifact) {
     const detail = (artifact && artifact.name ? artifact : null) ||
       CATALOG.find(item => item.id === artifact.id) ||
@@ -1584,7 +1578,6 @@ class Component extends DCLogic {
     this.setState({
       artifactId: artifact.id,
       catalogType: artifact.type,
-      catalogScope: 'all',
       detailOpen: true,
       detailArtifact: detail
     });
@@ -1603,7 +1596,14 @@ class Component extends DCLogic {
       const record = await this.api('/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
       if (this.state.artifactId === artifactId) this.setState({ detailArtifact: mapCatalogRecord(record) });
     } catch (error) {
-      if (this.state.artifactId === artifactId) this.setState({ storeError: error.message });
+      // Without the sidecar's record there is no execution policy, so the page fails closed
+      // and says why instead of waiting on a load that already failed.
+      const current = this.state.artifactId === artifactId && (this.state.detailArtifact || local);
+      if (current) {
+        this.setState({
+          detailArtifact: { ...current, execution: { eligible: false, reason: 'No signed recipe could be checked: ' + error.message } }
+        });
+      }
     }
   }
 
@@ -1637,7 +1637,7 @@ class Component extends DCLogic {
         artifactRunConfirmation: null,
         artifactRiskAcknowledged: false,
         view: 'launch',
-        selectedCell: result.cell.id,
+        logCell: result.cell.id,
         inspectorTab: 'logs'
       });
       if (typeof window !== 'undefined') window.location.hash = 'launch';
@@ -1770,7 +1770,7 @@ class Component extends DCLogic {
         method: 'POST', body: JSON.stringify({ id: configuration.id })
       });
       await this.refreshStatus(true);
-      this.setState({ view: 'launch', selectedCell: cell.id, inspectorTab: 'logs' });
+      this.setState({ view: 'launch', logCell: cell.id, inspectorTab: 'logs' });
       if (typeof window !== 'undefined') window.location.hash = 'launch';
       this.flash('Configuration started inside Apptainer');
     } catch (error) {
@@ -1825,7 +1825,7 @@ class Component extends DCLogic {
       const cell = await this.api('/api/v1/profiles/run', {
         method: 'POST', body: JSON.stringify(spec)
       });
-      this.setState({ preview: null, previewData: null, pendingProfile: null, selectedCell: cell.id });
+      this.setState({ preview: null, previewData: null, pendingProfile: null, logCell: cell.id, inspectorTab: 'logs' });
       await this.refreshStatus(true);
       this.flash('Started local profile ' + cell.profile + ' on the host');
       if (pendingWindow) this.openCell(cell, pendingWindow);
@@ -1898,10 +1898,7 @@ class Component extends DCLogic {
   }
 
   catalogQueryKey(state = this.state) {
-    return JSON.stringify([
-      state.query.trim(), state.catalogType, state.catalogScope,
-      state.catalogSort, !!state.knownLicenseOnly
-    ]);
+    return JSON.stringify([state.query.trim(), state.catalogType, state.catalogSort, !!state.knownLicenseOnly]);
   }
 
   /** Fetch one page from the imported catalog store. */
@@ -1917,7 +1914,6 @@ class Component extends DCLogic {
     parameters.set('type', s.catalogType);
     parameters.set('sort', sortMap[s.catalogSort] || 'relevance');
     parameters.set('limit', '50');
-    if (s.catalogScope === 'featured') parameters.set('featured', '1');
     if (s.knownLicenseOnly) parameters.set('licensed', '1');
     if (append && s.storeCursor) parameters.set('cursor', s.storeCursor);
     this.setState({ storeLoading: true, storeError: '' });
@@ -1934,7 +1930,6 @@ class Component extends DCLogic {
         storeArtifacts: append ? [...this.state.storeArtifacts, ...mapped] : mapped,
         storeTotal: page.total || 0,
         storeCursor: page.next_cursor || '',
-        storeGeneration: page.generation || 0,
         storeLoading: false
       });
     } catch (error) {
@@ -1958,25 +1953,16 @@ class Component extends DCLogic {
 
   applyStatus(status) {
     const trees = Array.isArray(status.trees) ? status.trees : [];
-    const profiles = Array.isArray(status.profiles) ? status.profiles : [];
     const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
     const cells = Array.isArray(status.cells) ? status.cells : [];
-    const selectedCell = cells.some(c => c.id === this.state.selectedCell) ? this.state.selectedCell : (cells[0] ? cells[0].id : null);
     this.setState({
-      sidecarConnected: true, statusLoaded: true, trees, treeId: current,
-      cells, selectedCell,
+      sidecarConnected: true, trees, treeId: current, cells,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
       configurations: Array.isArray(status.configurations) ? status.configurations : [],
-      profiles,
-      catalogProfileId: profiles.some(profile => profile.id === this.state.catalogProfileId)
-        ? this.state.catalogProfileId
-        : ((profiles.find(profile => profile.name === 'web') || profiles[0] || {}).id || ''),
+      profiles: Array.isArray(status.profiles) ? status.profiles : [],
       versionsDirectory: status.versions_directory || this.state.versionsDirectory,
-      suggestedPort: status.suggested_port || this.state.suggestedPort,
-      coverageGaps: Array.isArray(status.coverage_gaps) ? status.coverage_gaps : [],
-      credentials: Array.isArray(status.credentials) ? status.credentials : [],
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
     });
@@ -1989,7 +1975,7 @@ class Component extends DCLogic {
 
   async refreshStatus(silent = false) {
     if (typeof fetch === 'undefined' || typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) {
-      this.setState({ statusLoaded: true, sidecarConnected: false });
+      this.setState({ sidecarConnected: false });
       return;
     }
     try {
@@ -1997,26 +1983,8 @@ class Component extends DCLogic {
       this.applyStatus(status);
       await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
     } catch (error) {
-      this.setState({ statusLoaded: true, sidecarConnected: false, cells: [] });
+      this.setState({ sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
-    }
-  }
-
-  async saveLocalVersion() {
-    const path = this.state.versionPath.trim();
-    if (!path) return this.flash('Enter the directory containing a local Harness checkout');
-    this.setState({ versionBusy: true });
-    try {
-      const status = await this.api('/api/v1/scan', {
-        method: 'POST', body: JSON.stringify({ roots: [path] })
-      });
-      this.applyStatus(status);
-      this.setState({ versionPath: '', versionFormOpen: false });
-      this.flash('Local version saved; review its detection status');
-    } catch (error) {
-      this.flash(error.message);
-    } finally {
-      this.setState({ versionBusy: false });
     }
   }
 
@@ -2085,56 +2053,10 @@ class Component extends DCLogic {
     }
   }
 
-  launchSpec() {
-    const s = this.state;
-    return {
-      tree_id: s.treeId,
-      surface: s.surface,
-      profile: s.profile || 'tui-min',
-      task: s.task,
-      port: s.surface === 'headless' ? null : Number(s.port),
-      open_browser: s.openBrowser,
-      home_mode: s.homeMode,
-      clone_source: s.cloneSource,
-      workspace: s.workspace,
-      network: s.surface === 'web' ? 'host' : 'none',
-      resources: { gpu: 'none' }
-    };
-  }
-
-  async previewLaunch() {
-    try {
-      const previewData = await this.api('/api/v1/launches/preview', { method: 'POST', body: JSON.stringify(this.launchSpec()) });
-      this.setState({ preview: 'launch', previewData });
-    } catch (error) { this.flash(error.message); }
-  }
-
   uptime(started) {
     const s = Math.max(0, Math.floor((Date.now() - started) / 1000));
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
     return h > 0 ? h + 'h ' + pad(m) + 'm ' + pad(s % 60) + 's' : m + 'm ' + pad(s % 60) + 's';
-  }
-
-  freePort() {
-    const used = new Set(this.state.cells.map(c => c.port).filter(Boolean).concat([3080, 3090]));
-    let p = Number(this.state.suggestedPort) || 3100;
-    while (used.has(p)) p++;
-    return p;
-  }
-
-  async startCell() {
-    const pendingWindow = this.state.openBrowser && this.state.surface === 'web' ? window.open('about:blank', '_blank') : null;
-    try {
-      const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify(this.launchSpec()) });
-      this.setState({ preview: null, previewData: null });
-      await this.refreshStatus(true);
-      this.setState({ port: String(this.freePort()) });
-      this.flash('cell ' + cell.name + ' started inside Apptainer');
-      if (pendingWindow) this.openCell(cell, pendingWindow);
-    } catch (error) {
-      if (pendingWindow) pendingWindow.close();
-      this.flash(error.message);
-    }
   }
 
   async quickLaunch(version) {
@@ -2158,7 +2080,6 @@ class Component extends DCLogic {
         resources: { gpu: launch.resources && launch.resources.gpu === 'allocated' ? 'allocated' : 'none' }
       }) });
       await this.refreshStatus(true);
-      this.setState({ selectedCell: cell.id, inspectorTab: 'logs' });
       await this.inspectCell(cell, 'logs');
       this.flash('Launched ' + version.version + ' on port ' + cell.port);
       if (pendingWindow) this.openCell(cell, pendingWindow);
@@ -2168,39 +2089,17 @@ class Component extends DCLogic {
     }
   }
 
-  async sandboxTest(tree) {
-    if (!this.state.sidecarConnected || !this.state.sandbox.ready) {
-      return this.flash(this.state.sandbox.reason || 'Configure the Apptainer sandbox first');
-    }
-    this.setState({ sandboxTesting: tree.id });
-    try {
-      const result = await this.api('/api/v1/trees/' + encodeURIComponent(tree.id) + '/sandbox-test', {
-        method: 'POST', body: '{}'
-      });
-      await this.refreshStatus(true);
-      this.flash('sandbox test ' + result.status + ' · network none · no launcher secrets');
-    } catch (error) {
-      this.flash(error.message);
-    } finally {
-      this.setState({ sandboxTesting: null });
-    }
-  }
-
   async cellAction(cell, action) {
+    // Restart and clone create a new session; its logs stay open if the old session's were.
+    const logsWereOpen = this.state.logCell === cell.id;
     try {
       const result = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/' + action, { method: 'POST', body: '{}' });
       await this.refreshStatus(true);
-      if (action === 'restart' || action === 'clone') this.setState({ selectedCell: result.id, inspectorTab: 'logs' });
+      if ((action === 'restart' || action === 'clone') && logsWereOpen) {
+        this.setState({ logCell: result.id, inspectorTab: 'logs' });
+      }
       this.flash(action + ' complete · ' + cell.name);
     } catch (error) { this.flash(error.message); }
-  }
-
-  async copyCellUrl(cell) {
-    try {
-      const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-      await navigator.clipboard.writeText(payload.url);
-      this.flash('copied authenticated DSH Web URL');
-    } catch (error) { this.flash(error.message || 'clipboard unavailable'); }
   }
 
   async openCell(cell, existingWindow = null) {
@@ -2218,74 +2117,54 @@ class Component extends DCLogic {
     this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
   }
 
-  async openLogs(cell) {
-    try {
-      const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/logs');
-      this.setState({ logCell: cell.id, selectedCell: cell.id, inspectorTab: 'logs', logLines: payload.lines || [] });
-    } catch (error) { this.flash(error.message); }
-  }
-
   async inspectCell(cell, tab = 'logs') {
-    this.setState({ selectedCell: cell.id, inspectorTab: tab });
+    // Never show one session's logs under another while the new ones load.
+    const switching = this.state.logCell !== cell.id;
+    this.setState({ logCell: cell.id, inspectorTab: tab, ...(switching ? { logLines: [], artifacts: [] } : {}) });
     try {
       const [logs, artifacts] = await Promise.all([
         this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/logs'),
         this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/artifacts')
       ]);
-      this.setState({ logCell: cell.id, logLines: logs.lines || [], artifacts: artifacts.artifacts || [] });
+      // The panel may have been closed or moved to another cell while this was in flight.
+      if (this.state.logCell === cell.id) {
+        this.setState({ logLines: logs.lines || [], artifacts: artifacts.artifacts || [] });
+      }
     } catch (error) { this.flash(error.message); }
   }
 
   renderVals() {
     const s = this.state;
     const catalogEnabled = this.props.catalogEnabled ?? true;
-    const t = this.tree(s.treeId);
-    const runnable = s.sidecarConnected && !!(s.sandbox && s.sandbox.ready) && !!t.id && t.trust !== 'foreign' && t.launchability === 'ready';
-    const needsBuild = t.launchability === 'needs-build';
-    const portNum = parseInt(s.port, 10);
-    const occupyingCell = s.cells.find(c => c.port === portNum);
-    const isSystem = portNum === 3080 || portNum === 3090;
-    const confirm = this.props.confirmBeforeLaunch ?? true;
     const sandbox = s.sandbox || {};
     const savedTreeIds = new Set(s.savedVersions.flatMap(item => item.tree_ids || []));
+    // Rows are only built from launch-ready trees; the sandbox and trust still gate Launch.
     const localVersionCard = (tree, saved = null) => {
-      const canLaunch = !!tree && !!sandbox.ready && tree.trust !== 'foreign' && tree.launchability === 'ready';
+      const canLaunch = !!sandbox.ready && tree.trust !== 'foreign';
       const launchSettings = (saved && saved.launch) || {
         surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
         home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
       };
       const gpuMode = launchSettings.resources && launchSettings.resources.gpu === 'allocated' ? 'allocated' : 'none';
-      const status = !tree
-        ? (saved.state === 'missing' ? 'Folder missing' : 'Harness not found')
-        : (canLaunch ? 'Ready' : (!sandbox.ready ? 'Setup required' : 'Unavailable'));
+      const status = canLaunch ? 'Ready' : (!sandbox.ready ? 'Setup required' : 'Unavailable');
       return {
         id: saved ? saved.id : tree.id,
-        name: tree ? tree.name : 'Saved directory',
-        version: tree ? tree.version : 'No version detected',
-        tag: tree && tree.git ? tree.git.branch : (tree ? tree.kind : 'saved path'),
-        commit: tree && tree.git ? tree.git.sha : '—',
-        treeId: tree && tree.id,
+        version: tree.version,
+        gitLine: tree.git ? tree.git.branch + ' @ ' + String(tree.git.sha).slice(0, 7) : tree.kind,
+        treeId: tree.id,
         installPath: saved ? saved.path : tree.path,
-        originLabel: saved && saved.source === 'auto' ? 'found automatically' : (saved ? 'added manually' : 'found for this session'),
-        launchSettings,
-        launchSummary: 'Auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
+        originLabel: saved && saved.source === 'auto' ? 'Found automatically' : (saved ? 'Added manually' : 'Found for this session'),
+        launchSummary: 'auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
         status,
         statusColor: canLaunch ? OK : WARN,
-        buttonLabel: canLaunch ? 'Launch' : (!tree ? 'Unavailable' : (!sandbox.ready ? 'Setup required' : 'Unavailable')),
+        buttonLabel: canLaunch ? 'Launch' : status,
         disabled: !canLaunch,
-        buttonCursor: canLaunch ? 'pointer' : 'not-allowed',
-        buttonBg: canLaunch ? 'oklch(0.34 0.08 155)' : 'oklch(0.25 0.01 255)',
-        buttonBorder: canLaunch ? 'oklch(0.52 0.13 155)' : BORDER,
         showSettings: !!saved,
         settingsOpen: !!saved && s.versionSettingsId === saved.id,
-        showForget: !!saved && (saved.source !== 'auto' || saved.state === 'missing'),
+        showForget: !!saved && saved.source !== 'auto',
         openBrowser: !!launchSettings.open_browser,
         gpuMode,
-        launch: () => this.quickLaunch({
-          version: tree && tree.version,
-          treeId: tree && tree.id,
-          launchSettings
-        }),
+        launch: () => this.quickLaunch({ version: tree.version, treeId: tree.id, launchSettings }),
         toggleSettings: () => saved && this.setState({
           versionSettingsId: s.versionSettingsId === saved.id ? null : saved.id
         }),
@@ -2307,6 +2186,18 @@ class Component extends DCLogic {
       .filter(tree => tree.trust !== 'foreign' && tree.launchability === 'ready' && !savedTreeIds.has(tree.id))
       .map(tree => localVersionCard(tree));
     const versions = [...savedCards, ...sessionCards];
+    // Automatically found folders are managed by the scan; only manual ones need a Forget path here.
+    const unavailableVersions = s.savedVersions
+      .filter(saved => saved.source !== 'auto' && !(saved.state === 'ready' && saved.primary_tree && saved.primary_tree.launchability === 'ready'))
+      .map(saved => ({
+        id: saved.id,
+        path: saved.path,
+        version: (saved.primary_tree && saved.primary_tree.version) || 'No version detected',
+        reason: saved.state === 'missing'
+          ? 'Folder missing. Forgetting it never touches files on disk.'
+          : (saved.primary_tree ? 'Not launch-ready (' + saved.primary_tree.launchability + ')' : 'No Harness found in this folder'),
+        forget: () => this.forgetLocalVersion(saved)
+      }));
     const selectedProfileTree = this.tree(s.treeId);
     const profileTreeReady = !!selectedProfileTree.id && selectedProfileTree.trust !== 'foreign' && selectedProfileTree.launchability === 'ready';
     const localProfiles = s.profiles.map(profile => {
@@ -2315,7 +2206,6 @@ class Component extends DCLogic {
       const headless = profile.surface === 'headless';
       return {
         ...profile,
-        oneClick,
         headless,
         dependencyLabel: profile.dependencies.length
           ? profile.dependencies.length + (profile.dependencies.length === 1 ? ' plugin' : ' plugins')
@@ -2325,113 +2215,54 @@ class Component extends DCLogic {
         setTask: event => this.setState({ profileTask: event.target.value.slice(0, 20000) }),
         disabled: oneClick ? !runnable || (headless && !s.profileTask.trim()) : false,
         buttonLabel: oneClick ? (s.profileBusy ? 'Preparing…' : (headless ? 'Review task run' : 'Review & run')) : 'Copy terminal command',
-        buttonBorder: oneClick ? 'oklch(0.52 0.13 155)' : 'oklch(0.42 0.07 235)',
-        buttonBg: oneClick ? 'oklch(0.32 0.07 155)' : 'oklch(0.27 0.035 235)',
+        buttonClass: oneClick ? 'btn btn-sm' : 'btn btn-sm btn-ghost',
         run: () => oneClick ? this.previewLocalProfile(profile) : this.copyText(profile.command, 'Copied profile command')
       };
     });
-    const communityTrees = s.trees.filter(tr => tr.trust === 'foreign').map(tr => {
-      const result = tr.sandbox_test || {};
-      const canTest = s.sidecarConnected && !!sandbox.ready && !['needs-build', 'not-executable'].includes(tr.launchability);
-      const testing = s.sandboxTesting === tr.id;
-      const passed = result.status === 'passed';
-      const failed = ['failed', 'timeout'].includes(result.status);
-      return {
-        ...tr,
-        revision: tr.git && tr.git.sha ? tr.git.sha : 'unknown revision',
-        testState: passed ? 'passed capability probe' : (failed ? result.status : tr.launchability),
-        stateColor: passed ? OK : (failed ? BAD : WARN),
-        buttonLabel: testing ? 'Testing…' : (result.status ? 'Retest' : 'Test'),
-        disabled: !canTest || testing,
-        buttonCursor: canTest && !testing ? 'pointer' : 'not-allowed',
-        buttonBg: canTest ? 'oklch(0.30 0.055 235)' : 'oklch(0.25 0.01 255)',
-        buttonBorder: canTest ? 'oklch(0.48 0.09 235)' : BORDER,
-        run: () => this.sandboxTest(tr)
-      };
-    });
-
-    let portNote, portNoteFg = MUTED, portNoteBorder = BORDER, portNoteBg = 'transparent';
-    if (s.surface === 'headless') { portNote = 'headless surface binds no HTTP port'; }
-    else if (occupyingCell) { portNote = portNum + ' occupied by managed cell ' + occupyingCell.name + ' — stop it or use ' + this.freePort(); portNoteFg = WARN; portNoteBorder = 'oklch(0.42 0.09 85)'; portNoteBg = 'oklch(0.245 0.03 85)'; }
-    else if (isSystem) { portNote = portNum + ' reserved (' + (portNum === 3080 ? 'operator DSH' : 'this sidecar') + ') — never replaced implicitly'; portNoteFg = BAD; portNoteBorder = 'oklch(0.42 0.1 25)'; portNoteBg = 'oklch(0.25 0.04 25)'; }
-    else if (!s.sidecarConnected) { portNote = 'Portable preview only · start scripts/serve.py to validate and launch'; portNoteFg = WARN; }
-    else { portNote = portNum + ' will be checked on loopback immediately before spawn'; portNoteFg = OK; }
-
-    const homeModes = [
-      { id: 'fresh', label: 'Fresh empty home', tag: 'managed', detail: 'minimum directory structure in a launcher-managed cell dir' },
-      { id: 'clone', label: 'Cloned home', tag: 'snapshot', detail: 'copy a home template; locks, PIDs, sockets and caches excluded' }
-    ].map(h => ({
-      ...h,
-      border: s.homeMode === h.id ? SELB : BORDER,
-      bg: s.homeMode === h.id ? 'oklch(0.255 0.02 255)' : 'transparent',
-      dot: s.homeMode === h.id ? SELB : 'transparent',
-      dotBorder: s.homeMode === h.id ? SELB : 'oklch(0.4 0.012 255)',
-      select: () => this.setState({ homeMode: h.id })
-    }));
-
     const cells = s.cells.map(c => {
-      const ct = this.tree(c.treeId);
       const running = c.process === 'alive';
       const stateColor = c.agent_state === 'working' ? OK : (c.agent_state === 'blocked' ? WARN : (c.agent_state === 'exited' ? BAD : BLUE));
-      const processAlive = c.process === 'alive';
-      const httpOk = /^[1-4]\d\d$/.test(String(c.http));
-      const health = [
-        { label: 'process ' + (c.process || c.state), color: processAlive ? OK : MUTED },
-        { label: c.http === 'n/a' ? 'http n/a' : (httpOk ? 'http ' + c.http : 'http ' + (c.http || 'pending')), color: httpOk ? OK : (c.http === 'n/a' ? MUTED : WARN) },
-        { label: 'loader ' + (c.loader || 'not observed'), color: c.loader === 'settled' ? OK : MUTED }
-      ];
-      const act = (label, on, enabled) => ({
-        label, run: enabled ? on : (() => {}), disabled: !enabled,
-        border: enabled ? 'oklch(0.36 0.012 255)' : 'oklch(0.28 0.012 255)',
-        color: enabled ? TXT : 'oklch(0.48 0.01 255)', cursor: enabled ? 'pointer' : 'not-allowed'
-      });
       return {
         ...c,
-        treeName: ct.name,
-        treeIdentity: (c.version || ct.version || 'unknown') + ' · ' + (c.commit || (ct.git && ct.git.sha) || 'package pin'),
-        workspace_isolation: c.workspace_isolation || 'legacy/shared',
-        surface: c.surface, url: c.port ? '127.0.0.1:' + c.port : '—',
+        url: c.port ? '127.0.0.1:' + c.port : '—',
         uptime: this.uptime(c.started), stateColor,
         stateAnim: c.agent_state === 'working' ? 'dshpulse 1.8s ease-in-out infinite' : 'none',
-        rowBg: s.selectedCell === c.id ? 'oklch(0.235 0.018 255)' : 'oklch(0.205 0.009 255)',
-        cardBorder: s.selectedCell === c.id ? SELB : BORDER,
-        isolationColor: MUTED,
-        trust: ct.trust, trustColor: ct.trust === 'personal' ? OK : (ct.trust === 'readonly' ? BLUE : BAD),
-        trustBorder: ct.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (ct.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
-        health,
-        resourcesList: [
-          { label: 'CPU', value: (c.resources && c.resources.cpu) || 'unknown' },
-          { label: 'GPU', value: (c.resources && c.resources.gpu) || 'none' },
-          { label: 'RAM', value: (c.resources && c.resources.ram) || 'unknown' }
-        ],
-        recentLogLines: (c.recent_logs || []).map(msg => ({ msg })),
+        stateLabel: (c.agent_state || c.state || 'unknown').replace(/^./, ch => ch.toUpperCase()),
+        purposeLabel: c.purpose === 'forge-assistant' ? 'Assistant'
+          : (c.purpose === 'local-profile' ? 'Profile · ' + (c.profile || 'local') + ' · host'
+            : (c.configuration_id ? 'Configuration' : '')),
+        versionLabel: (c.version || 'unknown version') + ' · ' + (c.surface || 'web'),
+        expanded: s.logCell === c.id,
+        logsLabel: s.logCell === c.id ? 'Hide logs' : 'Logs',
+        toggleLogs: () => s.logCell === c.id
+          ? this.setState({ logCell: null, logLines: [], artifacts: [] })
+          : this.inspectCell(c, 'logs'),
         open: () => this.openCell(c),
         stop: () => this.cellAction(c, 'stop'),
         restart: () => this.cellAction(c, 'restart'),
         clone: () => this.cellAction(c, 'clone'),
+        // Profile sessions use the real profile home, so they are never cloned.
         cloneDisabled: !!c.profile_id,
-        inspect: () => this.inspectCell(c),
         openDisabled: !c.port || !running,
-        stopDisabled: !processAlive,
-        lifecycleDisabled: false,
-        actions: [
-          act('stop', () => this.cellAction(c, 'stop'), processAlive),
-          act('restart', () => this.cellAction(c, 'restart'), running || c.state === 'exited' || c.state === 'stopped'),
-          act('open', () => this.openCell(c), !!c.port && running),
-          act('copy', () => this.copyCellUrl(c), !!c.port),
-          act('logs', () => this.openLogs(c), true)
-        ]
+        stopDisabled: !running
       };
     });
-    const activeCell = cells.find(c => c.id === s.selectedCell) || cells[0] || null;
+    const openCell = cells.find(c => c.id === s.logCell) || null;
     const inspectorTabs = [
-      { id: 'logs', label: 'Live logs' }, { id: 'prompts', label: 'Prompts' }, { id: 'artifacts', label: 'Artifacts' }
+      { id: 'logs', label: 'Logs' }, { id: 'artifacts', label: 'Files' }
     ].map(tab => ({
       ...tab,
-      bg: s.inspectorTab === tab.id ? 'oklch(0.31 0.04 235)' : 'transparent',
-      color: s.inspectorTab === tab.id ? TXT : MUTED,
-      select: () => activeCell ? this.inspectCell(activeCell, tab.id) : undefined
+      className: s.inspectorTab === tab.id ? 'on' : '',
+      select: () => openCell ? this.inspectCell(openCell, tab.id) : undefined
     }));
+    // Sessions sit under the version that started them; anything else is listed after.
+    const versionTreeIds = new Set(versions.map(v => v.treeId).filter(Boolean));
+    const versionRows = versions.map(v => {
+      const own = cells.filter(c => c.treeId === v.treeId);
+      const live = own.filter(c => c.process === 'alive').length;
+      return { ...v, cells: own, runningLabel: live ? live + ' running' : '', hasRunning: live > 0 };
+    });
+    const otherCells = cells.filter(c => !versionTreeIds.has(c.treeId));
 
     const storeActive = this.usingCatalogStore(s);
     const queryTerms = s.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -2441,7 +2272,6 @@ class Component extends DCLogic {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
         a.type === s.catalogType &&
-        (s.catalogScope === 'all' || a.featured) &&
         (!s.knownLicenseOnly || a.licenseOk);
     }).sort((a, b) => {
       if (s.catalogSort === 'name') return a.slug.localeCompare(b.slug);
@@ -2453,18 +2283,29 @@ class Component extends DCLogic {
       }
       return (b.github_stars ?? -1) - (a.github_stars ?? -1) || (a.seed_rank || 999) - (b.seed_rank || 999);
     });
-    const filtered = storeActive ? s.storeArtifacts : embeddedFiltered;
-    // Never keep an unrelated detail open after search/filter removes it.
-    const selectedDetail = (s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
-      filtered.find(a => a.id === s.artifactId);
-    const detail = selectedDetail || (s.detailOpen ? {} : (filtered[0] || {}));
+    // Favorites are local records, so this filter works the same with or without a store.
+    const favoriteRecords = s.favoriteArtifacts
+      .filter(item => item.type === s.catalogType)
+      .map(item => CATALOG.find(a => a.id === item.id) || s.storeArtifacts.find(a => a.id === item.id) || item)
+      .filter(a => {
+        const searchable = [a.slug, a.description, a.terms, a.language, a.licenseLabel].join(' ').toLowerCase();
+        return queryTerms.every(term => searchable.includes(term)) && (!s.knownLicenseOnly || a.licenseOk);
+      });
+    // Store pages are keyed by type so a tab switch never shows the previous tab's records.
+    const filtered = s.favoritesOnly
+      ? favoriteRecords
+      : (storeActive ? s.storeArtifacts.filter(a => a.type === s.catalogType) : embeddedFiltered);
+    const catalogPending = storeActive && !s.favoritesOnly && !s.storeError && (s.storeLoading || !!this._catalogTimer);
+    // Only an open page has a detail. Its record comes from the route's id, never from the
+    // current list or filters (searching closes the page instead).
+    const detail = !s.detailOpen ? {}
+      : ((s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
+        CATALOG.find(a => a.id === s.artifactId) || s.storeArtifacts.find(a => a.id === s.artifactId) || {});
     const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
       id: item.id,
-      label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path,
-      selected: item.id === (s.packageVersionId || ((s.savedVersions.find(candidate => candidate.state === 'ready') || {}).id)),
+      label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path
     }));
     const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
-    const selectedCatalogProfile = s.profiles.find(profile => profile.id === s.catalogProfileId) || s.profiles[0] || null;
     const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
       item => item.slug === detail.slug && item.configured
     );
@@ -2478,11 +2319,19 @@ class Component extends DCLogic {
         : 'Connect the local launcher to check for an exact signed sandbox recipe'
     };
     const results = filtered.map(a => ({
-      ...a, selected: s.detailOpen && a.id === detail.id,
+      ...a,
       featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
-      border: s.detailOpen && a.id === detail.id ? SELB : BORDER,
-      bg: s.detailOpen && a.id === detail.id ? 'oklch(0.245 0.022 255)' : 'oklch(0.21 0.01 255)',
+      tags: ((a.curation && a.curation.taxonomy) || a.topics || []).slice(0, 2),
+      riskText: a.riskLabel ? a.riskLabel.replace(/^./, ch => ch.toUpperCase()) : '',
+      riskColor: RISK_COLORS[(a.curation && a.curation.security_risk) || (a.risk && a.risk.level)] || MUTED,
+      forksLabel: Number.isInteger(a.forks_count) ? a.forks_count.toLocaleString('en-US') : '—',
+      compared: !!a.divergence,
+      notCompared: !a.divergence,
+      aheadLabel: a.divergence ? '+' + a.divergence.ahead_by : '',
+      behindLabel: a.divergence ? '/ −' + a.divergence.behind_by : '',
+      pushedLabel: catalogDate(a.pushed_at),
+      licenseShort: a.licenseOk ? a.licenseLabel : '—',
       select: () => this.selectCatalogArtifact(a)
     }));
     const detailRows = !detail.id ? [] : (detail.catalogPackage ? [
@@ -2550,20 +2399,21 @@ class Component extends DCLogic {
         : (detail.external_validation
           ? 'The external marketplace classified this entry as ' + detail.external_validation.status + (detail.external_validation.code ? ' (' + detail.external_validation.code + ')' : '') + '. Forge verified the catalog digest but has not executed or security-reviewed the plugin.'
           : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.'))));
-    const detailTaxonomy = detail.catalogPackage
-      ? detail.taxonomy.join(' / ')
-      : (detail.curation ? detail.curation.taxonomy.join(' / ') : ((detail.topics || []).slice(0, 8).join(' / ') || 'Unclassified'));
-    const pluginCount = CATALOG.filter(a => a.type === 'plugin').length;
-    const forkCount = CATALOG.filter(a => a.type === 'fork').length;
-    const storeCounts = s.sidecarConnected && s.catalogStore.available && s.catalogStore.counts
-      ? s.catalogStore.counts
-      : null;
-    const displayedPluginCount = storeCounts && Number(storeCounts.plugin || 0) > 0
-      ? Number(storeCounts.plugin)
-      : pluginCount;
-    const displayedForkCount = storeCounts && Number(storeCounts.fork || 0) > 0
-      ? Number(storeCounts.fork)
-      : forkCount;
+    const detailRiskLevel = (detail.curation && detail.curation.security_risk) || (detail.risk && detail.risk.level) || '';
+    const riskIndex = RISK_LEVELS.indexOf(detailRiskLevel);
+    const declaredRange = (detail.compatibility && detail.compatibility.declared_dsh_range) || '';
+    const exactVersions = exactVersionList(declaredRange);
+    const localCompatibility = exactVersions ? s.savedVersions
+      .filter(item => item.state === 'ready' && item.primary_tree && item.primary_tree.version)
+      .map(item => {
+        const listed = exactVersions.includes(item.primary_tree.version);
+        return {
+          version: item.primary_tree.version, path: item.path, listed, unlisted: !listed,
+          label: listed ? 'Listed by the plugin' : 'Not in the declared list',
+          color: listed ? 'oklch(0.8 0.1 155)' : 'oklch(0.82 0.1 80)'
+        };
+      }) : [];
+    const divergence = detail.divergence || null;
     const forkCoverage = Array.isArray(s.catalogStore.coverage)
       ? s.catalogStore.coverage.find(item => item && item.source === 'github-rest/fork-network')
       : null;
@@ -2581,13 +2431,17 @@ class Component extends DCLogic {
           title: 'No community packages published yet',
           description: 'The versioned package schema and offline composer are available through the CLI. Publication, acquisition, installation, and execution are not connected, so no sample listings are fabricated.',
           action: 'Browse plugins',
-          run: () => this.navigate('catalog', 'plugin')
+          run: () => this.openBrowser('plugin')
         }
       : {
-          title: 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
-          description: 'Try a name, author, capability, taxonomy term, or clear the current filters.',
-          action: 'Clear filters',
-          run: () => { this.setState({ query: '', knownLicenseOnly: false }); this.scheduleCatalogRefresh(); }
+          title: s.favoritesOnly && !s.query.trim()
+            ? 'No favorite ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks') + ' yet'
+            : 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
+          description: s.favoritesOnly && !s.query.trim()
+            ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. Favorites are saved in this browser.'
+            : 'Try a name, author, capability, taxonomy term, or clear the current filters.',
+          action: s.favoritesOnly ? 'Show all' : 'Clear filters',
+          run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false }); this.scheduleCatalogRefresh(); }
         };
 
     const livePreview = s.previewData;
@@ -2608,169 +2462,51 @@ class Component extends DCLogic {
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
       goLaunch: () => this.navigate('launch'),
-      goCatalog: () => this.navigate('catalog', 'plugin'),
+      goPlugins: () => this.openBrowser('plugin'),
+      goForks: () => this.openBrowser('fork'),
       goAssistant: () => this.navigate('assistant'),
-      modeLabel: s.sidecarConnected ? 'Local' : 'Preview',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,
-      sidecarAddress: typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090',
-      sidecarState: s.sidecarConnected ? 'Connected' : 'Offline',
-      launchTabBg: s.view === 'launch' ? 'oklch(0.3 0.02 255)' : 'transparent',
-      launchTabFg: s.view === 'launch' ? 'oklch(0.95 0.01 255)' : MUTED,
-      launchTabBorder: s.view === 'launch' ? 'oklch(0.42 0.03 255)' : 'transparent',
-      catalogTabBg: s.view === 'catalog' ? 'oklch(0.3 0.02 255)' : 'transparent',
-      catalogTabFg: s.view === 'catalog' ? 'oklch(0.95 0.01 255)' : MUTED,
-      catalogTabBorder: s.view === 'catalog' ? 'oklch(0.42 0.03 255)' : 'transparent',
-      assistantTabBg: s.view === 'assistant' ? 'oklch(0.3 0.02 255)' : 'transparent',
-      assistantTabFg: s.view === 'assistant' ? 'oklch(0.95 0.01 255)' : MUTED,
-      assistantTabBorder: s.view === 'assistant' ? 'oklch(0.42 0.03 255)' : 'transparent',
-      cellsSummary: s.cells.filter(c => c.state === 'running').length + ' running',
-      snapshotAt: CATALOG_SNAPSHOT.fetched_at.slice(0, 16).replace('T', ' '),
-      versions,
+      sidecarLabel: s.sidecarConnected
+        ? 'Connected · ' + (typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090')
+        : 'Offline preview',
+      launchTabClass: s.view === 'launch' ? 'tab tab-on' : 'tab',
+      pluginsTabClass: s.view === 'catalog' && s.catalogType !== 'fork' ? 'tab tab-on' : 'tab',
+      forksTabClass: s.view === 'catalog' && s.catalogType === 'fork' ? 'tab tab-fork tab-on' : 'tab tab-fork',
+      assistantTabClass: s.view === 'assistant' ? 'tab tab-on' : 'tab',
+      launchTabCurrent: s.view === 'launch' ? 'page' : 'false',
+      pluginsTabCurrent: s.view === 'catalog' && s.catalogType !== 'fork' ? 'page' : 'false',
+      forksTabCurrent: s.view === 'catalog' && s.catalogType === 'fork' ? 'page' : 'false',
+      assistantTabCurrent: s.view === 'assistant' ? 'page' : 'false',
+      versions: versionRows,
+      versionGroups: [
+        ...versionRows.map(v => ({ ...v, isVersion: true, isOther: false })),
+        ...(otherCells.length ? [{ id: 'other', isVersion: false, isOther: true, cells: otherCells }] : [])
+      ],
+      hasLocalRows: versionRows.length + otherCells.length + unavailableVersions.length > 0,
+      unavailableVersions,
+      noVersions: versions.length === 0,
+      emptyVersionsText: s.sidecarConnected
+        ? 'Forge checks ' + ((s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions') + ' automatically. Use Add folder for a checkout anywhere else.'
+        : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
       localProfiles,
       hasLocalProfiles: localProfiles.length > 0,
       noLocalProfiles: localProfiles.length === 0,
       profileCountLabel: localProfiles.length + (localProfiles.length === 1 ? ' profile found' : ' profiles found'),
-      hasVersions: versions.length > 0,
-      noVersions: versions.length === 0,
-      versionCountLabel: versions.length + (versions.length === 1 ? ' version found' : ' versions found'),
-      favorites: s.favoriteArtifacts.map(item => ({
-        ...item,
-        kindLabel: item.type === 'fork' ? 'Fork' : 'Plugin',
-        view: () => this.selectCatalogArtifact(item)
-      })),
-      hasFavorites: s.favoriteArtifacts.length > 0,
-      versionsDirectory: (s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions',
-      versionFormOpen: s.versionFormOpen,
-      versionPath: s.versionPath,
       versionBusy: s.versionBusy,
       versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
       pickVersion: () => this.pickLocalVersion(),
-      addVersionLabel: s.versionFormOpen ? 'Close' : 'Add',
-      toggleVersionForm: () => this.setState({
-        versionFormOpen: !s.versionFormOpen,
-        versionPath: s.versionFormOpen ? '' : s.versionPath
-      }),
-      setVersionPath: event => this.setState({ versionPath: event.target.value }),
-      saveVersion: () => this.saveLocalVersion(),
-      rescanVersions: () => this.rescanVersions(),
-      communityTrees,
-      hasCommunityTrees: communityTrees.length > 0,
       sandboxTitle: sandbox.ready ? 'Isolation ready' : 'Isolation setup required',
       sandboxReason: sandbox.reason || 'No capability result is available.',
       sandboxColor: sandbox.ready ? OK : WARN,
-      sandboxBorder: sandbox.ready ? 'oklch(0.42 0.08 155)' : 'oklch(0.42 0.07 85)',
-      sandboxBg: sandbox.ready ? 'oklch(0.235 0.025 155)' : 'oklch(0.245 0.025 85)',
-      sandboxPolicy: sandbox.ready
-        ? 'Pinned SIF · source read-only · unique writable state · secrets excluded · ' + ((sandbox.resource_limits || {}).cpus || '—') + ' CPU · ' + ((sandbox.resource_limits || {}).memory || '—') + ' RAM'
-        : 'All cell launches fail closed. Configure a pinned SIF and pass the runtime capability probe.',
 
-      trees: s.trees.map(tr => {
-        const sel = tr.id === s.treeId;
-        const ok = tr.trust !== 'foreign';
-        return {
-          ...tr,
-          border: sel ? SELB : BORDER,
-          bg: sel ? 'oklch(0.255 0.02 255)' : 'oklch(0.205 0.009 255)',
-          cursor: ok ? 'pointer' : 'not-allowed',
-          opacity: ok ? '1' : '0.55',
-          gitLine: tr.git ? tr.git.branch + ' @ ' + tr.git.sha + (tr.git.dirty ? ' · dirty' : ' · clean') : 'no git identity',
-          trustColor: tr.trust === 'personal' ? OK : (tr.trust === 'readonly' ? BLUE : BAD),
-          trustBorder: tr.trust === 'personal' ? 'oklch(0.42 0.1 155)' : (tr.trust === 'readonly' ? 'oklch(0.42 0.08 235)' : 'oklch(0.42 0.1 25)'),
-          launchColor: tr.launchability === 'ready' ? OK : (tr.launchability === 'needs-build' ? WARN : BAD),
-          select: () => ok ? this.setState({ treeId: tr.id }) : this.flash('foreign trees can be capability-tested only; complete-cell promotion is not implemented')
-        };
-      }),
-      treeCountLabel: s.trees.length + ' detected · evidence-based',
-      coverageGap: s.coverageGaps.length
-        ? s.coverageGaps.length + (s.coverageGaps.length === 1 ? ' folder needs attention' : ' folders need attention')
-        : '',
-      surfaces: [
-        { id: 'web', label: 'web' }, { id: 'headless', label: 'headless' }
-      ].map(x => ({
-        ...x,
-        bg: s.surface === x.id ? 'oklch(0.33 0.03 255)' : 'transparent',
-        fg: s.surface === x.id ? 'oklch(0.95 0.01 255)' : MUTED,
-        select: () => this.setState({ surface: x.id })
-      })),
-      isCustomSurface: s.surface === 'custom',
-      isHeadlessSurface: s.surface === 'headless',
-      profiles: ['tui-min', 'web-debug', 'agent-eval'],
-      profile: s.profile,
-      setProfile: e => this.setState({ profile: e.target.value }),
-      task: s.task,
-      setTask: e => this.setState({ task: e.target.value.slice(0, 20000) }),
-
-      port: s.port,
-      setPort: e => this.setState({ port: e.target.value.replace(/[^0-9]/g, '').slice(0, 5) }),
-      suggested: this.freePort(),
-      suggestPort: () => this.setState({ port: String(this.freePort()) }),
-      openBrowser: s.openBrowser,
-      toggleOpenBrowser: () => this.setState({ openBrowser: !s.openBrowser }),
-      portNote, portNoteFg, portNoteBorder, portNoteBg,
-
-      homeModes,
-      showCloneOptions: s.homeMode === 'clone',
-      homeTemplates: ['~/.dsh', '~/.dsh-forge/homes/eval-a', '~/.dsh-forge/cells/clone-02'],
-      cloneSource: s.cloneSource,
-      setCloneSource: e => this.setState({ cloneSource: e.target.value }),
-      excludeSessions: s.excludeSessions,
-      toggleExcludeSessions: () => this.setState({ excludeSessions: !s.excludeSessions }),
-
-      advancedOpen: s.advancedOpen,
-      advancedCaret: s.advancedOpen ? '▾' : '▸',
-      toggleAdvanced: () => this.setState({ advancedOpen: !s.advancedOpen }),
-      advancedRows: [
-        { label: 'Discovery policy', value: 'configured roots · bounded · no code execution', color: OK },
-        { label: 'Process identity', value: 'timeout supervisor PID + OS process-start identity', color: BLUE },
-        { label: 'Execution backend', value: 'Apptainer required · no host fallback', color: OK },
-        { label: 'Trusted hosts', value: 'localhost, 127.0.0.1', color: MUTED },
-        { label: 'Loader readiness', value: 'not observed · adapter deferred', color: MUTED },
-        { label: 'Telemetry', value: 'none in launcher sidecar', color: OK },
-        { label: 'Executable', value: t.exe, color: TXT },
-        { label: 'Node binary', value: t.node, color: TXT }
-      ],
-      credentials: s.credentials.map(item => ({
-        label: item.name + ' · ' + (item.present ? 'present' : 'absent'),
-        color: item.present ? OK : MUTED,
-        border: item.present ? 'oklch(0.42 0.1 155)' : BORDER
-      })),
-
-      needsBuild,
-      buildCommands: 'Build orchestration deferred · use the tree’s documented build steps',
-
-      primaryLabel: !s.sidecarConnected ? 'Start local sidecar to launch' : (!t.id ? 'Add a DSH tree' : (t.trust === 'foreign' ? 'Sandbox test only' : (needsBuild ? 'Build required' : (confirm ? 'Preview launch…' : 'Start cell')))),
-      primaryAction: () => {
-        if (!s.sidecarConnected) return this.flash('Run python3 scripts/serve.py to connect the launcher');
-        if (!runnable) return this.flash(t.trust === 'foreign' ? 'foreign trees require the separate promotion policy' : (!sandbox.ready ? (sandbox.reason || 'configure the Apptainer cell runner') : 'select a launch-ready detected tree'));
-        if (needsBuild) return this.flash('build orchestration is deferred; build this tree using its own documentation, then restart Forge');
-        if (confirm) return this.previewLaunch();
-        this.startCell();
-      },
-      launchDisabled: !runnable,
-      primaryBg: runnable ? 'oklch(0.34 0.08 155)' : 'oklch(0.24 0.01 255)',
-      primaryFg: runnable ? 'oklch(0.95 0.05 155)' : 'oklch(0.55 0.01 255)',
-      primaryBorder: runnable ? 'oklch(0.52 0.13 155)' : BORDER,
-      primaryCursor: runnable ? 'pointer' : 'not-allowed',
-      launchHint: s.sidecarConnected ? 'Every launch requires the pinned Apptainer runner. There is no host-process fallback.' : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
-
-      cellColumns: COLUMNS,
-      cells,
-      noCells: cells.length === 0,
-      hasActiveCell: !!activeCell,
-      activeCell: activeCell || {},
       inspectorTabs,
       showInspectorLogs: s.inspectorTab === 'logs',
-      showInspectorPrompts: s.inspectorTab === 'prompts',
       showInspectorArtifacts: s.inspectorTab === 'artifacts',
       inspectorLogLines: s.logLines,
+      noLogLines: s.logLines.length === 0,
       inspectorArtifacts: s.artifacts.map(item => ({ ...item, sizeLabel: item.bytes.toLocaleString('en-US') + ' B' })),
       noArtifacts: s.artifacts.length === 0,
-
-      logsOpen: !!s.logCell,
-      logTitle: 'logs · ' + (s.cells.find(c => c.id === s.logCell) || { name: '' }).name,
-      logLines: s.logLines,
-      closeLogs: () => this.setState({ logCell: null, logLines: [] }),
 
       query: s.query,
       setQuery: e => { this.setState({ query: e.target.value, detailOpen: false, detailArtifact: null }); this.scheduleCatalogRefresh(); },
@@ -2778,78 +2514,109 @@ class Component extends DCLogic {
       setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,
       toggleKnownLicense: e => { this.setState({ knownLicenseOnly: !!e.target.checked }); this.scheduleCatalogRefresh(); },
-      repoTypes: [{ id: 'plugin', label: 'Plugins' }, { id: 'fork', label: 'Forks' }].map(f => ({
-        ...f,
-        count: storeCounts && Number(storeCounts[f.id] || 0) > 0
-          ? Number(storeCounts[f.id])
-          : CATALOG.filter(a => a.type === f.id).length,
-        selected: s.catalogType === f.id,
-        border: s.catalogType === f.id ? 'oklch(0.43 0.05 235)' : 'transparent',
-        bg: s.catalogType === f.id ? 'oklch(0.29 0.035 235)' : 'transparent',
-        color: s.catalogType === f.id ? 'oklch(0.88 0.035 235)' : MUTED,
-        select: () => { this.navigate('catalog', f.id); this.scheduleCatalogRefresh(); }
-      })),
-      seedCount: CATALOG_SNAPSHOT.entries.length,
-      pluginCount,
-      forkCount,
-      catalogCountLabel: displayedPluginCount.toLocaleString('en-US') + ' plugins · ' + displayedForkCount.toLocaleString('en-US') + ' forks',
-      resultCount: (storeActive && s.storeTotal > results.length
+      favoritesOnly: s.favoritesOnly,
+      favoritesChipClass: s.favoritesOnly ? 'chip chip-on' : 'chip',
+      toggleFavoritesOnly: () => this.setState({ favoritesOnly: !s.favoritesOnly, detailOpen: false, detailArtifact: null }),
+      isForkBrowser: s.catalogType === 'fork',
+      isPluginBrowser: s.catalogType !== 'fork',
+      browserTitle: s.catalogType === 'fork' ? 'Forks' : (s.catalogType === 'package' ? 'Packages' : 'Plugins'),
+      browserLede: s.catalogType === 'fork'
+        ? 'Independent builds of ' + CATALOG_SNAPSHOT.upstream + '. Browse only for now: Forge can’t launch forks yet.'
+        : (s.catalogType === 'package'
+          ? 'Signed plugin stacks. Each recipe must be verified locally before it can be installed.'
+          : 'Extensions that load into a Harness profile. Only plugins with a matching signed recipe can be installed.'),
+      searchPlaceholder: s.catalogType === 'fork'
+        ? 'Search forks by owner, name, or description'
+        : 'Search by name, author, capability, or taxonomy',
+      resultCount: (storeActive && !s.favoritesOnly && s.storeTotal > results.length
         ? results.length + ' of ' + s.storeTotal.toLocaleString('en-US')
         : String(results.length)
-      ) + ' ' + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
+      ) + (s.favoritesOnly ? ' favorite ' : ' ') + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
       catalogSourceLabel: storeActive
         ? 'Imported catalog store' + coverageLabel
         : (s.sidecarConnected && s.catalogStore.available
           ? 'Embedded snapshot · no imported ' + s.catalogType + ' records'
           : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot')),
-      storeActive,
-      storeLoading: s.storeLoading,
       storeError: s.storeError,
       hasStoreError: !!s.storeError,
-      canLoadMore: storeActive && !!s.storeCursor && !s.storeLoading,
-      loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more results',
-      loadMore: () => this.refreshCatalog({ append: true }),
       loadMoreOnScroll: event => {
         const node = event.currentTarget;
         if (storeActive && s.storeCursor && !s.storeLoading && node.scrollHeight - node.scrollTop - node.clientHeight < 480) {
           this.refreshCatalog({ append: true });
         }
       },
-      catalogFeedStatus: s.storeLoading ? 'Loading more results…' : (s.storeCursor ? 'Scroll for more' : 'End of results'),
+      catalogFeedStatus: s.favoritesOnly
+        ? 'Favorites are saved in this browser only'
+        : (catalogPending ? 'Loading results…' : (s.storeCursor ? 'Scroll for more' : 'End of results')),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
           ? 'Explainable hidden-gem priority · metadata only, not a security verdict'
           : (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order'))
         : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
       results,
-      noResults: results.length === 0,
+      noResults: results.length === 0 && !catalogPending,
       hasDetail: !!detail.id,
       noDetail: !detail.id,
       showCatalogFeed: !s.detailOpen,
       showArtifactPage: s.detailOpen,
       detail,
-      detailPopularityLabel: detail.catalogPackage ? detail.components.length + ' pinned component(s)' : detail.starsLabel + ' GitHub stars',
       detailRows,
-      detailTopics: (detail.topics || []).slice(0, 8),
       detailCompatibilityText,
       detailEvidenceText,
-      detailTaxonomy,
       detailRisk: detail.catalogPackage
         ? detail.risk.level + ' risk · package candidate B' + String(detail.rank).padStart(2, '0')
         : (detail.hiddenGem
           ? detail.hiddenGem.confidence + ' · ' + detail.hiddenGem.gaps.length + ' evidence gap(s)'
           : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed')),
       isPackageDetail: !!detail.catalogPackage,
-      isRepositoryDetail: !!detail.id && !detail.catalogPackage,
       isPluginDetail: detail.type === 'plugin',
       isForkDetail: detail.type === 'fork',
       favoriteLabel: s.favoriteArtifacts.some(item => item.id === detail.id) ? 'Favorited' : 'Favorite',
       toggleFavorite: () => detail.id ? this.toggleFavorite(detail) : undefined,
       backToCatalog: () => this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin'),
+      backLabel: detail.type === 'fork' ? 'Forks' : (detail.catalogPackage ? 'Packages' : 'Plugins'),
+      crumbClass: detail.type === 'fork' ? 'crumb-back crumb-fork' : 'crumb-back',
+      detailTileClass: detail.type === 'fork' ? 'tile tile-lg tile-fork' : 'tile tile-lg',
+      detailIconBox: detail.type !== 'fork',
+      detailGemClass: detail.type === 'fork' ? 'gem gem-fork' : 'gem',
+      detailFeatured: !!detail.featured,
+      hasDetailStars: !!detail.id && !detail.catalogPackage,
+      detailMetaItems: [
+        detail.type === 'fork'
+          ? (Number.isInteger(detail.forks_count) ? detail.forks_count.toLocaleString('en-US') + (detail.forks_count === 1 ? ' fork' : ' forks') : '')
+          : detail.versionLabel,
+        detail.licenseLabel, detail.language, detail.activity
+      ].filter(Boolean),
+      detailTags: ((detail.curation && detail.curation.taxonomy) || detail.topics || []).slice(0, 8),
+      hasDeclaredRange: !!declaredRange,
+      detailDeclaredRange: declaredRange,
+      detailObservedBase: (detail.compatibility && detail.compatibility.observed_base) || '',
+      hasObservedBase: !!(detail.compatibility && detail.compatibility.observed_base),
+      hasCompatibilityFacts: !!(declaredRange || (detail.compatibility && detail.compatibility.observed_base)),
+      localCompatibility,
+      hasLocalCompatibility: localCompatibility.length > 0,
+      hasRiskMeter: riskIndex >= 0,
+      noRiskMeter: riskIndex < 0,
+      riskLevelLabel: detailRiskLevel.replace(/^./, ch => ch.toUpperCase()),
+      riskLevelColor: RISK_COLORS[detailRiskLevel] || MUTED,
+      riskSegments: RISK_LEVELS.map((level, index) => ({
+        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'oklch(0.28 0.012 255)'
+      })),
+      forkUpstream: detail.source_repository || detail.parent_repository || 'Upstream not reported',
+      forkHead: (detail.default_branch || 'default branch') + ' @ ' + (detail.head_sha ? detail.head_sha.slice(0, 7) : 'not captured'),
+      hasDivergence: !!divergence,
+      noDivergence: !divergence,
+      forkAhead: divergence ? Number(divergence.ahead_by || 0).toLocaleString('en-US') : '',
+      forkBehind: divergence ? Number(divergence.behind_by || 0).toLocaleString('en-US') : '',
+      forkFiles: divergence ? Number(divergence.listed_file_count || 0).toLocaleString('en-US') + (divergence.files_truncated ? '+' : '') : '',
+      forkSurfaces: (detail.compatibility && detail.compatibility.changed_surfaces) || [],
+      hasForkSurfaces: !!(detail.compatibility && (detail.compatibility.changed_surfaces || []).length),
+      executionPill: artifactExecution.eligible ? 'Signed recipe' : 'Browse only',
+      executionPillClass: artifactExecution.eligible ? 'pill pill-ok' : 'pill',
       installAndRunDisabled: !artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy,
       installAndRunLabel: s.artifactRunBusy
-        ? 'Installing and testingâ€¦'
-        : (artifactExecution.eligible ? 'Install and run in sandboxâ€¦' : 'Sandbox recipe required'),
+        ? 'Installing and testing…'
+        : (artifactExecution.eligible ? 'Install and run…' : 'Sandbox recipe required'),
       installAndRunReason: artifactExecution.reason,
       installAndRun: () => detail.id ? this.confirmArtifactRun(detail) : undefined,
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
@@ -2871,8 +2638,6 @@ class Component extends DCLogic {
       installStatus: latestPackageInstall
         ? (latestPackageInstall.state === 'ready' ? 'Ready · tested profile saved' : latestPackageInstall.detail)
         : (recipeConfigured ? 'Signed recipe configured locally' : 'Signed recipe required'),
-      acquireLabel: detail.catalogPackage ? detail.acquisition.label : 'Acquire verified bytes',
-      acquireReason: detail.catalogPackage ? detail.acquisition.reason : 'A schema-valid signed package record is required before acquisition.',
       sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,
       saveConfiguration: () => detail.id ? this.saveCatalogConfiguration(detail) : undefined,
       saveConfigurationDisabled: !detail.id || !s.sidecarConnected || !selectedPackageVersion || s.configurationBusy,
@@ -2880,20 +2645,6 @@ class Component extends DCLogic {
       hasPackageLink: !!(detail.package && detail.package.url),
       detailPackageUrl: detail.package ? detail.package.url : '',
       detailPackageLabel: detail.package ? 'View ' + detail.package.registry + ' package ↗' : '',
-      catalogProfiles: s.profiles.map(profile => ({
-        ...profile,
-        selected: profile.id === (selectedCatalogProfile && selectedCatalogProfile.id)
-      })),
-      selectedCatalogProfileId: selectedCatalogProfile ? selectedCatalogProfile.id : '',
-      setCatalogProfile: event => this.setState({ catalogProfileId: event.target.value }),
-      hasCatalogProfiles: s.profiles.length > 0,
-      noCatalogProfiles: s.profiles.length === 0,
-      pluginInstallable: false,
-      pluginCommandUnavailable: detail.type === 'plugin',
-      pluginInstallCommand: '',
-      forkDownloadUrl: '',
-      forkDownloadCommand: '',
-      hasForkDownload: false,
       hasDiscussionLink: !!detail.discussion_url,
       detailDiscussionUrl: detail.discussion_url || '',
       emptyTitle: emptyCopy.title,
@@ -2911,9 +2662,6 @@ class Component extends DCLogic {
       assistantReady: !!s.assistantUrl,
       assistantEmpty: !s.assistantUrl,
       assistantUrl: s.assistantUrl,
-      openAssistant: () => {
-        if (s.assistantUrl && typeof window !== 'undefined') window.open(s.assistantUrl, '_blank', 'noopener');
-      },
       configurations: s.configurations.map(configuration => ({
         ...configuration,
         selectionLabel: (configuration.selections || []).length + ((configuration.selections || []).length === 1 ? ' selection' : ' selections'),
@@ -2934,22 +2682,20 @@ class Component extends DCLogic {
       artifactRiskAcknowledged: s.artifactRiskAcknowledged,
       toggleArtifactRisk: event => this.setState({ artifactRiskAcknowledged: !!event.target.checked }),
       artifactRunConfirmDisabled: !s.artifactRiskAcknowledged || s.artifactRunBusy,
-      artifactRunConfirmLabel: s.artifactRunBusy ? 'Verifying, testing, and startingâ€¦' : 'Install and run',
+      artifactRunConfirmLabel: s.artifactRunBusy ? 'Verifying, testing, and starting…' : 'Install and run',
       cancelArtifactRun: () => {
         if (!s.artifactRunBusy) this.setState({ artifactRunConfirmation: null, artifactRiskAcknowledged: false });
       },
       startArtifactRun: () => this.installAndRunArtifact(),
 
+      // Installed profiles are the only launch that is previewed before it runs.
       previewOpen: !!s.preview,
-      previewTitle: s.preview === 'profile'
-        ? 'Confirm local profile — direct host process'
-        : 'Confirm launch — exact argv and environment keys',
-      previewConfirmLabel: s.preview === 'profile' ? 'Run local profile' : 'Start cell',
-      idemKey: 'preview-' + (s.treeId || 'no-tree') + '-' + (s.port || 'headless'),
+      previewTitle: 'Confirm local profile — direct host process',
+      previewConfirmLabel: 'Run local profile',
       previewLines,
       previewNotes,
       closePreview: () => this.setState({ preview: null, previewData: null, pendingProfile: null }),
-      confirmPreview: () => s.preview === 'profile' ? this.startLocalProfile() : this.startCell(),
+      confirmPreview: () => this.startLocalProfile(),
 
       toast: s.toast
     };

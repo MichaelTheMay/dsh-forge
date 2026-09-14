@@ -14,10 +14,12 @@ isolated **Assistant** surface are available.
 The loopback sidecar discovers configured DSH trees without executing candidate
 code and repeatedly starts
 trusted local cells with automatic ports, separate writable homes, managed
-workspaces, process groups, recent logs, clone/restart controls, and a live
-inspector. It controls only processes whose PID and process-start identity it
-recorded. The front page shows only DSH versions and profiles detected on the
-user's machine; the disconnected demo does not substitute release cards.
+workspaces, process groups, recent logs, and clone/restart controls. It
+controls only processes whose PID and process-start identity it recorded. The
+**Local** tab shows only DSH versions and profiles detected on the user's
+machine, with each running session listed under the version that started it
+and its logs one click away; the disconnected demo does not substitute release
+cards.
 Community contains a small offline snapshot of real plugins and forks. A
 connected launcher can sync the continuously refreshed Forge feed, currently
 covering thousands of plugins and tens of thousands of forks, into the local search store.
@@ -36,8 +38,10 @@ share the host network so their loopback port is reachable; headless cells
 default to a network namespace with no network. Apptainer still shares the host
 kernel and is not described as a virtual machine.
 
-Already-present community checkouts remain limited to the separate bounded CLI
-capability probe, and that probe requires per-cell cgroup controls. They are not
+Already-present community checkouts remain limited to the separate bounded
+capability probe on the loopback sidecar
+(`POST /api/v1/trees/<tree-id>/sandbox-test`), and that probe requires per-cell
+cgroup controls. The V1 launcher UI does not list them, and they are never
 promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
@@ -101,7 +105,7 @@ start/stop/restart/clone, live logs, artifacts, stable JSON output, and the
 required Apptainer configuration. Prompt delivery and normalized session
 transcripts remain fail-closed capabilities for their follow-up adapters.
 
-Open <http://127.0.0.1:3090/> for Launch, or
+Open <http://127.0.0.1:3090/> for the Local tab, or
 <http://127.0.0.1:3090/#plugins>, <http://127.0.0.1:3090/#forks>, or
 <http://127.0.0.1:3090/#packages> for the separate browsers. The old
 `#public-repos` route remains a Forks alias. The server binds
@@ -109,9 +113,8 @@ only to loopback. Stop it with Ctrl+C. If port 3090 is occupied, choose another
 port with `--port 3091`; the script does not stop existing processes.
 
 See [Delta setup](docs/delta-setup.md) for remote access through an SSH tunnel.
-See [Apptainer cell runner](docs/apptainer-sandbox.md) to pin a SIF, enable
-complete local cells, and retain the compact **Test** action for detected
-community trees.
+See [Apptainer cell runner](docs/apptainer-sandbox.md) to pin a SIF and enable
+complete local cells.
 To produce a single HTML file that can be downloaded and opened locally as a
 disconnected, non-runnable preview:
 
@@ -260,8 +263,13 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 - Browse Plugins and Forks in a dynamically loaded card feed. Every artifact
   opens a stable, shareable profile route with authorship, provenance, activity,
   compatibility, license, and risk metadata.
-- Favorite an artifact locally and reopen it from the Home page. Authentication,
-  ratings, and cross-device favorites remain post-V1 work.
+- Plugins open as a card grid and forks as a lineage table, each on its own
+  tab. Favorite an artifact locally and reopen it from either browser's
+  **Favorites** filter. Authentication, ratings, and cross-device favorites
+  remain post-V1 work.
+- A plugin page checks an exact declared Harness version list against the
+  launch-ready versions on this machine. Real semver ranges and prose
+  qualifiers are shown verbatim and never evaluated.
 - A plugin's **Install and run** action becomes available only when a local
   curator-signed, single-plugin recipe matches its exact npm package, integrity,
   repository, and commit. Every attempt requires a risk acknowledgment, runs

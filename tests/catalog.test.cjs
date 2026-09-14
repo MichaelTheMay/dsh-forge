@@ -77,18 +77,20 @@ test('embedded snapshot preserves forks and plugins and adds only schema-generat
 test('launcher remains default and Community opens individual plugins and forks', () => {
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
-  assert.equal(c.renderVals().modeLabel, 'Preview');
-  assert.match(c.renderVals().launchHint, /No sample process is presented as real/);
-  c.renderVals().goCatalog(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
+  assert.equal(c.renderVals().sidecarLabel, 'Offline preview');
+  assert.match(c.renderVals().emptyVersionsText, /No sample process is presented as real/);
+  c.renderVals().goPlugins(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'plugins');
+  assert.equal(c.renderVals().pluginsTabCurrent, 'page');
   const plugin = c.renderVals().results[0];
   plugin.select();
   assert.equal(windowStub.location.hash, 'plugins/' + encodeURIComponent(plugin.id));
   assert(c.renderVals().showArtifactPage);
   c.renderVals().backToCatalog();
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   assert.equal(windowStub.location.hash, 'forks');
-  assert.deepEqual(c.renderVals().repoTypes.map(f => f.id), ['plugin', 'fork']);
+  assert.equal(c.renderVals().forksTabCurrent, 'page');
+  assert.equal(c.renderVals().pluginsTabCurrent, 'false');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
 });
 test('preview contains no personal-name or private-home leakage', () => {
@@ -105,19 +107,18 @@ test('live status replaces preview inventory instead of merging it', () => {
   assert.equal(c.state.trees.length, 1);
   assert.equal(c.state.trees[0].id, 'real');
   assert.equal(c.state.savedVersions.length, 1);
-  assert.equal(c.renderVals().modeLabel, 'Local');
-  assert.equal(c.renderVals().suggested, 3210);
+  assert.match(c.renderVals().sidecarLabel, /^Connected · /);
+  assert.deepEqual(c.renderVals().versions.map(item => item.version), ['1']);
 });
 test('portable preview shows no versions or cells that are not locally detected', () => {
   const c = instance(); const values = c.renderVals();
   assert.equal(values.versions.length, 0);
   assert(values.noVersions);
-  assert.equal(values.trees.length, 0);
-  assert.equal(values.cells.length, 0);
-  assert.match(script, /Isolation ready/);
+  assert.equal(values.versionGroups.length, 0);
+  assert.equal(values.hasLocalRows, false);
+  assert.equal(values.sandboxTitle, 'Isolation setup required');
   assert(!/Fail-closed cell fleet/.test(html));
   assert(!/quota unenforced/.test(html));
-  assert.match(script, /sandbox test .*network none .*no launcher secrets/);
 });
 test('launcher auto-detects local versions and opens a native directory picker', async () => {
   assert.match(html, />Add folder</);
@@ -141,7 +142,11 @@ test('launcher auto-detects local versions and opens a native directory picker',
     url: '/api/v1/versions/pick', method: 'POST', body: {}
   });
   assert.equal(c.state.savedVersions.length, 1);
-  assert.equal(c.state.versionFormOpen, false);
+  // A picked folder without a Harness is never launchable, but it can still be forgotten.
+  const values = c.renderVals();
+  assert.equal(values.versions.length, 0);
+  assert.deepEqual(values.unavailableVersions.map(item => [item.path, item.reason]),
+    [['~/dsh', 'No Harness found in this folder']]);
 });
 test('saved-version rescan and forget use explicit non-destructive endpoints', async () => {
   const c = instance(); const requests = [];
@@ -210,39 +215,20 @@ test('one-click version launch requests automatic isolation', async () => {
   assert.equal(request.resources.gpu, 'none');
   assert.equal(request.tree_id, 'a3');
 });
-test('detected community trees use the probe endpoint and never become complete cells', async () => {
-  const c = instance(); let request;
+test('detected community trees never become launchable local versions', () => {
+  const c = instance();
   const foreign = {
     id: 'fork-1', name: 'community fork', short: 'fork', kind: 'source', version: '1.0.0',
-    path: '~/fork', exe: '~/fork/dsh.js', node: 'sandbox',
-    git: { sha: 'abc123', branch: 'main', dirty: false }, trust: 'foreign', launchability: 'sandbox-testable'
+    path: '~/fork', git: { sha: 'abc123', branch: 'main', dirty: false }, trust: 'foreign', launchability: 'ready'
   };
-  c.applyStatus({
-    trees: [foreign], cells: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
-    sandbox: {
-      mode: 'apptainer-cell-v1', ready: true, reason: 'capability probe passed',
-      hostile_code_isolation: false, resource_limits: { cpus: '4', memory: '8G' }
-    }
-  });
-  c.api = async (url, options) => {
-    request = { url, method: options.method, body: options.body };
-    return { status: 'passed' };
-  };
-  c.refreshStatus = async () => {};
+  c.applyStatus({ trees: [foreign], cells: [], sandbox: { ready: true, reason: 'capability probe passed' } });
   const values = c.renderVals();
-  assert.equal(values.communityTrees.length, 1);
-  assert.equal(values.communityTrees[0].disabled, false);
-  assert.equal(values.launchDisabled, true);
-  assert.equal(values.primaryLabel, 'Sandbox test only');
-  await values.communityTrees[0].run();
-  assert.deepEqual(request, {
-    url: '/api/v1/trees/fork-1/sandbox-test', method: 'POST', body: '{}'
-  });
-  assert.match(c.lastMessage, /sandbox test passed/);
+  assert.equal(values.versions.length, 0);
+  assert.equal(values.noVersions, true);
 });
 test('fork star sorting retains captured GitHub order for ties', () => {
   const c = instance();
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   c.renderVals().setCatalogSort({ target: { value: 'stars' } });
   const rows = c.renderVals().results;
   const forks = CATALOG.filter(r => r.type === 'fork');
@@ -255,28 +241,33 @@ test('fork star sorting retains captured GitHub order for ties', () => {
 });
 test('search handles case, whitespace, and multiple terms', () => {
   const c = instance(); const target = CATALOG.filter(r => r.type === 'plugin')[1];
-  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  c.renderVals().goPlugins();
   c.renderVals().setQuery({ target: { value: '  ' + target.owner.toUpperCase() + '   ' + target.name + '  ' } });
   assert.deepEqual(c.renderVals().results.map(r => r.id), [target.id]);
 });
 test('filtered-out selection never leaves stale detail content', () => {
   const c = instance(); const plugins = CATALOG.filter(r => r.type === 'plugin');
-  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  c.renderVals().goPlugins();
   c.renderVals().results[3].select();
+  assert.equal(c.renderVals().detail.id, plugins[3].id);
+  // Searching returns to the list; the old page's record is not carried along.
   c.renderVals().setQuery({ target: { value: plugins[4].slug } });
-  assert.equal(c.renderVals().detail.id, plugins[4].id);
+  assert.equal(c.renderVals().showArtifactPage, false);
+  assert.equal(c.renderVals().hasDetail, false);
+  assert.deepEqual(c.renderVals().results.map(r => r.id), [plugins[4].id]);
   c.renderVals().setQuery({ target: { value: 'no-such-repository-000' } });
   assert(c.renderVals().noResults); assert(!c.renderVals().hasDetail);
   assert.deepEqual(c.renderVals().detailRows, []);
 });
 test('community browser exposes plugins and forks without provisional package promotion', () => {
   const c = instance();
-  c.renderVals().goCatalog();
+  c.renderVals().goPlugins();
   assert.equal(c.renderVals().results.length, 7);
-  assert.deepEqual(c.renderVals().repoTypes.map(f => [f.id, f.count]), [['plugin', 7], ['fork', 10]]);
+  assert.equal(c.renderVals().resultCount, '7 plugins');
   assert.equal(windowStub.location.hash, 'plugins');
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   assert.equal(c.renderVals().results.length, 10);
+  assert.equal(c.renderVals().resultCount, '10 forks');
 });
 test('recent and name sort change order without changing catalog membership', () => {
   const c = instance(); c.renderVals().setCatalogSort({ target: { value: 'recent' } });
@@ -293,22 +284,24 @@ test('license filter is based on reported metadata, not a verification claim', (
 });
 test('copy pinned ref actually writes the captured commit URL', async () => {
   const c = instance(); const plugin = snapshot.supplemental_entries[0];
-  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  c.renderVals().goPlugins();
+  c.renderVals().results.find(r => r.id === plugin.artifact_id).select();
   await c.renderVals().copyRef();
   assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
   assert.equal(c.lastMessage, 'Copied repository reference');
 });
 test('catalog interactions cannot add, stop, or modify local cells', () => {
   const c = instance(); const before = JSON.stringify(c.state.cells);
-  c.renderVals().goCatalog(); c.renderVals().repoTypes.find(f => f.id === 'plugin').select(); c.renderVals().results[5].select();
+  c.renderVals().goPlugins(); c.renderVals().results[5].select();
   c.renderVals().setQuery({ target: { value: 'desktop' } });
   c.renderVals().goLaunch(); assert.equal(JSON.stringify(c.state.cells), before);
 });
 test('repository actions stay disabled while signed package install is locally gated', () => {
   const section = html.slice(html.indexOf('<main class="public-browser"'), html.indexOf('<sc-if value="{{ previewOpen }}"'));
-  // Composition and upload remain the only disabled affordance: one-click install stays
-  // package-only, while plugins and forks now hand over an explicit command instead.
-  const disabled = section.match(/<button disabled(?: title="([^"]*)")?/g) || [];
+  // Composition and upload remain the only statically disabled affordance. A bare
+  // `disabled` reaches React as "" (not disabled), so static buttons spell it out.
+  const disabled = section.match(/<button disabled="disabled"(?: title="([^"]*)")?/g) || [];
+  assert(!/<button disabled[\s>]/.test(section), 'a bare disabled attribute does not disable the button');
   assert.equal(disabled.length, 1);
   assert.match(disabled[0], /Package composition and upload are a separate boundary\./);
   assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
@@ -382,7 +375,7 @@ test('plugin detail never exposes a host install command', () => {
   c.selectCatalogArtifact({ id: plugin.artifact_id, type: 'plugin' });
   const values = c.renderVals();
   assert.equal(values.isPluginDetail, true);
-  assert.equal(values.pluginInstallCommand, '');
+  assert(!Object.keys(values).some(key => /InstallCommand|Download(?:Url|Command)/.test(key)));
   assert.equal(values.installAndRunDisabled, true);
   assert.equal(values.installAndRunLabel, 'Sandbox recipe required');
   assert(!/Copy exact-version install command/.test(html));
@@ -429,7 +422,9 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  assert.equal(c.state.selectedCell, 'cell_plugin');
+  // The new session opens on the Local tab with its startup logs showing.
+  assert.equal(c.state.view, 'launch');
+  assert.equal(c.state.logCell, 'cell_plugin');
   assert.equal(c.state.artifactRunConfirmation, null);
   assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
   assert.match(html, /Apptainer shares the host kernel/);
@@ -438,25 +433,25 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
 test('raw plugins and forks cannot bypass sandbox acquisition', () => {
   const c = instance();
   const mcpb = snapshot.supplemental_entries.find(entry => entry.package.registry !== 'npm');
+  const hostPath = values => Object.keys(values).some(key => /InstallCommand|Download(?:Url|Command)/.test(key));
   c.selectCatalogArtifact({ id: mcpb.artifact_id, type: 'plugin' });
   let values = c.renderVals();
-  assert.equal(values.pluginInstallable, false);
-  assert.equal(values.pluginCommandUnavailable, true);
-  assert.equal(values.pluginInstallCommand, '');
+  assert.equal(values.installAndRunDisabled, true);
+  assert.equal(hostPath(values), false);
 
   const fork = snapshot.entries[0];
   c.selectCatalogArtifact({ id: fork.artifact_id, type: 'fork' });
   values = c.renderVals();
   assert.equal(values.isForkDetail, true);
-  assert.equal(values.forkDownloadUrl, '');
-  assert.equal(values.forkDownloadCommand, '');
+  assert.equal(values.isPluginDetail, false);
+  assert.equal(hostPath(values), false);
   assert(!/Download \.tar\.gz|Copy command/.test(html));
 });
 
 test('community browser does not publish provisional curated packages or featured strips', () => {
-  const c = instance();
-  const values = c.renderVals();
-  assert.deepEqual(values.repoTypes.map(item => item.id), ['plugin', 'fork']);
+  // The header offers exactly four sections; packages have no tab of their own.
+  const tabs = [...html.matchAll(/class="\{\{ (\w+)TabClass \}\}"/g)].map(match => match[1]);
+  assert.deepEqual(tabs, ['launch', 'plugins', 'forks', 'assistant']);
   assert(!/Forge picks/.test(html));
   assert(!/Administrator curated hidden gems/.test(html));
 });
@@ -464,7 +459,7 @@ test('community browser does not publish provisional curated packages or feature
 test('plugin and fork cards open stable dedicated pages and favorites persist locally', () => {
   stored.clear();
   const c = instance();
-  c.renderVals().goCatalog();
+  c.renderVals().goPlugins();
   const plugin = c.renderVals().results[0];
   plugin.select();
   let values = c.renderVals();
@@ -472,13 +467,12 @@ test('plugin and fork cards open stable dedicated pages and favorites persist lo
   assert.equal(values.detail.id, plugin.id);
   values.toggleFavorite();
   assert.equal(c.renderVals().favoriteLabel, 'Favorited');
-  assert.equal(c.renderVals().favorites.length, 1);
 
   const reopened = instance({}, '#plugins/' + encodeURIComponent(plugin.id));
   values = reopened.renderVals();
   assert(values.showArtifactPage);
   assert.equal(values.detail.id, plugin.id);
-  assert.equal(values.favorites.length, 1);
+  assert.equal(values.favoriteLabel, 'Favorited');
   stored.clear();
 });
 
@@ -520,18 +514,18 @@ function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
 
 test('without an imported store the browser still reads the embedded snapshot', () => {
   const c = instance();
-  c.renderVals().goCatalog();
+  c.renderVals().goPlugins();
   let values = c.renderVals();
-  assert.equal(values.storeActive, false);
+  assert.equal(c.usingCatalogStore(), false);
   assert.equal(values.catalogSourceLabel, 'Embedded snapshot');
-  assert.equal(values.canLoadMore, false);
+  assert.equal(values.catalogFeedStatus, 'End of results');
   assert(values.results.length > 0);
 
   // A connected sidecar with nothing imported keeps using the embedded corpus.
   c.api = async () => ({ artifacts: [], total: 0 });
   connectedStore(c, { available: false, reason: 'No catalog store is imported yet' });
   values = c.renderVals();
-  assert.equal(values.storeActive, false);
+  assert.equal(c.usingCatalogStore(), false);
   assert.match(values.catalogSourceLabel, /no store imported/);
 });
 
@@ -543,15 +537,13 @@ test('an imported store replaces the embedded inventory and maps records identic
     requests.push(url);
     return { artifacts: [fork], total: 23890, next_cursor: '77.50', generation: 77 };
   };
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   connectedStore(c, { available: true, artifact_count: 33839, counts: { plugin: 9949, fork: 23890, package: 0 } });
   await c.refreshCatalog();
 
   const values = c.renderVals();
-  assert.equal(values.storeActive, true);
+  assert.equal(c.usingCatalogStore(), true);
   assert.equal(values.catalogSourceLabel, 'Imported catalog store');
-  assert.equal(values.catalogCountLabel, '9,949 plugins · 23,890 forks');
-  assert.equal(values.repoTypes.find(type => type.id === 'plugin').count, 9949);
   assert.match(values.sortExplanation, /metadata only, not a security verdict/);
   assert.equal(values.results.length, 1);
   // The store hands back snapshot records; the browser applies its one mapping.
@@ -561,7 +553,7 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.equal(values.results[0].commitUrl, embedded.commitUrl);
   // The count reports the corpus size, not just the page.
   assert.match(values.resultCount, /1 of 23,890 forks/);
-  assert.equal(values.canLoadMore, true);
+  assert.equal(values.catalogFeedStatus, 'Scroll for more');
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
 });
 
@@ -589,20 +581,25 @@ test('analyzed forks disclose immutable divergence evidence without claiming exe
       confidence: 'source-diff-metadata', signals: [], gaps: []
     } }
   });
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   connectedStore(c, { available: true, counts: { plugin: 0, fork: 1, package: 0 } });
   await c.refreshCatalog();
+  const row = c.renderVals().results[0];
+  assert.deepEqual([row.aheadLabel, row.behindLabel, row.compared], ['+4', '/ −2', true]);
+  row.select();
   const values = c.renderVals();
-  assert.match(values.detailRows.find(row => row.k === 'Source difference').v, /4 fork-only commit/);
-  assert.match(values.detailRows.find(row => row.k === 'Changed files').v, /provider limit reached/);
-  assert.match(values.detailRows.find(row => row.k === 'Trust').v, /not executed or security-reviewed/);
+  assert.match(values.detailRows.find(item => item.k === 'Source difference').v, /4 fork-only commit/);
+  assert.match(values.detailRows.find(item => item.k === 'Changed files').v, /provider limit reached/);
+  assert.match(values.detailRows.find(item => item.k === 'Trust').v, /not executed or security-reviewed/);
   assert.match(values.detailEvidenceText, /300-file response limit/);
-  assert.equal(values.forkDownloadUrl, '');
+  // The lineage card reports the same evidence and marks the file list as partial.
+  assert.deepEqual([values.forkAhead, values.forkBehind, values.forkFiles], ['4', '2', '300+']);
+  assert.deepEqual(values.forkSurfaces, ['plugin runtime']);
 });
 
 test('fork coverage is disclosed beside imported results', () => {
   const c = instance();
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   connectedStore(c, {
     available: true,
     counts: { plugin: 9949, fork: 100, package: 0 },
@@ -616,7 +613,7 @@ test('fork coverage is disclosed beside imported results', () => {
 
 test('recursive fork coverage does not compare descendants to a direct-root count', () => {
   const c = instance();
-  c.renderVals().repoTypes.find(f => f.id === 'fork').select();
+  c.renderVals().goForks();
   connectedStore(c, {
     available: true,
     counts: { plugin: 9949, fork: 26137, package: 0 },
@@ -673,13 +670,13 @@ test('imported research evidence marks only bounded hidden-gem candidates', asyn
 
 test('a plugin-only imported store retains the embedded fork snapshot', () => {
   const c = instance();
-  c.renderVals().repoTypes.find(type => type.id === 'fork').select();
+  c.renderVals().goForks();
   connectedStore(c, { available: true, artifact_count: 9949, counts: { plugin: 9949, fork: 0, package: 0 } });
 
   const values = c.renderVals();
-  assert.equal(values.storeActive, false);
+  assert.equal(c.usingCatalogStore(), false);
   assert.equal(values.results.length, 10);
-  assert.equal(values.catalogCountLabel, '9,949 plugins · 10 forks');
+  assert.equal(values.resultCount, '10 forks');
   assert.match(values.catalogSourceLabel, /no imported fork records/);
 });
 
@@ -693,21 +690,23 @@ test('store queries carry the active filters and load more appends by cursor', a
       total: 40, next_cursor: '77.50', generation: 77
     };
   };
-  c.renderVals().repoTypes.find(f => f.id === 'plugin').select();
+  c.renderVals().goPlugins();
   connectedStore(c);
-  c.setState({ query: 'agent teams', catalogSort: 'stars', catalogScope: 'featured', knownLicenseOnly: true });
+  c.setState({ query: 'agent teams', catalogSort: 'stars', knownLicenseOnly: true });
   await c.refreshCatalog();
 
   const sent = requests.at(-1);
   assert.equal(sent.get('q'), 'agent teams');
   assert.equal(sent.get('type'), 'plugin');
   assert.equal(sent.get('sort'), 'stars');
-  assert.equal(sent.get('featured'), '1');
+  assert.equal(sent.get('featured'), null, 'the browser has no featured-only filter');
   assert.equal(sent.get('licensed'), '1');
   assert.equal(sent.get('cursor'), null);
 
+  // Scrolling near the end of the feed is the only way to load the next page.
   const before = c.renderVals().results.length;
-  await c.renderVals().loadMore();
+  c.renderVals().loadMoreOnScroll({ currentTarget: { scrollHeight: 1000, scrollTop: 600, clientHeight: 300 } });
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(requests.at(-1).get('cursor'), '77.50');
   assert.equal(c.renderVals().results.length, before + 1, 'load more appends rather than replacing');
 });
@@ -759,7 +758,8 @@ test('a store failure is surfaced without falling back to a different corpus', a
   assert.equal(values.hasStoreError, true);
   assert.match(values.storeError, /re-imported/);
   assert.equal(values.results.length, 0);
-  assert.equal(values.storeActive, true, 'an error must not silently swap corpora');
+  assert.equal(c.usingCatalogStore(), true, 'an error must not silently swap corpora');
+  assert.equal(values.noResults, true, 'a failed query is not presented as still loading');
 });
 
 test('typing schedules one coalesced store query instead of one per keystroke', () => {
@@ -821,7 +821,7 @@ test('dedicated package route selects the requested metadata page and remains no
 
 test('plugin browsing shows the complete available inventory without a featured filter', () => {
   const c = instance();
-  c.renderVals().goCatalog();
+  c.renderVals().goPlugins();
   assert.equal(c.renderVals().results.length, 7);
   assert.equal(c.renderVals().catalogScopes, undefined);
   assert(!/All in snapshot/.test(html));
@@ -851,6 +851,97 @@ test('catalog page saves stable selections and signed package identity only when
   assert.deepEqual(request.body.selections, [{ type: 'package', id: 'catalog-package:agent-teams-builder' }]);
   assert.equal(request.body.draft, false);
   assert(!('path' in request.body));
+});
+
+test('plugin page checks only an exact declared version list against local versions', () => {
+  const saved = version => ({
+    id: 'version_' + version.replace(/\W/g, ''), path: '~/' + version, state: 'ready', tree_ids: [],
+    primary_tree: { id: 'tree_' + version, version, launchability: 'ready' }
+  });
+  const c = instance();
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved('0.1.2-rc.1'), saved('0.1.2-alpha.3')],
+    suggested_port: 3100, coverage_gaps: [], credentials: []
+  });
+  const exact = snapshot.supplemental_entries.find(entry => entry.compatibility.declared_dsh_range === '0.1.2-rc.1 || 0.1.2-alpha.5 || 0.1.2-alpha.2');
+  c.selectCatalogArtifact({ id: exact.artifact_id, type: 'plugin' });
+  assert.deepEqual(c.renderVals().localCompatibility.map(item => [item.version, item.listed]),
+    [['0.1.2-rc.1', true], ['0.1.2-alpha.3', false]]);
+  // A real range with a prose qualifier is shown, never evaluated.
+  const ranged = snapshot.supplemental_entries.find(entry => /^>=/.test(entry.compatibility.declared_dsh_range || ''));
+  c.selectCatalogArtifact({ id: ranged.artifact_id, type: 'plugin' });
+  const values = c.renderVals();
+  assert.equal(values.detailDeclaredRange, ranged.compatibility.declared_dsh_range);
+  assert.deepEqual(values.localCompatibility, []);
+});
+
+test('favorites filter lists only saved artifacts of the open browser', () => {
+  stored.clear();
+  const c = instance();
+  c.renderVals().goPlugins();
+  const plugin = c.renderVals().results[2];
+  plugin.select();
+  c.renderVals().toggleFavorite();
+  c.renderVals().backToCatalog();
+  c.renderVals().toggleFavoritesOnly();
+  assert.deepEqual(c.renderVals().results.map(r => r.id), [plugin.id]);
+  assert.equal(c.renderVals().resultCount, '1 favorite plugins');
+  // A page opened by its route (no record loaded yet) is found by id, so the filter
+  // never blanks a page that isn't a favorite.
+  const other = CATALOG.find(item => item.type === 'plugin' && item.id !== plugin.id);
+  c.setState({ detailOpen: true, artifactId: other.id, detailArtifact: null });
+  assert.equal(c.renderVals().detail.id, other.id);
+  c.renderVals().backToCatalog();
+  c.renderVals().goForks();
+  assert.equal(c.renderVals().results.length, 0);
+  assert.equal(c.renderVals().emptyTitle, 'No favorite forks yet');
+  c.renderVals().resetCatalogFilters();
+  assert.equal(c.renderVals().results.length, 10);
+  stored.clear();
+});
+
+test('running sessions sit under the version that started them', () => {
+  const c = instance();
+  const tree = { id: 'tree_a', trust: 'personal', launchability: 'ready', version: '1.0.0', name: 'DSH', git: { sha: 'abcdef123456', branch: 'main' } };
+  const cell = (id, treeId) => ({ id, name: id, treeId, port: 3101, started: Date.now(), process: 'alive', state: 'running', agent_state: 'idle' });
+  c.applyStatus({
+    trees: [tree], cells: [cell('mine', 'tree_a'), cell('orphan', 'tree_gone')], profiles: [],
+    sandbox: { ready: true }, credentials: [], coverage_gaps: [],
+    saved_versions: [{ id: 'version_a', state: 'ready', source: 'auto', tree_ids: ['tree_a'], primary_tree: tree }]
+  });
+  const values = c.renderVals();
+  assert.deepEqual(values.versionGroups.map(group => [group.isVersion, group.cells.map(item => item.id)]),
+    [[true, ['mine']], [false, ['orphan']]]);
+  assert.equal(values.versions[0].gitLine, 'main @ abcdef1');
+  assert.equal(values.versions[0].runningLabel, '1 running');
+  // Logs open inline for one session at a time and close again.
+  c.inspectCell = async target => c.setState({ logCell: target.id });
+  values.versions[0].cells[0].toggleLogs();
+  assert.equal(c.renderVals().versions[0].cells[0].expanded, true);
+  c.renderVals().versions[0].cells[0].toggleLogs();
+  assert.equal(c.state.logCell, null);
+});
+
+test('a plugin page whose policy cannot load fails closed and says why', async () => {
+  const c = instance();
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.api = async () => { throw new Error('Unknown catalog artifact'); };
+  c.setState({ sidecarConnected: true });
+  c.selectCatalogArtifact(plugin);
+  await c.loadCatalogArtifact(plugin.id);
+  const values = c.renderVals();
+  assert.equal(values.installAndRunDisabled, true);
+  assert.equal(values.installAndRunReason, 'No signed recipe could be checked: Unknown catalog artifact');
+  assert.equal(values.hasStoreError, false, 'an artifact lookup is not a feed error');
+});
+
+test('a tab switch never renders the previous tab store records', () => {
+  const c = instance();
+  connectedStore(c, { available: true, counts: { plugin: 10, fork: 10, package: 0 } });
+  c.setState({ storeArtifacts: CATALOG.filter(item => item.type === 'fork'), catalogType: 'plugin' });
+  const values = c.renderVals();
+  assert.equal(values.results.length, 0);
+  clearTimeout(c._catalogTimer);
 });
 
 test('Assistant tab starts a saved Harness through its dedicated endpoint', async () => {
