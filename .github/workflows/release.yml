@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -31,18 +31,85 @@ jobs:
           git diff --exit-code -- web/launcher.js
           node --test tests/catalog.test.cjs
           python3 -m unittest discover -s tests -p 'test_*.py'
-      - name: Build release assets
+      - name: Build the portable web release
         run: |
           mkdir -p dist
           python3 scripts/package_preview.py dist/DSH_Forge_Release.html
-          sha256sum dist/DSH_Forge_Release.html > dist/SHA256SUMS
+          sha256sum dist/DSH_Forge_Release.html > dist/SHA256SUMS-Web.txt
+      - name: Upload the portable release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-web
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install --requirement packaging/windows/requirements-build.txt
+          choco install innosetup --version 6.7.3 --no-progress --yes
+      - name: Import the Authenticode release certificate
+        shell: pwsh
+        env:
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:SIGNING_CERTIFICATE_BASE64 -or -not $env:SIGNING_CERTIFICATE_PASSWORD) {
+            throw 'Configure WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD before publishing a Windows release.'
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'dsh-forge-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+          $password = ConvertTo-SecureString $env:SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificates = @(Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password)
+          Remove-Item -LiteralPath $pfxPath -Force
+          $certificate = $certificates | Where-Object {
+            $_.HasPrivateKey -and ($_.EnhancedKeyUsageList.ObjectId.Value -contains '1.3.6.1.5.5.7.3.3')
+          } | Select-Object -First 1
+          if (-not $certificate) { throw 'The PFX does not contain a private key authorized for code signing.' }
+          "CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+      - name: Build and sign the Windows application
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          ./packaging/windows/build.ps1 -Version $version -CertificateThumbprint $env:CERTIFICATE_THUMBPRINT
+      - name: Smoke-test the signed installer
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -LiteralPath dist/windows -Filter 'DSH-Forge-*-Setup.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected one Windows installer, found $($installers.Count)." }
+          ./packaging/windows/smoke.ps1 -InstallerPath $installers[0].FullName
+      - name: Upload the Windows release
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-windows
+          path: dist/windows/
+          if-no-files-found: error
+
+  release:
+    needs: [test, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            dist/DSH_Forge_Release.html \
-            dist/SHA256SUMS \
+            dist/* \
             --verify-tag \
             --generate-notes \
             --title "DSH Forge $GITHUB_REF_NAME"

@@ -14,6 +14,7 @@ import sys
 from typing import Any, Mapping, Sequence, TextIO
 
 from .launcher import Launcher, LauncherError
+from .runtime import bundle_root
 
 
 # Forge currently implements the connection-level initialize handshake used by
@@ -39,7 +40,7 @@ class CatalogIndex:
     """Small bounded view over already-ingested, metadata-only catalog files."""
 
     def __init__(self, root: str | Path | None = None):
-        self.root = Path(root) if root else Path(__file__).resolve().parents[1] / "data"
+        self.root = Path(root) if root else bundle_root() / "data"
         public = _json_file(self.root / "public-repos.seed.json")
         packages = _json_file(self.root / "package-catalog.seed.json")
         rows: list[dict[str, Any]] = []
