@@ -1508,6 +1508,8 @@ class Component extends DCLogic {
       toast: '',
       cells: [],
       sidecarConnected: false,
+      application: { version: 'development', packaged: false, platform: 'web' },
+      update: { status: 'idle', current_version: 'development' },
       sandbox: {
         mode: 'unavailable', ready: false, hostile_code_isolation: false,
         reason: 'Start the sidecar with a pinned Apptainer image to enable complete cells.'
@@ -1546,6 +1548,9 @@ class Component extends DCLogic {
     window.addEventListener('hashchange', this.hashListener);
     this.refreshStatus(true).then(() => {
       if (this.state.detailOpen && this.state.artifactId) this.loadCatalogArtifact(this.state.artifactId);
+      if (this.state.application && this.state.application.updates && this.state.application.updates.available) {
+        this.checkForUpdate();
+      }
     });
   }
   componentWillUnmount() {
@@ -1967,6 +1972,7 @@ class Component extends DCLogic {
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
       configurations: Array.isArray(status.configurations) ? status.configurations : [],
       profiles: Array.isArray(status.profiles) ? status.profiles : [],
+      application: status.application || this.state.application,
       versionsDirectory: status.versions_directory || this.state.versionsDirectory,
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
@@ -1990,6 +1996,17 @@ class Component extends DCLogic {
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
+    }
+  }
+
+  async checkForUpdate() {
+    if (this.updateRequested || !this.state.sidecarConnected) return;
+    this.updateRequested = true;
+    this.setState({ update: { ...this.state.update, status: 'checking' } });
+    try {
+      this.setState({ update: await this.api('/api/v1/update') });
+    } catch (error) {
+      this.setState({ update: { status: 'unavailable', reason: error.message } });
     }
   }
 
@@ -2142,6 +2159,9 @@ class Component extends DCLogic {
     const s = this.state;
     const catalogEnabled = this.props.catalogEnabled ?? true;
     const sandbox = s.sandbox || {};
+    const application = s.application || {};
+    const nativeSandbox = application.native_sandbox || {};
+    const update = s.update || {};
     const savedTreeIds = new Set(s.savedVersions.flatMap(item => item.tree_ids || []));
     // Rows are only built from launch-ready trees; the sandbox and trust still gate Launch.
     const localVersionCard = (tree, saved = null) => {
@@ -2471,10 +2491,17 @@ class Component extends DCLogic {
       goPlugins: () => this.openBrowser('plugin'),
       goForks: () => this.openBrowser('fork'),
       goAssistant: () => this.navigate('assistant'),
+      showUpdate: update.status === 'available' && !!update.release_url,
+      updateLabel: 'Update ' + (update.latest_version || ''),
+      updateUrl: update.release_url || 'https://github.com/MichaelTheMay/dsh-forge/releases/latest',
+      showPlatformNotice: application.platform === 'windows' && !nativeSandbox.available,
+      platformNotice: nativeSandbox.message || '',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,
       sidecarLabel: s.sidecarConnected
-        ? 'Connected · ' + (typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090')
+        ? ('Connected · ' + (application.packaged && application.version
+          ? 'v' + application.version
+          : (typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090')))
         : 'Offline preview',
       launchTabClass: s.view === 'launch' ? 'tab tab-on' : 'tab',
       pluginsTabClass: s.view === 'catalog' && s.catalogType !== 'fork' ? 'tab tab-on' : 'tab',

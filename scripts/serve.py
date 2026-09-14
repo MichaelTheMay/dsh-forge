@@ -19,16 +19,20 @@ from http.cookies import SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.request import urlopen
 
-ROOT = Path(__file__).resolve().parents[1]
-WEB_ROOT = ROOT / "web"
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SOURCE_ROOT = Path(__file__).resolve().parents[1]
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
 
 from dsh_forge.feed import DEFAULT_FEED_URL, FeedError, fetch_catalog_feed  # noqa: E402
 from dsh_forge.launcher import Launcher, LauncherError  # noqa: E402
 from dsh_forge.marketplace import DEFAULT_CATALOG_URL, MarketplaceError, fetch_catalog  # noqa: E402
+from dsh_forge.runtime import acquire_windows_instance, bundle_root, check_for_update, default_state_root, packaged  # noqa: E402
 from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError  # noqa: E402
+
+ROOT = bundle_root()
+WEB_ROOT = ROOT / "web"
 
 
 def choose_directory() -> str | None:
@@ -89,6 +93,20 @@ def open_desktop_window(url: str, profile: Path) -> subprocess.Popen | None:
     return None
 
 
+def existing_launcher(port: int) -> bool:
+    """Recognize an already-running local Forge before reusing its window."""
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/api/v1/status", timeout=1) as response:
+            payload = json.loads(response.read(65537))
+        return (
+            isinstance(payload, dict)
+            and payload.get("api_version") == "v1"
+            and payload.get("mode") == "live-local-sidecar"
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
 class LauncherHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -103,6 +121,11 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
     """Serve the UI plus a same-origin, session-protected local API."""
 
     server: LauncherHTTPServer
+
+    def log_message(self, format, *args):
+        # PyInstaller's windowed bootloader intentionally has no stderr.
+        if sys.stderr is not None:
+            super().log_message(format, *args)
 
     def list_directory(self, path):
         self.send_error(404, "Directory listing disabled")
@@ -185,6 +208,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         if path == "/api/v1/status":
             if self._api_guard():
                 self._json(self.server.launcher.status(), establish_session=True)
+            return
+        if path == "/api/v1/update":
+            if self._api_guard() and self._session_ok():
+                self._json(check_for_update())
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
         if path == "/api/v1/trees":
             if self._api_guard() and self._session_ok():
@@ -414,11 +443,17 @@ StaticUIHandler = LauncherUIHandler
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=3090)
-    parser.add_argument("--desktop", action="store_true", help="Open Forge in a dedicated desktop app window")
+    parser.add_argument(
+        "--desktop", action=argparse.BooleanOptionalAction, default=packaged(),
+        help="Open Forge in a dedicated desktop app window",
+    )
     parser.add_argument("--scan-root", action="append", default=[], help="Register an explicit directory for bounded DSH discovery; repeatable")
     parser.add_argument("--dsh-home", action="append", default=[], help="Scan this DSH home for installed profiles; repeatable")
     parser.add_argument("--state-dir", type=Path, help="Override launcher state/log directory")
-    parser.add_argument("--sync-catalog", action="store_true", help="Refresh the full public Forge catalog once before serving")
+    parser.add_argument(
+        "--sync-catalog", action=argparse.BooleanOptionalAction, default=packaged(),
+        help="Refresh the full public Forge catalog once before serving",
+    )
     parser.add_argument("--sync-plugins", action="store_true", help="Refresh the public plugin catalog once before serving")
     parser.add_argument("--catalog-feed-url", default=DEFAULT_FEED_URL, help=argparse.SUPPRESS)
     parser.add_argument("--plugin-catalog-url", default=DEFAULT_CATALOG_URL, help=argparse.SUPPRESS)
@@ -435,8 +470,13 @@ def main():
         parser.error("Choose an unprivileged port between 1024 and 65535")
     if args.sync_catalog and args.sync_plugins:
         parser.error("Choose either --sync-catalog or --sync-plugins")
-    configured_state = args.state_dir or os.environ.get("DSH_FORGE_STATE_DIR")
-    state_root = Path(configured_state).expanduser() if configured_state else Path.home() / ".local" / "state" / "dsh-forge"
+    state_root = args.state_dir.expanduser() if args.state_dir else default_state_root()
+    instance_handle = acquire_windows_instance()
+    if instance_handle is False:
+        if existing_launcher(args.port):
+            open_desktop_window(f"http://127.0.0.1:{args.port}/#launch", state_root / "desktop-browser")
+            return
+        parser.exit(1, "DSH Forge is already running, but its local window could not be reached.\n")
     try:
         sandbox_config = SandboxConfig.from_values(
             image=args.sandbox_image or os.environ.get("DSH_FORGE_SANDBOX_IMAGE"),
@@ -452,18 +492,24 @@ def main():
         parser.error(str(error))
     sandbox = ApptainerSandbox(sandbox_config, state_root / "sandbox")
     launcher = Launcher(args.scan_root, state_root=state_root, sandbox=sandbox, dsh_homes=args.dsh_home)
-    if args.sync_catalog:
+
+    def refresh_catalog():
         try:
             imported = launcher.import_catalog(fetch_catalog_feed(args.catalog_feed_url))
             print(f"Forge catalog: {imported['artifact_count']:,} artifacts imported.", flush=True)
         except (FeedError, LauncherError, OSError) as error:
             print(f"Forge catalog refresh failed; keeping the last good local catalog: {error}", file=sys.stderr, flush=True)
-    if args.sync_plugins:
+
+    def refresh_plugins():
         try:
             imported = launcher.import_catalog(fetch_catalog(args.plugin_catalog_url))
             print(f"Plugin catalog: {imported['artifact_count']:,} artifacts imported.", flush=True)
         except (MarketplaceError, LauncherError, OSError) as error:
             print(f"Plugin catalog refresh failed; keeping the last good local catalog: {error}", file=sys.stderr, flush=True)
+
+    refresh = refresh_catalog if args.sync_catalog else (refresh_plugins if args.sync_plugins else None)
+    if refresh and not packaged():
+        refresh()
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
         server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)
@@ -481,6 +527,10 @@ def main():
     sandbox_status = status["sandbox"]
     print(f"Cell runner: {sandbox_status['mode']} · {'ready' if sandbox_status['ready'] else sandbox_status['reason']}", flush=True)
     print("The sidecar is loopback-only. Press Ctrl+C to stop it and its owned cells.", flush=True)
+    if refresh and packaged():
+        # The window should not wait for the network. The catalog store
+        # atomically replaces its snapshot after a verified refresh succeeds.
+        threading.Thread(target=refresh, daemon=True).start()
     if args.desktop:
         def desktop_session():
             process = open_desktop_window(

@@ -501,6 +501,12 @@ class LauncherServer(LauncherFixture):
                 self.assertNotIn("'unsafe-eval'", csp)
                 self.assertGreater(len(response.read()), 1000)
 
+    def test_running_launcher_is_recognized_before_reusing_its_window(self):
+        self.assertTrue(serve.existing_launcher(self.server.server_address[1]))
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as unused:
+            unused.bind(("127.0.0.1", 0))
+            self.assertFalse(serve.existing_launcher(unused.getsockname()[1]))
+
     def test_source_git_and_directory_listings_are_not_served(self):
         for path in ["/.git/config", "/../.git/config", "/scripts/seed_catalog.py", "/vendor/"]:
             with self.assertRaises(urllib.error.HTTPError) as context:
@@ -678,6 +684,7 @@ class LauncherServer(LauncherFixture):
     def test_status_is_live_and_cookie_is_hardened(self):
         _, payload = self.establish_session()
         self.assertEqual(payload["mode"], "live-local-sidecar")
+        self.assertEqual(payload["application"]["name"], "DSH Forge")
         with urllib.request.urlopen(self.url + "/api/v1/status", timeout=3) as response:
             cookie = response.headers["Set-Cookie"]
         self.assertIn("HttpOnly", cookie)
@@ -685,6 +692,22 @@ class LauncherServer(LauncherFixture):
         self.assertEqual(payload["sandbox"]["mode"], "fake-apptainer-cell-v1")
         self.assertTrue(payload["sandbox"]["ready"])
         self.assertFalse(payload["sandbox"]["hostile_code_isolation"])
+
+    def test_update_endpoint_requires_session_and_uses_bounded_checker(self):
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(self.url + "/api/v1/update", timeout=3)
+        self.assertEqual(context.exception.code, 403)
+        cookie, _ = self.establish_session()
+        expected = {
+            "status": "current", "current_version": "1.0.0", "latest_version": "1.0.0",
+            "release_url": "https://github.com/MichaelTheMay/dsh-forge/releases/tag/v1.0.0",
+            "reason": "DSH Forge is current.",
+        }
+        with mock.patch.object(serve, "check_for_update", return_value=expected) as check:
+            request = urllib.request.Request(self.url + "/api/v1/update", headers={"Cookie": cookie})
+            with urllib.request.urlopen(request, timeout=3) as response:
+                self.assertEqual(json.load(response), expected)
+        check.assert_called_once_with()
 
     def test_sandbox_mutation_requires_session_and_uses_tree_endpoint(self):
         tree = self.launcher._trees[self.tree()["id"]]

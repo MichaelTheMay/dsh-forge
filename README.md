@@ -51,6 +51,14 @@ Browse the permanent disconnected demo at
 shell and embedded community catalog. Local detection, installation, and launch
 controls remain disabled until the loopback sidecar below is running.
 
+On Windows, download `DSH-Forge-VERSION-Setup.exe` from the
+[latest GitHub release](https://github.com/MichaelTheMay/dsh-forge/releases/latest)
+and open **DSH Forge** from the Start Menu. The per-user installer bundles the
+Python sidecar, opens a dedicated Edge app window, detects local DSH installs on
+startup, and supports in-place upgrades. No separate Python or frontend setup is
+required. See [Windows desktop application](docs/windows-desktop.md) for the
+security boundary, build process, and trusted signing setup.
+
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.
 

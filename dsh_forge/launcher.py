@@ -1076,6 +1076,8 @@ class Launcher:
         return public
 
     def status(self) -> dict[str, Any]:
+        from .runtime import application_status
+
         with self._mutation_lock, self._registry_file_lock():
             self._sync_cells()
             with self._lock:
@@ -1085,6 +1087,7 @@ class Launcher:
         return {
             "api_version": "v1",
             "mode": "live-local-sidecar",
+            "application": application_status(),
             "trees": trees,
             "profiles": profiles,
             "cells": cells,
@@ -2279,8 +2282,9 @@ class Launcher:
         """Copy only bounded metadata and a self-contained MCP server into a cell."""
 
         from .mcp_server import CatalogIndex
+        from .runtime import bundle_root
 
-        index = CatalogIndex(Path(__file__).resolve().parents[1] / "data")
+        index = CatalogIndex(bundle_root() / "data")
         snapshot = {
             "schema": "dsh-forge.assistant-snapshot/v1",
             **index.snapshot,

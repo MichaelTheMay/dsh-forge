@@ -47,6 +47,7 @@
   .tab-on { color: oklch(0.95 0.006 255); border-bottom-color: oklch(0.78 0.11 235); }
   .tab-fork.tab-on { border-bottom-color: oklch(0.78 0.11 300); }
   .status-pill { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-size: 11.5px; color: oklch(0.7 0.012 255); white-space: nowrap; }
+  .update-link { font: 500 11.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
   .page { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .page-inner { width: min(1120px, 100%); margin: 0 auto; padding: 40px 28px 56px; display: flex; flex-direction: column; gap: 32px; }
   .page-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; }
@@ -115,6 +116,7 @@
   /* Local */
   .sandbox-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: oklch(0.72 0.012 255); }
   .sandbox-status .dot { width: 7px; height: 7px; }
+  .platform-note { padding: 13px 16px; border: 1px solid oklch(0.42 0.06 75); border-radius: 9px; background: oklch(0.225 0.02 75); color: oklch(0.82 0.05 75); font-size: 12.5px; line-height: 1.55; }
   .panel > * + * { border-top: 1px solid oklch(0.3 0.012 255); }
   .vrow { display: flex; align-items: center; gap: 20px; padding: 18px 22px; }
   .vstatus { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; }
@@ -342,6 +344,7 @@
       <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
     </nav>
     <span class="spacer"></span>
+    <sc-if value="{{ showUpdate }}" hint-placeholder-val="{{ false }}"><a class="update-link" href="{{ updateUrl }}" target="_blank" rel="noopener noreferrer">{{ updateLabel }}</a></sc-if>
     <span class="status-pill mono" title="{{ sidecarTitle }}"><span class="dot" style="background: {{ sidecarDot }};"></span>{{ sidecarLabel }}</span>
   </header>
 
@@ -359,6 +362,10 @@
           <button class="btn" onClick="{{ pickVersion }}" disabled="{{ versionControlsDisabled }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 10.5v6M9 13.5h6"/></svg>Add folder</button>
         </div>
       </div>
+
+      <sc-if value="{{ showPlatformNotice }}" hint-placeholder-val="{{ false }}">
+        <aside class="platform-note" aria-label="Windows isolation capability">{{ platformNotice }}</aside>
+      </sc-if>
 
       <sc-if value="{{ noVersions }}" hint-placeholder-val="{{ false }}">
         <div class="empty"><h2>No launch-ready versions yet</h2><p>{{ emptyVersionsText }}</p></div>

@@ -39,7 +39,18 @@ Launcher and catalog checks / checks
 
 `.github/workflows/release.yml` runs only for `v*` tags. It rejects a tag unless
 it points to the current `main` tip, reruns the complete test suite, builds the
-portable HTML preview and checksum, and publishes them as a GitHub Release.
+portable HTML preview, and builds a 64-bit Windows installer and portable zip.
+The workflow signs and verifies both Windows executables before publishing all
+artifacts and checksums as one GitHub Release.
+
+Before creating a release tag, configure two encrypted Actions secrets:
+
+- `WINDOWS_SIGNING_CERTIFICATE_BASE64`: the base64-encoded PFX for the CA-backed
+  Authenticode certificate
+- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`: the PFX password
+
+The release fails closed when either secret is absent. Local unsigned builds
+remain available for development through `packaging/windows/build.ps1`.
 
 ```bash
 git switch main
