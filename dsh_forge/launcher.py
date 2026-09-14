@@ -974,7 +974,8 @@ class Launcher:
             raise LauncherError(str(error)) from error
         if record is None:
             raise LauncherError("Unknown catalog artifact")
-        return {**record, **({"hidden_gem": research} if research else {})}
+        detail = {**record, **({"hidden_gem": research} if research else {})}
+        return {**detail, "execution": self._artifact_execution(detail)}
 
     def suggested_port(self) -> int:
         with self._lock:
@@ -1167,6 +1168,14 @@ class Launcher:
                 "backend": "signed-quarantine-apptainer-v1",
                 "atomic_promotion": True,
                 "host_fallback": False,
+                "reason": sandbox_status.get("reason"),
+            },
+            "artifact_install_and_run": {
+                "available": sandbox_ready,
+                "backend": "exact-single-plugin-recipe-apptainer-v1",
+                "explicit_risk_acknowledgment": True,
+                "host_fallback": False,
+                "forks_supported": False,
                 "reason": sandbox_status.get("reason"),
             },
             "parallel_local_cells": {
@@ -1756,14 +1765,8 @@ class Launcher:
                     })
         return recipes
 
-    def install_trusted_catalog_package(
-        self,
-        *,
-        package_slug: str,
-        version_id: str,
-        profile: str = "web",
-    ) -> dict[str, Any]:
-        """Install one locally trusted catalog recipe without accepting browser file paths."""
+    def _read_trusted_package_recipe(self, package_slug: str) -> dict[str, Any]:
+        """Read and verify one fixed local recipe without accepting caller paths."""
 
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,63}", str(package_slug or "")):
             raise LauncherError("Choose a valid package")
@@ -1809,10 +1812,135 @@ class Launcher:
             or certification.get("install_policy") != "acquire-inspect-networkless-apptainer-smoke-test-then-promote"
         ):
             raise LauncherError("Package certification does not match its signed manifest and review policy")
+        return {
+            "slug": package_slug,
+            "envelope": envelope,
+            "trust_root": trust_root,
+            "manifest": manifest,
+            "certification": certification,
+        }
+
+    @staticmethod
+    def _recipe_matches_artifact(recipe: dict[str, Any], artifact: dict[str, Any]) -> bool:
+        """Require one signed npm component to match the catalog's exact identity."""
+
+        components = recipe["manifest"].get("plugins") or []
+        package = artifact.get("package") if isinstance(artifact.get("package"), dict) else {}
+        if artifact.get("artifact_type") != "plugin" or len(components) != 1:
+            return False
+        component = components[0]
+        source = component.get("source") or {}
+        repository = component.get("repository") or {}
+        return (
+            package.get("registry") == "npm"
+            and source.get("kind") == "npm"
+            and source.get("name") == package.get("name")
+            and source.get("version") == package.get("version")
+            and source.get("integrity") == package.get("integrity")
+            and str(repository.get("url") or "").rstrip("/")
+            == str(artifact.get("repository_url") or "").rstrip("/")
+            and repository.get("commit") == artifact.get("head_sha")
+        )
+
+    def _trusted_artifact_recipe(self, artifact: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+        if artifact.get("artifact_type") == "fork":
+            return None, "Forks need a signed build recipe and a separate Harness compatibility boundary"
+        if artifact.get("artifact_type") != "plugin":
+            return None, "Only cataloged plugins can use the V1 artifact runner"
+        if artifact.get("archived") is True:
+            return None, "Archived plugins cannot start a new installation"
+        package = artifact.get("package") if isinstance(artifact.get("package"), dict) else {}
+        if package.get("registry") != "npm" or not package.get("integrity"):
+            return None, "V1 requires an exact npm version and registry integrity value"
+        matches: list[dict[str, Any]] = []
+        for summary in self.trusted_package_recipes():
+            try:
+                recipe = self._read_trusted_package_recipe(summary["slug"])
+            except LauncherError:
+                continue
+            if self._recipe_matches_artifact(recipe, artifact):
+                matches.append(recipe)
+        if not matches:
+            return None, "No locally trusted single-plugin recipe matches this exact package and repository commit"
+        if len(matches) > 1:
+            return None, "Multiple trusted recipes match this artifact; remove the ambiguity before running"
+        return matches[0], "Exact signed recipe is ready for sandbox installation"
+
+    def _artifact_execution(self, artifact: dict[str, Any]) -> dict[str, Any]:
+        recipe, reason = self._trusted_artifact_recipe(artifact)
+        sandbox = self.sandbox.status()
+        if recipe is not None and not sandbox.get("ready"):
+            reason = str(sandbox.get("reason") or "Apptainer isolation is unavailable")
+        certification = recipe["certification"] if recipe else {}
+        return {
+            "eligible": bool(recipe and sandbox.get("ready")),
+            "reason": reason,
+            "recipe_slug": recipe["slug"] if recipe else None,
+            "recipe_name": recipe["manifest"]["package"]["name"] if recipe else None,
+            "reviewer": str(certification.get("reviewer") or "") if recipe else None,
+            "reviewed_at": str(certification.get("reviewed_at") or "") if recipe else None,
+            "exact_package": bool(recipe),
+            "exact_repository_commit": bool(recipe),
+            "host_fallback": False,
+        }
+
+    def install_and_run_catalog_artifact(
+        self,
+        *,
+        artifact_id: str,
+        version_id: str,
+        acknowledge_risk: bool,
+    ) -> dict[str, Any]:
+        """Install one exact reviewed plugin and clone it into a disposable cell."""
+
+        if acknowledge_risk is not True:
+            raise LauncherError("Explicit community-code risk acknowledgment is required")
+        artifact = self.catalog_artifact(artifact_id)
+        execution = artifact["execution"]
+        if not execution["eligible"]:
+            raise LauncherError(execution["reason"])
+        recipe = self._read_trusted_package_recipe(execution["recipe_slug"])
+        if not self._recipe_matches_artifact(recipe, artifact):
+            raise LauncherError("Trusted recipe changed after eligibility was checked")
+        installation = self.install_package(
+            version_id=version_id,
+            envelope=recipe["envelope"],
+            trust_root=recipe["trust_root"],
+            profile="web",
+        )
+        installation = self._update_package_installation(
+            installation["id"],
+            artifact_id=artifact_id,
+            community_code_risk_acknowledged=True,
+            disposable_run_requested=True,
+        )
+        configuration = self.save_configuration(
+            name=str(artifact.get("name") or artifact.get("full_name") or "Community plugin")[:80],
+            description="Installed from an exact curator-reviewed artifact recipe.",
+            version_id=version_id,
+            package_slug=recipe["slug"],
+            selections=[{"type": "plugin", "id": artifact_id}],
+            launch={
+                "surface": "web", "profile": "web", "port": "auto",
+                "open_browser": False, "network": "host", "resources": {"gpu": "none"},
+            },
+        )
+        cell = self.run_configuration(configuration["id"])
+        return {"artifact_id": artifact_id, "installation": installation, "configuration": configuration, "cell": cell}
+
+    def install_trusted_catalog_package(
+        self,
+        *,
+        package_slug: str,
+        version_id: str,
+        profile: str = "web",
+    ) -> dict[str, Any]:
+        """Install one locally trusted catalog recipe without accepting browser file paths."""
+        recipe = self._read_trusted_package_recipe(package_slug)
         return self.install_package(
             version_id=version_id,
-            envelope=envelope,
-            trust_root=trust_root,
+            envelope=recipe["envelope"],
+            trust_root=recipe["trust_root"],
             profile=profile,
         )
 

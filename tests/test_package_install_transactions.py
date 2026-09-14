@@ -66,6 +66,33 @@ class PackageInstallTransactionTests(unittest.TestCase):
         self.launcher.shutdown()
         self.temp.cleanup()
 
+    def write_recipe(self, envelope):
+        verified = verify(envelope, self.trust_root)
+        manifest = verified["manifest"]
+        recipe = self.launcher.trusted_package_recipes_root / manifest["package"]["id"]
+        recipe.mkdir(exist_ok=True)
+        (recipe / "envelope.json").write_text(json.dumps(envelope), encoding="utf-8")
+        (recipe / "trust-root.json").write_text(json.dumps(self.trust_root), encoding="utf-8")
+        (recipe / "certification.json").write_text(json.dumps({
+            "schema": "dsh-forge.package-certification/v1",
+            "policy": "dsh-forge.hidden-gems/v1",
+            "package_id": manifest["package"]["id"],
+            "package_name": manifest["package"]["name"],
+            "package_version": manifest["package"]["version"],
+            "component_count": len(manifest["plugins"]),
+            "reviewer": "Test curator",
+            "signed_review_statement": manifest["provenance"]["created_by"],
+            "reviewed_at": "2026-09-11T05:00:00Z",
+            "attestations": {"source": True, "permissions": True, "license": True, "compatibility": True},
+            "payload_digest": verified["payload_digest"],
+            "valid_signers": verified["valid_signers"],
+            "metadata_candidate": True,
+            "security_verified": False,
+            "sandbox_verified": False,
+            "install_policy": "acquire-inspect-networkless-apptainer-smoke-test-then-promote",
+        }), encoding="utf-8")
+        return recipe
+
     def test_successful_transaction_is_persistent_and_ready(self):
         with mock.patch("dsh_forge.acquisition.acquire", return_value={"receipt": str(self.root / "receipt.json")}), mock.patch(
             "dsh_forge.installation.install_in_sandbox"
@@ -115,29 +142,7 @@ class PackageInstallTransactionTests(unittest.TestCase):
         self.assertEqual(self.launcher.status()["package_installations"], [])
 
     def test_catalog_recipe_resolves_only_fixed_local_inputs_and_matching_identity(self):
-        recipe = self.launcher.trusted_package_recipes_root / "agent-teams-builder"
-        recipe.mkdir()
-        (recipe / "envelope.json").write_text(json.dumps(self.envelope), encoding="utf-8")
-        (recipe / "trust-root.json").write_text(json.dumps(self.trust_root), encoding="utf-8")
-        verified = verify(self.envelope, self.trust_root)
-        (recipe / "certification.json").write_text(json.dumps({
-            "schema": "dsh-forge.package-certification/v1",
-            "policy": "dsh-forge.hidden-gems/v1",
-            "package_id": "agent-teams-builder",
-            "package_name": "Review stack",
-            "package_version": "1.0.0",
-            "component_count": 2,
-            "reviewer": "Test curator",
-            "signed_review_statement": verified["manifest"]["provenance"]["created_by"],
-            "reviewed_at": "2026-09-11T05:00:00Z",
-            "attestations": {"source": True, "permissions": True, "license": True, "compatibility": True},
-            "payload_digest": verified["payload_digest"],
-            "valid_signers": verified["valid_signers"],
-            "metadata_candidate": True,
-            "security_verified": False,
-            "sandbox_verified": False,
-            "install_policy": "acquire-inspect-networkless-apptainer-smoke-test-then-promote",
-        }), encoding="utf-8")
+        recipe = self.write_recipe(self.envelope)
         with mock.patch.object(self.launcher, "install_package", return_value={"state": "ready"}) as install:
             result = self.launcher.install_trusted_catalog_package(
                 package_slug="agent-teams-builder",
@@ -162,6 +167,90 @@ class PackageInstallTransactionTests(unittest.TestCase):
                 package_slug="agent-teams-builder",
                 version_id=self.version_id,
             )
+
+    def test_artifact_runner_requires_exact_single_plugin_recipe_and_acknowledgment(self):
+        spec = package_spec()
+        spec["package"]["id"] = "single-vet"
+        spec["package"]["name"] = "Single vet"
+        spec["plugins"] = [spec["plugins"][0]]
+        spec["load_order"] = [spec["plugins"][0]["id"]]
+        spec["provenance"]["created_by"] = signed_review_statement(
+            "Test curator", "dsh-forge.hidden-gems/v1"
+        )
+        envelope = sign(compose(spec), self.private)
+        self.write_recipe(envelope)
+        plugin = {
+            "artifact_id": "github:42",
+            "artifact_type": "plugin",
+            "github_id": 42,
+            "full_name": "rogerdigital/dsh-vet",
+            "owner": "rogerdigital",
+            "name": "dsh-vet",
+            "repository_url": "https://github.com/rogerdigital/dsh-vet",
+            "head_sha": "3005968cc708d12b7e1f98f1a312239b5312ce7f",
+            "archived": False,
+            "license": {"spdx": "MIT"},
+            "package": {
+                "registry": "npm", "name": "dsh-vet", "version": "0.3.0",
+                "integrity": "sha512-HdQoj+ZxoYJRp3/PUK7fIIc/bj6FhyF86SDxyKapRQB1X23GY9hPM7PNoarzAvSa7k4isv6nrnXR8S7IqfQ0Ig==",
+            },
+            "verification": {"metadata_only": True, "executed": False, "security_verified": False},
+        }
+        self.launcher.import_catalog({
+            "snapshot_id": "artifact-run-test", "fetched_at": "2026-09-11T05:00:00Z",
+            "provenance": {"method": "test"}, "coverage": [], "entries": [],
+            "supplemental_entries": [plugin], "package_entries": [],
+        })
+        detail = self.launcher.catalog_artifact("github:42")
+        self.assertTrue(detail["execution"]["eligible"])
+        self.assertEqual(detail["execution"]["recipe_slug"], "single-vet")
+        with self.assertRaisesRegex(LauncherError, "acknowledgment"):
+            self.launcher.install_and_run_catalog_artifact(
+                artifact_id="github:42", version_id=self.version_id, acknowledge_risk=False
+            )
+        with mock.patch.object(self.launcher, "install_package", return_value={"id": "install_test"}) as install, mock.patch.object(
+            self.launcher, "save_configuration", return_value={"id": "config_test"}
+        ) as save, mock.patch.object(self.launcher, "run_configuration", return_value={"id": "cell_test"}) as run:
+            result = self.launcher.install_and_run_catalog_artifact(
+                artifact_id="github:42", version_id=self.version_id, acknowledge_risk=True
+            )
+        self.assertEqual(result["cell"]["id"], "cell_test")
+        self.assertTrue(result["installation"]["community_code_risk_acknowledged"])
+        self.assertEqual(result["installation"]["artifact_id"], "github:42")
+        self.assertEqual(install.call_args.kwargs["version_id"], self.version_id)
+        self.assertEqual(save.call_args.kwargs["package_slug"], "single-vet")
+        self.assertEqual(save.call_args.kwargs["selections"], [{"type": "plugin", "id": "github:42"}])
+        run.assert_called_once_with("config_test")
+
+        changed = json.loads(json.dumps(plugin))
+        changed["head_sha"] = "b" * 40
+        self.launcher.import_catalog({
+            "snapshot_id": "artifact-run-mismatch", "fetched_at": "2026-09-11T06:00:00Z",
+            "provenance": {"method": "test"}, "coverage": [], "entries": [],
+            "supplemental_entries": [changed], "package_entries": [],
+        })
+        self.assertFalse(self.launcher.catalog_artifact("github:42")["execution"]["eligible"])
+        with self.assertRaisesRegex(LauncherError, "No locally trusted"):
+            self.launcher.install_and_run_catalog_artifact(
+                artifact_id="github:42", version_id=self.version_id, acknowledge_risk=True
+            )
+
+    def test_artifact_runner_keeps_forks_browse_only(self):
+        fork = {
+            "artifact_id": "github:77", "artifact_type": "fork", "github_id": 77,
+            "full_name": "example/fork", "owner": "example", "name": "fork",
+            "repository_url": "https://github.com/example/fork", "head_sha": "a" * 40,
+            "archived": False, "license": {"spdx": "MIT"},
+            "verification": {"metadata_only": True, "executed": False, "security_verified": False},
+        }
+        self.launcher.import_catalog({
+            "snapshot_id": "fork-run-test", "fetched_at": "2026-09-11T05:00:00Z",
+            "provenance": {"method": "test"}, "coverage": [], "entries": [fork],
+            "supplemental_entries": [], "package_entries": [],
+        })
+        execution = self.launcher.catalog_artifact("github:77")["execution"]
+        self.assertFalse(execution["eligible"])
+        self.assertIn("signed build recipe", execution["reason"])
 
 
 if __name__ == "__main__":

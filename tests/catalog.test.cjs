@@ -384,8 +384,55 @@ test('plugin detail never exposes a host install command', () => {
   assert.equal(values.isPluginDetail, true);
   assert.equal(values.pluginInstallCommand, '');
   assert.equal(values.installAndRunDisabled, true);
-  assert.equal(values.installAndRunLabel, 'Sandbox review required');
+  assert.equal(values.installAndRunLabel, 'Sandbox recipe required');
   assert(!/Copy exact-version install command/.test(html));
+});
+
+test('eligible plugin requires a large risk confirmation before the stable-ID install-run request', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [{ slug: 'single-vet', configured: true }],
+    suggested_port: 3100, coverage_gaps: [], credentials: [], sandbox: { ready: true }
+  });
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.setState({
+    detailOpen: true,
+    artifactId: plugin.id,
+    detailArtifact: {
+      ...plugin,
+      execution: {
+        eligible: true, reason: 'Exact signed recipe is ready for sandbox installation',
+        recipe_slug: 'single-vet', recipe_name: 'Single vet', reviewer: 'Release curator'
+      }
+    }
+  });
+  let values = c.renderVals();
+  assert.equal(values.installAndRunDisabled, false);
+  values.installAndRun();
+  values = c.renderVals();
+  assert.equal(values.artifactRunConfirmationOpen, true);
+  assert.equal(values.artifactRunConfirmDisabled, true);
+  values.toggleArtifactRisk({ target: { checked: true } });
+  let request;
+  c.api = async (url, options) => {
+    request = { url, body: JSON.parse(options.body) };
+    return { cell: { id: 'cell_plugin' } };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().startArtifactRun();
+  assert.deepEqual(request, {
+    url: '/api/v1/catalog/install-run',
+    body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
+  });
+  assert.equal(c.state.selectedCell, 'cell_plugin');
+  assert.equal(c.state.artifactRunConfirmation, null);
+  assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
+  assert.match(html, /Apptainer shares the host kernel/);
 });
 
 test('raw plugins and forks cannot bypass sandbox acquisition', () => {

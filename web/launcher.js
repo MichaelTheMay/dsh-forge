@@ -1466,6 +1466,9 @@ class Component extends DCLogic {
       catalogProfileId: '',
       packageVersionId: '',
       packageInstallBusy: false,
+      artifactRunBusy: false,
+      artifactRunConfirmation: null,
+      artifactRiskAcknowledged: false,
       configurationBusy: false,
       catalogScope: 'all',
       catalogStore: { available: false },
@@ -1594,16 +1597,55 @@ class Component extends DCLogic {
     const local = CATALOG.find(item => item.id === artifactId) ||
       this.state.storeArtifacts.find(item => item.id === artifactId) ||
       this.state.favoriteArtifacts.find(item => item.id === artifactId);
-    if (local) {
-      this.setState({ detailArtifact: local });
-      return;
-    }
+    if (local) this.setState({ detailArtifact: local });
     if (!this.state.sidecarConnected) return;
     try {
       const record = await this.api('/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
       if (this.state.artifactId === artifactId) this.setState({ detailArtifact: mapCatalogRecord(record) });
     } catch (error) {
       if (this.state.artifactId === artifactId) this.setState({ storeError: error.message });
+    }
+  }
+
+  confirmArtifactRun(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
+    if (!versionId) return this.flash('Save a launch-ready Harness version first');
+    if (!detail.execution || !detail.execution.eligible) {
+      return this.flash((detail.execution && detail.execution.reason) || 'An exact signed sandbox recipe is required');
+    }
+    this.setState({
+      packageVersionId: versionId,
+      artifactRunConfirmation: detail,
+      artifactRiskAcknowledged: false
+    });
+  }
+
+  async installAndRunArtifact() {
+    const detail = this.state.artifactRunConfirmation;
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
+    this.setState({ artifactRunBusy: true });
+    try {
+      const result = await this.api('/api/v1/catalog/install-run', {
+        method: 'POST',
+        body: JSON.stringify({ artifact_id: detail.id, version_id: versionId, acknowledge_risk: true })
+      });
+      await this.refreshStatus(true);
+      this.setState({
+        artifactRunBusy: false,
+        artifactRunConfirmation: null,
+        artifactRiskAcknowledged: false,
+        view: 'launch',
+        selectedCell: result.cell.id,
+        inspectorTab: 'logs'
+      });
+      if (typeof window !== 'undefined') window.location.hash = 'launch';
+      this.flash('Plugin verified, installed, and started in a disposable cell');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.setState({ artifactRunBusy: false });
+      this.flash(error.message);
     }
   }
 
@@ -2429,6 +2471,12 @@ class Component extends DCLogic {
     const latestPackageInstall = detail.catalogPackage
       ? [...s.packageInstallations].reverse().find(item => item.package && item.package.id === detail.slug)
       : null;
+    const artifactExecution = detail.execution || {
+      eligible: false,
+      reason: s.sidecarConnected
+        ? 'Loading the local execution policy for this artifact'
+        : 'Connect the local launcher to check for an exact signed sandbox recipe'
+    };
     const results = filtered.map(a => ({
       ...a, selected: s.detailOpen && a.id === detail.id,
       featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
@@ -2798,8 +2846,12 @@ class Component extends DCLogic {
       favoriteLabel: s.favoriteArtifacts.some(item => item.id === detail.id) ? 'Favorited' : 'Favorite',
       toggleFavorite: () => detail.id ? this.toggleFavorite(detail) : undefined,
       backToCatalog: () => this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin'),
-      installAndRunDisabled: true,
-      installAndRunLabel: 'Sandbox review required',
+      installAndRunDisabled: !artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy,
+      installAndRunLabel: s.artifactRunBusy
+        ? 'Installing and testingâ€¦'
+        : (artifactExecution.eligible ? 'Install and run in sandboxâ€¦' : 'Sandbox recipe required'),
+      installAndRunReason: artifactExecution.reason,
+      installAndRun: () => detail.id ? this.confirmArtifactRun(detail) : undefined,
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
         ...component,
         name: component.package.name,
@@ -2873,6 +2925,20 @@ class Component extends DCLogic {
         runLabel: (configuration.runtime || {}).runnable ? 'Run in Apptainer' : 'Not ready'
       })),
       noConfigurations: s.configurations.length === 0,
+
+      artifactRunConfirmationOpen: !!s.artifactRunConfirmation,
+      artifactRunBusy: s.artifactRunBusy,
+      artifactRunArtifact: s.artifactRunConfirmation || {},
+      artifactRunRecipe: (s.artifactRunConfirmation && s.artifactRunConfirmation.execution && s.artifactRunConfirmation.execution.recipe_name) || 'Signed recipe',
+      artifactRunReviewer: (s.artifactRunConfirmation && s.artifactRunConfirmation.execution && s.artifactRunConfirmation.execution.reviewer) || 'Local curator',
+      artifactRiskAcknowledged: s.artifactRiskAcknowledged,
+      toggleArtifactRisk: event => this.setState({ artifactRiskAcknowledged: !!event.target.checked }),
+      artifactRunConfirmDisabled: !s.artifactRiskAcknowledged || s.artifactRunBusy,
+      artifactRunConfirmLabel: s.artifactRunBusy ? 'Verifying, testing, and startingâ€¦' : 'Install and run',
+      cancelArtifactRun: () => {
+        if (!s.artifactRunBusy) this.setState({ artifactRunConfirmation: null, artifactRiskAcknowledged: false });
+      },
+      startArtifactRun: () => this.installAndRunArtifact(),
 
       previewOpen: !!s.preview,
       previewTitle: s.preview === 'profile'
