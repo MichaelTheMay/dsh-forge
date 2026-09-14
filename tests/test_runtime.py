@@ -1,6 +1,6 @@
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
 from unittest import mock
@@ -79,11 +79,16 @@ class RuntimeTests(unittest.TestCase):
         opener.assert_not_called()
 
     def test_windows_packaged_state_uses_local_app_data(self):
-        with mock.patch.object(runtime, "packaged", return_value=True), mock.patch.object(runtime.os, "name", "nt"):
+        with (
+            mock.patch.object(runtime, "packaged", return_value=True),
+            mock.patch.object(runtime.os, "name", "nt"),
+            mock.patch.object(runtime, "Path", PureWindowsPath),
+            mock.patch.object(runtime, "application_version", return_value="1.0.0"),
+        ):
             with mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\Users\test\AppData\Local"}, clear=False):
                 self.assertEqual(
                     runtime.default_state_root(),
-                    Path(r"C:\Users\test\AppData\Local") / "DSH Forge",
+                    PureWindowsPath(r"C:\Users\test\AppData\Local") / "DSH Forge",
                 )
                 status = runtime.application_status()
         self.assertEqual(status["platform"], "windows")
