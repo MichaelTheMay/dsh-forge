@@ -82,6 +82,7 @@ class RuntimeTests(unittest.TestCase):
         with (
             mock.patch.object(runtime, "packaged", return_value=True),
             mock.patch.object(runtime.os, "name", "nt"),
+            mock.patch.object(runtime.sys, "platform", "win32"),
             mock.patch.object(runtime, "Path", PureWindowsPath),
             mock.patch.object(runtime, "application_version", return_value="1.0.0"),
         ):
