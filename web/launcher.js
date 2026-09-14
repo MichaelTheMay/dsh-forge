@@ -1504,6 +1504,7 @@ class Component extends DCLogic {
       detailOpen: !!initialRoute.detailOpen,
       detailArtifact: null,
       favoriteArtifacts: storedFavorites(),
+      favoritePopId: null,
       toast: '',
       cells: [],
       sidecarConnected: false,
@@ -1553,6 +1554,7 @@ class Component extends DCLogic {
     clearInterval(this.scanTimer);
     clearInterval(this.inspectorTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
+    if (this.favoritePopTimer) clearTimeout(this.favoritePopTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
@@ -1662,7 +1664,10 @@ class Component extends DCLogic {
     const next = exists
       ? this.state.favoriteArtifacts.filter(item => item.id !== detail.id)
       : [favorite, ...this.state.favoriteArtifacts].slice(0, 200);
-    this.setState({ favoriteArtifacts: next });
+    // The gold pop plays once when an item is saved, never when a saved page reopens.
+    this.setState({ favoriteArtifacts: next, favoritePopId: exists ? null : detail.id });
+    if (this.favoritePopTimer) clearTimeout(this.favoritePopTimer);
+    if (!exists) this.favoritePopTimer = setTimeout(() => this.setState({ favoritePopId: null }), 700);
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
@@ -2414,6 +2419,7 @@ class Component extends DCLogic {
         };
       }) : [];
     const divergence = detail.divergence || null;
+    const isFavorite = !!detail.id && s.favoriteArtifacts.some(item => item.id === detail.id);
     const forkCoverage = Array.isArray(s.catalogStore.coverage)
       ? s.catalogStore.coverage.find(item => item && item.source === 'github-rest/fork-network')
       : null;
@@ -2571,7 +2577,9 @@ class Component extends DCLogic {
       isPackageDetail: !!detail.catalogPackage,
       isPluginDetail: detail.type === 'plugin',
       isForkDetail: detail.type === 'fork',
-      favoriteLabel: s.favoriteArtifacts.some(item => item.id === detail.id) ? 'Favorited' : 'Favorite',
+      favoriteLabel: isFavorite ? 'Favorited' : 'Favorite',
+      isFavorite,
+      favoriteClass: 'btn fav' + (isFavorite ? ' fav-on' : '') + (isFavorite && s.favoritePopId === detail.id ? ' fav-pop' : ''),
       toggleFavorite: () => detail.id ? this.toggleFavorite(detail) : undefined,
       backToCatalog: () => this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin'),
       backLabel: detail.type === 'fork' ? 'Forks' : (detail.catalogPackage ? 'Packages' : 'Plugins'),

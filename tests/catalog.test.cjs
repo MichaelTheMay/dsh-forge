@@ -465,14 +465,23 @@ test('plugin and fork cards open stable dedicated pages and favorites persist lo
   let values = c.renderVals();
   assert(values.showArtifactPage);
   assert.equal(values.detail.id, plugin.id);
+  assert.equal(values.favoriteClass, 'btn fav');
   values.toggleFavorite();
   assert.equal(c.renderVals().favoriteLabel, 'Favorited');
+  // Saving turns the button gold and plays the pop once.
+  assert.equal(c.renderVals().favoriteClass, 'btn fav fav-on fav-pop');
 
   const reopened = instance({}, '#plugins/' + encodeURIComponent(plugin.id));
   values = reopened.renderVals();
   assert(values.showArtifactPage);
   assert.equal(values.detail.id, plugin.id);
   assert.equal(values.favoriteLabel, 'Favorited');
+  // A saved page reopens gold without replaying the animation.
+  assert.equal(values.favoriteClass, 'btn fav fav-on');
+  // Removing a favorite fades back to neutral with no pop.
+  values.toggleFavorite();
+  assert.equal(reopened.renderVals().favoriteClass, 'btn fav');
+  clearTimeout(c.favoritePopTimer);
   stored.clear();
 });
 
