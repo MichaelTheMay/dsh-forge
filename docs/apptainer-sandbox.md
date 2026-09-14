@@ -77,10 +77,11 @@ python3 scripts/serve.py \
 The sidecar prints either `Sandbox: apptainer-cell-v1 · ready` or the specific
 reason it stayed unavailable. Inside a Slurm allocation, CPU, RAM, and GPU are
 shared by the cells in that allocation; only wall time is per cell. On a host
-where Apptainer's cgroup flags pass, CPU, RAM, and PID limits are per cell and a
-detected community tree may expose the **Test** action. If no community tree
-appears, confirm that the checkout has no tracked changes and contains a
-recognized, built DSH CLI artifact.
+where Apptainer's cgroup flags pass, CPU, RAM, and PID limits are per cell and
+the sidecar accepts the bounded probe for a detected community tree at
+`POST /api/v1/trees/<tree-id>/sandbox-test`. The V1 launcher UI does not list
+community trees. If the probe reports an unknown tree, confirm that the checkout
+has no tracked changes and contains a recognized, built DSH CLI artifact.
 
 The same values may be configured with `DSH_FORGE_SANDBOX_IMAGE`,
 `DSH_FORGE_SANDBOX_IMAGE_SHA256`, `DSH_FORGE_SANDBOX_BINARY`,
