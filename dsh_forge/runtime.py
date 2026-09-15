@@ -32,7 +32,7 @@ def bundle_root() -> Path:
 
 
 def application_version() -> str:
-    """Read build metadata embedded by the Windows packaging job."""
+    """Read build metadata embedded by a desktop packaging job."""
     try:
         value = json.loads((bundle_root() / "build-version.json").read_text(encoding="utf-8-sig"))
         version = str(value.get("version") or "") if isinstance(value, dict) else ""
@@ -47,6 +47,8 @@ def default_state_root() -> Path:
         return Path(configured).expanduser()
     if packaged() and os.name == "nt" and os.environ.get("LOCALAPPDATA"):
         return Path(os.environ["LOCALAPPDATA"]) / "DSH Forge"
+    if packaged() and sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "DSH Forge"
     return Path.home() / ".local" / "state" / "dsh-forge"
 
 
