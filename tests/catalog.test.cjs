@@ -3,6 +3,9 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
+const { gzipSync } = require('node:zlib');
+const { pathToFileURL } = require('node:url');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
 const script = fs.readFileSync(path.join(root, 'web/launcher.js'), 'utf8');
@@ -44,6 +47,32 @@ test('browser entrypoint uses precompiled logic under the strict CSP', () => {
   assert.match(html, /<script src="\.\/launcher\.js"><\/script>/);
   assert(!/\beval\s*\(|new Function\s*\(/.test(script));
   assert.equal(typeof Component, 'function');
+});
+
+test('assistant iframe is inert in source and accepts only an explicit loopback URL', () => {
+  assert(!/iframe[^>]+src="\{\{\s*assistantUrl/.test(html));
+  assert.match(html, /iframe data-assistant-url="\{\{ assistantUrl \}\}"/);
+  const c = instance();
+  const frame = {
+    dataset: { assistantUrl: 'http://127.0.0.1:3100/session' },
+    src: '',
+    removeAttribute(name) { if (name === 'src') this.src = ''; }
+  };
+  global.document = { querySelector: () => frame };
+  try {
+    c.syncAssistantFrame();
+    assert.equal(frame.src, 'http://127.0.0.1:3100/session');
+    frame.dataset.assistantUrl = 'https://example.com/unsafe';
+    c.syncAssistantFrame();
+    assert.equal(frame.src, '');
+  } finally {
+    delete global.document;
+  }
+});
+
+test('public preview includes a real favicon asset', () => {
+  assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
+  assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
 });
 
 test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
@@ -520,6 +549,71 @@ function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
     catalog_store: store
   });
 }
+
+test('hosted preview pages use the live read-only catalog without enabling local execution', async () => {
+  const c = instance();
+  const plugin = snapshot.supplemental_entries[0];
+  const requests = [];
+  c.api = async url => {
+    requests.push(url);
+    return {
+      artifacts: [plugin], total: 10430, next_cursor: '50', research: {},
+      catalog_store: {
+        available: true, public: true, artifact_count: 37083,
+        counts: { plugin: 10430, fork: 26653, package: 0 }, coverage: []
+      }
+    };
+  };
+  global.location = { protocol: 'https:', hostname: 'dsh-forge.vercel.app' };
+  try {
+    await c.loadPublicCatalog('plugin');
+  } finally {
+    delete global.location;
+  }
+  const values = c.renderVals();
+  assert.equal(c.usingCatalogStore(), true);
+  assert.equal(values.catalogSourceLabel, 'Live public catalog');
+  assert.match(values.resultCount, /1 of 10,430 plugins/);
+  assert.equal(values.installAndRunDisabled, true);
+  assert(requests[0].startsWith('/api/catalog?'));
+});
+
+test('public catalog endpoint verifies gzip assets and searches deterministically', async () => {
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const payload = Buffer.from(JSON.stringify({ ok: true }));
+  const compressed = gzipSync(payload);
+  const sha = value => createHash('sha256').update(value).digest('hex');
+  const metadata = {
+    compression: 'gzip', media_type: 'application/json',
+    compressed_bytes: compressed.length, compressed_sha256: sha(compressed),
+    uncompressed_bytes: payload.length, uncompressed_sha256: sha(payload)
+  };
+  assert.deepEqual(endpoint.parseVerifiedGzip(compressed, metadata, 1024, 1024), { ok: true });
+  assert.throws(
+    () => endpoint.parseVerifiedGzip(compressed, { ...metadata, compressed_sha256: '0'.repeat(64) }, 1024, 1024),
+    /digest does not match/
+  );
+
+  const artifacts = [
+    { artifact_id: 'github:1', artifact_type: 'plugin', full_name: 'acme/memory-kit', name: 'memory-kit', description: 'durable memory', github_stars: 2, pushed_at: '2026-01-01', license: { spdx: 'MIT' } },
+    { artifact_id: 'github:2', artifact_type: 'plugin', full_name: 'small/agent-tools', name: 'agent-tools', description: 'agent memory', github_stars: 0, pushed_at: '2026-02-01', license: { spdx: null } },
+    { artifact_id: 'github:3', artifact_type: 'fork', full_name: 'fork/dsh', name: 'dsh', description: 'fork', github_stars: 9, pushed_at: '2026-03-01', license: { spdx: 'MIT' } }
+  ];
+  const catalog = {
+    artifacts,
+    hiddenGems: new Map([['github:2', { rank: 1 }], ['github:1', { rank: 2 }]])
+  };
+  const ranked = endpoint.queryCatalog(catalog, new URL('https://forge.test/api/catalog?type=plugin&q=memory&sort=rank&limit=1'));
+  assert.deepEqual(ranked.artifacts.map(item => item.artifact_id), ['github:2']);
+  assert.equal(ranked.total, 2);
+  assert.equal(ranked.next_cursor, '1');
+  const licensed = endpoint.queryCatalog(catalog, new URL('https://forge.test/api/catalog?type=plugin&licensed=1&sort=name'));
+  assert.deepEqual(licensed.artifacts.map(item => item.artifact_id), ['github:1']);
+  assert.throws(
+    () => endpoint.queryCatalog(catalog, new URL('https://forge.test/api/catalog?type=plugin&cursor=50001')),
+    /Invalid catalog cursor/
+  );
+});
 
 test('without an imported store the browser still reads the embedded snapshot', () => {
   const c = instance();

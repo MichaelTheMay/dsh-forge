@@ -20,9 +20,11 @@ controls only processes whose PID and process-start identity it recorded. The
 machine, with each running session listed under the version that started it
 and its logs one click away; the disconnected demo does not substitute release
 cards.
-Community contains a small offline snapshot of real plugins and forks. A
-connected launcher can sync the continuously refreshed Forge feed, currently
-covering thousands of plugins and tens of thousands of forks, into the local search store.
+Community keeps a small offline snapshot of real plugins and forks as a fallback.
+The hosted browser reads the continuously refreshed Forge feed through a
+checksum-verifying, paginated endpoint. A connected launcher can sync the same
+feed, currently covering thousands of plugins and tens of thousands of forks,
+into its local search store.
 Forge adds an explainable, bounded hidden-gem research queue over that full
 inventory. The V1 browser stays focused on plugins and forks. Package curation
 remains a separate signed CLI workflow.
@@ -48,16 +50,18 @@ promoted into complete cells. Public repository acquisition remains disabled.
 
 Browse the permanent disconnected demo at
 <https://dsh-forge.vercel.app/>. It exposes the full application
-shell and embedded community catalog. Local detection, installation, and launch
-controls remain disabled until the loopback sidecar below is running.
+shell and live read-only community catalog. The public endpoint verifies the
+compressed and expanded feed digests before serving bounded search pages. Local
+detection, installation, and launch controls remain disabled until the loopback
+sidecar below is running.
 
-On Windows, download `DSH-Forge-VERSION-Setup.exe` from the
-[latest GitHub release](https://github.com/MichaelTheMay/dsh-forge/releases/latest)
-and open **DSH Forge** from the Start Menu. The per-user installer bundles the
-Python sidecar, opens a dedicated Edge app window, detects local DSH installs on
-startup, and supports in-place upgrades. No separate Python or frontend setup is
-required. See [Windows desktop application](docs/windows-desktop.md) for the
-security boundary, build process, and trusted signing setup.
+The Windows installer is ready to build, but no installer is published until a
+trusted code-signing certificate is configured. Once signed, the per-user
+installer will bundle the Python sidecar, open a dedicated Edge app window,
+detect local DSH installs on startup, and support in-place upgrades. Until then,
+use the source launch command below. See
+[Windows desktop application](docs/windows-desktop.md) for the security
+boundary, build process, and trusted signing setup.
 
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.

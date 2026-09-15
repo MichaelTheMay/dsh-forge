@@ -5,6 +5,7 @@
 <title>DSH Forge</title>
 <meta name="description" content="Discover DeepSeek Harness plugins and forks, then run trusted local Harness profiles.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
 <script src="./launcher.js"></script>
@@ -774,7 +775,7 @@
       </sc-for>
     </aside>
     <section class="assistant-frame">
-      <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe src="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
+      <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe data-assistant-url="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
       <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="empty"><h2>Start the isolated assistant</h2><p>The embedded Harness appears here once its authenticated loopback URL is ready.</p></div></sc-if>
     </section>
   </main>

@@ -153,6 +153,19 @@ GET /api/v1/catalog/search?q=&type=&sort=&limit=&cursor=&featured=&licensed=&arc
 It requires the same loopback host and launcher session cookie as every other
 API read.
 
+The hosted preview exposes a read-only counterpart:
+
+```
+GET /api/catalog?q=&type=&sort=&limit=&cursor=&licensed=
+GET /api/catalog?id=ARTIFACT_ID
+```
+
+That endpoint downloads only the fixed `catalog-latest` release URLs, checks
+both compressed and expanded sizes and SHA-256 digests from the feed, and
+requires the registry and research snapshot IDs and counts to agree. It keeps a
+verified snapshot in warm function memory and returns at most 50 records. It
+does not acquire, install, import, or execute community code.
+
 - **Sorts**: `relevance` (BM25, falls back to `rank` when there is no query),
   `rank`, `stars`, `recent`, `name`. Every sort is total, so paging is stable.
 - **Filters**: artifact type, administrator-curated only, reports a license,
@@ -173,16 +186,17 @@ API read.
 The Community browser picks its corpus the same way the launcher already picks
 between preview and live inventory:
 
-| Sidecar | Store imported | Corpus |
-| ------- | -------------- | ------ |
-| No | — | Embedded snapshot |
-| Yes | No | Embedded snapshot (labelled "no store imported") |
-| Yes | Yes | Imported catalog store |
+| Surface | Sidecar | Store imported | Corpus |
+| ------- | ------- | -------------- | ------ |
+| Hosted preview | No | Not applicable | Live public catalog |
+| Local or file preview | No | Not applicable | Embedded snapshot |
+| Local launcher | Yes | No | Embedded snapshot (labelled "no store imported") |
+| Local launcher | Yes | Yes | Imported catalog store |
 
 The result line names the corpus in use, so it is always visible which one
 answered. When the store is active the query, filters, and sort are applied by
-the store rather than in the page, the count reads `50 of 23,890`, and a **Load
-more results** button pages with the returned cursor.
+the store rather than in the page, the count reads `50 of 23,890`, and scrolling
+near the end fetches the next page with the returned cursor.
 
 Store records keep their snapshot shape, so the browser applies the same
 `mapRepositoryArtifact` / `mapPackageArtifact` mapping to both corpora. A record
@@ -209,6 +223,10 @@ Everything is bounded so a large corpus cannot turn into a large response:
 | Query terms | 12 |
 | Paging depth | 10,000 results |
 | Snapshot input/signature payload | 128 MiB |
+
+The hosted read-only endpoint uses a 50-record page, a 120-character query, and
+a 50,000-record cursor ceiling. Its compressed registry and research inputs are
+capped at 8 MiB and 2 MiB, and their expanded forms at 64 MiB and 8 MiB.
 
 Deep paging stops rather than letting a caller walk the whole corpus one page at
 a time; narrow the query instead. The 9,949-entry marketplace snapshot, including

@@ -1523,7 +1523,7 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.timer = setInterval(() => this.forceUpdate(), 1000);
-    this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
+    if (!this.isPublicWeb()) this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
     this.scanTimer = setInterval(() => {
       if (this.state.sidecarConnected && !this.state.versionBusy) this.rescanVersions(true);
     }, 30000);
@@ -1546,12 +1546,19 @@ class Component extends DCLogic {
       if (route.artifactId) this.loadCatalogArtifact(route.artifactId);
     };
     window.addEventListener('hashchange', this.hashListener);
-    this.refreshStatus(true).then(() => {
+    const statusReady = this.isPublicWeb() ? Promise.resolve() : this.refreshStatus(true);
+    statusReady.then(async () => {
+      if (!this.state.sidecarConnected && this.state.view === 'catalog') {
+        await this.loadPublicCatalog(this.state.catalogType);
+      }
       if (this.state.detailOpen && this.state.artifactId) this.loadCatalogArtifact(this.state.artifactId);
       if (this.state.application && this.state.application.updates && this.state.application.updates.available) {
         this.checkForUpdate();
       }
     });
+  }
+  componentDidUpdate() {
+    this.syncAssistantFrame();
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1560,7 +1567,26 @@ class Component extends DCLogic {
     clearInterval(this.inspectorTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.favoritePopTimer) clearTimeout(this.favoritePopTimer);
+    if (this._catalogTimer) clearTimeout(this._catalogTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
+  }
+
+  syncAssistantFrame() {
+    if (typeof document === 'undefined') return;
+    const frame = document.querySelector('iframe[data-assistant-url]');
+    if (!frame) return;
+    try {
+      const url = new URL(frame.dataset.assistantUrl || '');
+      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) throw new Error('unsafe');
+      if (frame.src !== url.href) frame.src = url.href;
+    } catch {
+      frame.removeAttribute('src');
+    }
+  }
+
+  isPublicWeb() {
+    if (typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) return false;
+    return !['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
   }
 
   navigate(view, type = 'package') {
@@ -1574,7 +1600,11 @@ class Component extends DCLogic {
 
   openBrowser(type) {
     this.navigate('catalog', type);
-    this.scheduleCatalogRefresh();
+    if (this.isPublicWeb() && !this.state.sidecarConnected && !(this.state.catalogStore && this.state.catalogStore.public)) {
+      this.loadPublicCatalog(type);
+    } else {
+      this.scheduleCatalogRefresh();
+    }
   }
 
   selectCatalogArtifact(artifact) {
@@ -1598,9 +1628,12 @@ class Component extends DCLogic {
       this.state.storeArtifacts.find(item => item.id === artifactId) ||
       this.state.favoriteArtifacts.find(item => item.id === artifactId);
     if (local) this.setState({ detailArtifact: local });
-    if (!this.state.sidecarConnected) return;
+    const publicCatalog = !this.state.sidecarConnected && this.state.catalogStore && this.state.catalogStore.public;
+    if (!this.state.sidecarConnected && !publicCatalog) return;
     try {
-      const record = await this.api('/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
+      const record = await this.api(publicCatalog
+        ? '/api/catalog?id=' + encodeURIComponent(artifactId)
+        : '/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
       if (this.state.artifactId === artifactId) this.setState({ detailArtifact: mapCatalogRecord(record) });
     } catch (error) {
       // Without the sidecar's record there is no execution policy, so the page fails closed
@@ -1902,9 +1935,43 @@ class Component extends DCLogic {
   }
 
   usingCatalogStore(state = this.state) {
-    if (!(state.sidecarConnected && state.catalogStore && state.catalogStore.available)) return false;
+    if (!(state.catalogStore && state.catalogStore.available && (state.sidecarConnected || state.catalogStore.public))) return false;
     const counts = state.catalogStore.counts;
     return !counts || Number(counts[state.catalogType] || 0) > 0;
+  }
+
+  async loadPublicCatalog(type = this.state.catalogType) {
+    if (this.state.sidecarConnected || !this.isPublicWeb()) return;
+    if (this._publicCatalogPromise) return this._publicCatalogPromise;
+    const parameters = new URLSearchParams({ type, sort: 'rank', limit: '50' });
+    const artifactId = this.state.detailOpen ? this.state.artifactId : '';
+    this._publicCatalogPromise = (async () => {
+      try {
+        const [page, detail] = await Promise.all([
+          this.api('/api/catalog?' + parameters.toString()),
+          artifactId ? this.api('/api/catalog?id=' + encodeURIComponent(artifactId)) : Promise.resolve(null)
+        ]);
+        if (this.state.sidecarConnected) return;
+        const research = page.research || {};
+        const mapped = (page.artifacts || []).map(record => mapCatalogRecord({
+          ...record,
+          hidden_gem: research[record.artifact_id] || null
+        }));
+        this.setState({
+          catalogStore: { ...(page.catalog_store || {}), available: true, public: true },
+          storeArtifacts: this.state.catalogType === type ? mapped : this.state.storeArtifacts,
+          storeTotal: this.state.catalogType === type ? (page.total || 0) : this.state.storeTotal,
+          storeCursor: this.state.catalogType === type ? (page.next_cursor || '') : this.state.storeCursor,
+          storeError: '',
+          detailArtifact: detail && this.state.artifactId === artifactId ? mapCatalogRecord(detail) : this.state.detailArtifact
+        });
+      } catch (error) {
+        if (!this.state.sidecarConnected) this.setState({ storeError: error.message });
+      } finally {
+        this._publicCatalogPromise = null;
+      }
+    })();
+    return this._publicCatalogPromise;
   }
 
   catalogQueryKey(state = this.state) {
@@ -1928,7 +1995,8 @@ class Component extends DCLogic {
     if (append && s.storeCursor) parameters.set('cursor', s.storeCursor);
     this.setState({ storeLoading: true, storeError: '' });
     try {
-      const page = await this.api('/api/v1/catalog/search?' + parameters.toString());
+      const endpoint = !s.sidecarConnected && s.catalogStore.public ? '/api/catalog?' : '/api/v1/catalog/search?';
+      const page = await this.api(endpoint + parameters.toString());
       // A slower reply for an older query must not overwrite the current one.
       if (this.catalogQueryKey() !== key) return;
       const research = page.research || {};
@@ -2566,7 +2634,7 @@ class Component extends DCLogic {
         : String(results.length)
       ) + (s.favoritesOnly ? ' favorite ' : ' ') + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
       catalogSourceLabel: storeActive
-        ? 'Imported catalog store' + coverageLabel
+        ? (s.catalogStore.public ? 'Live public catalog' : 'Imported catalog store') + coverageLabel
         : (s.sidecarConnected && s.catalogStore.available
           ? 'Embedded snapshot · no imported ' + s.catalogType + ' records'
           : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot')),
