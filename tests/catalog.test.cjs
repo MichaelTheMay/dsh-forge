@@ -16,11 +16,17 @@ const rootVercel = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'u
 const vercelIgnore = fs.readFileSync(path.join(root, '.vercelignore'), 'utf8').split(/\r?\n/);
 class Logic {
   constructor(props) { this.props = props; }
-  setState(change) { Object.assign(this.state, typeof change === 'function' ? change(this.state) : change); }
+  setState(change, callback) {
+    Object.assign(this.state, typeof change === 'function' ? change(this.state) : change);
+    if (callback) callback();
+  }
 }
 const stored = new Map();
+const listeners = new Map();
 const windowStub = {
   location: { hash: '', href: 'http://127.0.0.1:3090/' },
+  addEventListener: (name, listener) => listeners.set(name, listener),
+  removeEventListener: name => listeners.delete(name),
   localStorage: {
     getItem: key => stored.get(key) || null,
     setItem: (key, value) => stored.set(key, value),
@@ -126,6 +132,25 @@ test('launcher remains default and Community opens individual plugins and forks'
   assert.equal(c.renderVals().forksTabCurrent, 'page');
   assert.equal(c.renderVals().pluginsTabCurrent, 'false');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
+});
+
+test('browser back navigation refreshes the newly selected catalog type', async () => {
+  const c = instance();
+  const refreshed = [];
+  c.refreshStatus = async () => {};
+  c.scheduleCatalogRefresh = () => refreshed.push(c.state.catalogType);
+  c.componentDidMount();
+  try {
+    windowStub.location.hash = '#forks';
+    listeners.get('hashchange')();
+    windowStub.location.hash = '#plugins';
+    listeners.get('hashchange')();
+    assert.deepEqual(refreshed, ['fork', 'plugin']);
+    assert.equal(c.state.catalogType, 'plugin');
+  } finally {
+    c.componentWillUnmount();
+    windowStub.location.hash = '';
+  }
 });
 test('preview contains no personal-name or private-home leakage', () => {
   assert(!/michael(?:the)?may|\/home\/[^/]+\//i.test(html));
