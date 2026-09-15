@@ -75,6 +75,11 @@ test('public preview includes a real favicon asset', () => {
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
 });
 
+test('mobile fork layout removes every unused desktop grid column', () => {
+  assert.match(html, /@media \(max-width: 800px\)[\s\S]*\.app-header > \.spacer \{ display: none; \}/);
+  assert.match(html, /@media \(max-width: 800px\)[\s\S]*\.col-forks, \.col-upstream, \.col-push, \.col-license, \.frow \.gem \{ display: none; \}/);
+});
+
 test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
   assert.deepEqual(CATALOG_SNAPSHOT, {
     ...snapshot,
