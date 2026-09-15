@@ -1542,8 +1542,17 @@ class Component extends DCLogic {
         artifactId: route.artifactId || (packageArtifact ? packageArtifact.id : this.state.artifactId),
         detailOpen: !!route.detailOpen,
         detailArtifact: route.detailOpen ? this.state.detailArtifact : null
+      }, () => {
+        if (route.artifactId) {
+          this.loadCatalogArtifact(route.artifactId);
+        } else if (route.view === 'catalog') {
+          if (this.isPublicWeb() && !(this.state.catalogStore && this.state.catalogStore.public)) {
+            this.loadPublicCatalog(route.type);
+          } else {
+            this.scheduleCatalogRefresh();
+          }
+        }
       });
-      if (route.artifactId) this.loadCatalogArtifact(route.artifactId);
     };
     window.addEventListener('hashchange', this.hashListener);
     const statusReady = this.isPublicWeb() ? Promise.resolve() : this.refreshStatus(true);
