@@ -54,13 +54,11 @@ expanded feed digests before serving bounded search pages. Local detection,
 installation, and launch controls remain disabled until the loopback sidecar
 below is running.
 
-The release pipeline produces signed Windows installers and notarized macOS
-disk images for Apple silicon and Intel. Public binaries are published only
-after the required platform credentials are configured and each packaged app
-passes its smoke test. Until then, use the source launch command below. See the
-[Windows desktop application](docs/windows-desktop.md) and
-[macOS desktop application](docs/macos-desktop.md) guides for platform security
-boundaries, build steps, and trusted signing setup.
+The release pipeline produces a signed Windows installer. Public binaries are
+published only after the required Windows signing credentials are configured
+and the packaged app passes its smoke test. Until then, use the source launch
+command below. See [Windows desktop application](docs/windows-desktop.md) for
+the platform security boundary, build steps, and trusted signing setup.
 
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.
