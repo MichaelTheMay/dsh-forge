@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "web",
+  "functions": {
+    "api/catalog.mjs": { "maxDuration": 30 }
+  },
   "headers": [
     {
       "source": "/(.*)",
