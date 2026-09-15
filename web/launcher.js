@@ -2614,7 +2614,7 @@ class Component extends DCLogic {
       showUpdate: update.status === 'available' && !!update.release_url,
       updateLabel: 'Update ' + (update.latest_version || ''),
       updateUrl: update.release_url || 'https://github.com/MichaelTheMay/dsh-forge/releases/latest',
-      showPlatformNotice: application.packaged && !nativeSandbox.available,
+      showPlatformNotice: application.platform === 'windows' && !nativeSandbox.available,
       platformNotice: nativeSandbox.message || '',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,

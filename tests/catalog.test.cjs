@@ -145,7 +145,8 @@ test('public root presents the product site and routes into the working applicat
     assert.equal(landing.showLanding, true);
     assert.equal(landing.showAppShell, false);
     assert.match(html, /Every plugin\. <span>Every fork\. One launcher\.<\/span>/);
-    assert.match(html, /Apple silicon and Intel/);
+    assert.doesNotMatch(html, /Apple silicon and Intel|macOS releases/);
+    assert.match(html, /Windows 10 and 11/);
     assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
     await landing.landingCopyInstall();
     assert.equal(clipboard.at(-1), 'python3 scripts/serve.py --desktop --sync-catalog');

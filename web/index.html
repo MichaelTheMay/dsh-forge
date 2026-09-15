@@ -356,7 +356,7 @@
   .landing-fact + .landing-fact { border-left: 1px solid #242632; }
   .landing-fact strong { display: block; font-size: 31px; font-weight: 500; letter-spacing: -.04em; }
   .landing-fact span { display: block; margin-top: 7px; color: #777a87; font: 10px 'IBM Plex Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
-  .landing-downloads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 48px; }
+  .landing-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 48px; }
   .landing-download { display: flex; flex-direction: column; min-height: 250px; padding: 26px; border: 1px solid #292c37; border-radius: 12px; background: #10121a; }
   .landing-download .platform { color: #858894; font: 10px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
   .landing-download h3 { margin-top: 14px; font-size: 21px; }
@@ -485,12 +485,12 @@
 
     <section class="landing-section" id="landing-security">
       <span class="landing-kicker">Evidence before execution</span><h2>Discovery is broad. Trust stays narrow.</h2><p class="landing-section-lede">Forge separates visibility from permission. Public records are metadata, ranking is explainable, and community code never becomes executable because it looked promising.</p>
-      <div class="landing-grid"><article class="landing-card"><span class="landing-card-number">01</span><h3>Verified catalog transport</h3><p>Compressed and expanded feed digests are checked before any public result is served.</p></article><article class="landing-card"><span class="landing-card-number">02</span><h3>Explicit trust boundary</h3><p>Install and run stays disabled without an exact curator-signed recipe and a compatible local Harness.</p></article><article class="landing-card"><span class="landing-card-number">03</span><h3>Isolated Linux execution</h3><p>Approved code runs through pinned Apptainer cells. Windows and macOS browsing never fall back to unsafe host execution.</p></article></div>
+      <div class="landing-grid"><article class="landing-card"><span class="landing-card-number">01</span><h3>Verified catalog transport</h3><p>Compressed and expanded feed digests are checked before any public result is served.</p></article><article class="landing-card"><span class="landing-card-number">02</span><h3>Explicit trust boundary</h3><p>Install and run stays disabled without an exact curator-signed recipe and a compatible local Harness.</p></article><article class="landing-card"><span class="landing-card-number">03</span><h3>Isolated Linux execution</h3><p>Approved code runs through pinned Apptainer cells. Windows browsing never falls back to unsafe host execution.</p></article></div>
     </section>
 
     <section class="landing-section" id="landing-downloads">
       <span class="landing-kicker">Desktop launcher</span><h2>Take the catalog to your local Harness.</h2><p class="landing-section-lede">Desktop builds package the loopback sidecar and focused app window. Public binaries are released only after platform signing checks pass.</p>
-      <div class="landing-downloads"><article class="landing-download"><span class="platform">macOS</span><h3>Apple silicon and Intel</h3><p>Developer ID signed and Apple-notarized disk images are produced by the release pipeline.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">macOS releases</a></article><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>Per-user installer with Authenticode signing, Start Menu integration, and safe in-place upgrades.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Windows releases</a></article><article class="landing-download"><span class="platform">Source</span><h3>Linux and developers</h3><p>Run the public source directly with Python 3.9 or later. No frontend build or API key is required.</p><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View repository</a></article></div>
+      <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>Per-user installer with Authenticode signing, Start Menu integration, and safe in-place upgrades.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Windows releases</a></article><article class="landing-download"><span class="platform">Source</span><h3>Linux and developers</h3><p>Run the public source directly with Python 3.9 or later. No frontend build or API key is required.</p><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View repository</a></article></div>
     </section>
 
     <footer class="landing-footer"><span>DSH Forge · public-source local discovery workbench</span><span>Metadata is not a security verdict.</span></footer>
@@ -530,7 +530,7 @@
       </div>
 
       <sc-if value="{{ showPlatformNotice }}" hint-placeholder-val="{{ false }}">
-        <aside class="platform-note" aria-label="Desktop isolation capability">{{ platformNotice }}</aside>
+        <aside class="platform-note" aria-label="Windows isolation capability">{{ platformNotice }}</aside>
       </sc-if>
 
       <sc-if value="{{ noVersions }}" hint-placeholder-val="{{ false }}">

@@ -96,24 +96,6 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(status["native_sandbox"]["available"])
         self.assertIn("WSL2", status["native_sandbox"]["message"])
 
-    def test_macos_packaged_state_uses_application_support(self):
-        home = Path("/Users/test")
-        with (
-            mock.patch.object(runtime, "packaged", return_value=True),
-            mock.patch.object(runtime.os, "name", "posix"),
-            mock.patch.object(runtime.sys, "platform", "darwin"),
-            mock.patch.object(runtime.Path, "home", return_value=home),
-            mock.patch.object(runtime, "application_version", return_value="1.0.0"),
-        ):
-            self.assertEqual(
-                runtime.default_state_root(),
-                home / "Library" / "Application Support" / "DSH Forge",
-            )
-            status = runtime.application_status()
-        self.assertEqual(status["platform"], "macos")
-        self.assertFalse(status["native_sandbox"]["available"])
-        self.assertIn("Linux host with Apptainer", status["native_sandbox"]["message"])
-
 
 if __name__ == "__main__":
     unittest.main()
