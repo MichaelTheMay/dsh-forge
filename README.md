@@ -48,20 +48,19 @@ promoted into complete cells. Public repository acquisition remains disabled.
 
 ## Open the UI
 
-Browse the permanent disconnected demo at
-<https://dsh-forge.vercel.app/>. It exposes the full application
-shell and live read-only community catalog. The public endpoint verifies the
-compressed and expanded feed digests before serving bounded search pages. Local
-detection, installation, and launch controls remain disabled until the loopback
-sidecar below is running.
+Browse the permanent product site at <https://dsh-forge.vercel.app/>. Its
+public catalog is read only and live. The endpoint verifies the compressed and
+expanded feed digests before serving bounded search pages. Local detection,
+installation, and launch controls remain disabled until the loopback sidecar
+below is running.
 
-The Windows installer is ready to build, but no installer is published until a
-trusted code-signing certificate is configured. Once signed, the per-user
-installer will bundle the Python sidecar, open a dedicated Edge app window,
-detect local DSH installs on startup, and support in-place upgrades. Until then,
-use the source launch command below. See
-[Windows desktop application](docs/windows-desktop.md) for the security
-boundary, build process, and trusted signing setup.
+The release pipeline produces signed Windows installers and notarized macOS
+disk images for Apple silicon and Intel. Public binaries are published only
+after the required platform credentials are configured and each packaged app
+passes its smoke test. Until then, use the source launch command below. See the
+[Windows desktop application](docs/windows-desktop.md) and
+[macOS desktop application](docs/macos-desktop.md) guides for platform security
+boundaries, build steps, and trusted signing setup.
 
 Python 3.9+ is sufficient to serve the app. There is no frontend dependency
 installation or build step, and no API key is needed to browse local metadata.

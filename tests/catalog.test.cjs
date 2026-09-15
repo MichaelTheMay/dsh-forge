@@ -24,7 +24,7 @@ class Logic {
 const stored = new Map();
 const listeners = new Map();
 const windowStub = {
-  location: { hash: '', href: 'http://127.0.0.1:3090/' },
+  location: { hash: '', href: 'http://127.0.0.1:3090/', protocol: 'http:', hostname: '127.0.0.1' },
   addEventListener: (name, listener) => listeners.set(name, listener),
   removeEventListener: name => listeners.delete(name),
   localStorage: {
@@ -132,6 +132,31 @@ test('launcher remains default and Community opens individual plugins and forks'
   assert.equal(c.renderVals().forksTabCurrent, 'page');
   assert.equal(c.renderVals().pluginsTabCurrent, 'false');
   c.renderVals().goLaunch(); assert(c.renderVals().showLaunch);
+});
+
+test('public root presents the product site and routes into the working application', async () => {
+  const previous = { ...windowStub.location };
+  Object.assign(windowStub.location, {
+    hash: '', href: 'https://dsh-forge.vercel.app/', protocol: 'https:', hostname: 'dsh-forge.vercel.app'
+  });
+  try {
+    const c = instance();
+    const landing = c.renderVals();
+    assert.equal(landing.showLanding, true);
+    assert.equal(landing.showAppShell, false);
+    assert.match(html, /Every plugin\. <span>Every fork\. One launcher\.<\/span>/);
+    assert.match(html, /Apple silicon and Intel/);
+    assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
+    await landing.landingCopyInstall();
+    assert.equal(clipboard.at(-1), 'python3 scripts/serve.py --desktop --sync-catalog');
+    landing.landingCommunity();
+    assert.equal(c.renderVals().showCatalog, true);
+    assert.equal(windowStub.location.hash, 'plugins');
+    c.renderVals().landingOpenLauncher();
+    assert.equal(c.renderVals().showLaunch, true);
+  } finally {
+    Object.assign(windowStub.location, previous);
+  }
 });
 
 test('browser back navigation refreshes the newly selected catalog type', async () => {
@@ -582,6 +607,7 @@ function connectedStore(c, store = { available: true, artifact_count: 24000 }) {
 
 test('hosted preview pages use the live read-only catalog without enabling local execution', async () => {
   const c = instance();
+  const previousLocation = { ...windowStub.location };
   const plugin = snapshot.supplemental_entries[0];
   const requests = [];
   c.api = async url => {
@@ -594,11 +620,13 @@ test('hosted preview pages use the live read-only catalog without enabling local
       }
     };
   };
-  global.location = { protocol: 'https:', hostname: 'dsh-forge.vercel.app' };
+  Object.assign(windowStub.location, {
+    protocol: 'https:', hostname: 'dsh-forge.vercel.app', href: 'https://dsh-forge.vercel.app/#plugins'
+  });
   try {
     await c.loadPublicCatalog('plugin');
   } finally {
-    delete global.location;
+    Object.assign(windowStub.location, previousLocation);
   }
   const values = c.renderVals();
   assert.equal(c.usingCatalogStore(), true);

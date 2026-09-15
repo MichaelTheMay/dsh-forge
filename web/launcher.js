@@ -1454,12 +1454,20 @@ function catalogRoute(hash) {
   return { view: 'launch', type: 'plugin' };
 }
 
+function publicWebLocation(value) {
+  return !!(value && /^https?:$/.test(value.protocol) &&
+    !['127.0.0.1', 'localhost', '::1'].includes(value.hostname));
+}
+
 function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    const initialRoute = catalogRoute(typeof window !== 'undefined' ? window.location.hash : '');
+    const browserLocation = typeof window !== 'undefined' ? window.location : null;
+    const initialRoute = publicWebLocation(browserLocation) && !browserLocation.hash
+      ? { view: 'landing', type: 'plugin' }
+      : catalogRoute(browserLocation ? browserLocation.hash : '');
     this.state = {
       view: initialRoute.view,
       treeId: null,
@@ -1532,7 +1540,9 @@ class Component extends DCLogic {
       if (cell) this.inspectCell(cell, this.state.inspectorTab);
     }, 3000);
     this.hashListener = () => {
-      const route = catalogRoute(window.location.hash);
+      const route = this.isPublicWeb() && !window.location.hash
+        ? { view: 'landing', type: 'plugin' }
+        : catalogRoute(window.location.hash);
       const packageArtifact = route.packageSlug
         ? PACKAGE_CATALOG.find(item => item.slug === route.packageSlug)
         : null;
@@ -1557,7 +1567,7 @@ class Component extends DCLogic {
     window.addEventListener('hashchange', this.hashListener);
     const statusReady = this.isPublicWeb() ? Promise.resolve() : this.refreshStatus(true);
     statusReady.then(async () => {
-      if (!this.state.sidecarConnected && this.state.view === 'catalog') {
+      if (!this.state.sidecarConnected && ['landing', 'catalog'].includes(this.state.view)) {
         await this.loadPublicCatalog(this.state.catalogType);
       }
       if (this.state.detailOpen && this.state.artifactId) this.loadCatalogArtifact(this.state.artifactId);
@@ -1594,8 +1604,22 @@ class Component extends DCLogic {
   }
 
   isPublicWeb() {
-    if (typeof location === 'undefined' || !/^https?:$/.test(location.protocol)) return false;
-    return !['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
+    return typeof window !== 'undefined' && publicWebLocation(window.location);
+  }
+
+  scrollLanding(id) {
+    if (typeof document === 'undefined') return;
+    const section = document.getElementById(id);
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async copySourceInstall() {
+    try {
+      await navigator.clipboard.writeText('python3 scripts/serve.py --desktop --sync-catalog');
+      this.flash('Source launch command copied');
+    } catch {
+      this.flash('Copy the source launch command manually');
+    }
   }
 
   navigate(view, type = 'package') {
@@ -2561,6 +2585,8 @@ class Component extends DCLogic {
 
     return {
       catalogEnabled,
+      showLanding: s.view === 'landing',
+      showAppShell: s.view !== 'landing',
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
@@ -2568,10 +2594,27 @@ class Component extends DCLogic {
       goPlugins: () => this.openBrowser('plugin'),
       goForks: () => this.openBrowser('fork'),
       goAssistant: () => this.navigate('assistant'),
+      landingProduct: () => this.scrollLanding('landing-product'),
+      landingSecurity: () => this.scrollLanding('landing-security'),
+      landingCommunity: () => this.openBrowser('plugin'),
+      landingDownloads: () => this.scrollLanding('landing-downloads'),
+      landingOpenLauncher: () => this.navigate('launch'),
+      landingCopyInstall: () => this.copySourceInstall(),
+      landingCatalogCount: s.catalogStore && s.catalogStore.artifact_count
+        ? Number(s.catalogStore.artifact_count).toLocaleString('en-US') + ' community projects indexed'
+        : 'Continuously refreshed community index',
+      landingPluginCount: s.catalogStore && s.catalogStore.counts
+        ? Number(s.catalogStore.counts.plugin || 0).toLocaleString('en-US')
+        : '10K+',
+      landingForkCount: s.catalogStore && s.catalogStore.counts
+        ? Number(s.catalogStore.counts.fork || 0).toLocaleString('en-US')
+        : '26K+',
+      desktopReleasesUrl: 'https://github.com/MichaelTheMay/dsh-forge/releases',
+      repositoryUrl: 'https://github.com/MichaelTheMay/dsh-forge',
       showUpdate: update.status === 'available' && !!update.release_url,
       updateLabel: 'Update ' + (update.latest_version || ''),
       updateUrl: update.release_url || 'https://github.com/MichaelTheMay/dsh-forge/releases/latest',
-      showPlatformNotice: application.platform === 'windows' && !nativeSandbox.available,
+      showPlatformNotice: application.packaged && !nativeSandbox.available,
       platformNotice: nativeSandbox.message || '',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,

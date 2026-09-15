@@ -39,18 +39,31 @@ Launcher and catalog checks / checks
 
 `.github/workflows/release.yml` runs only for `v*` tags. It rejects a tag unless
 it points to the current `main` tip, reruns the complete test suite, builds the
-portable HTML preview, and builds a 64-bit Windows installer and portable zip.
-The workflow signs and verifies both Windows executables before publishing all
+portable HTML preview, builds a 64-bit Windows installer and portable zip, and
+builds notarized macOS disk images for Apple silicon and Intel. The workflow
+verifies platform signatures and packaged sidecars before publishing all
 artifacts and checksums as one GitHub Release.
 
-Before creating a release tag, configure two encrypted Actions secrets:
+Before creating a release tag, configure the encrypted Actions secrets below.
+The Windows job needs:
 
 - `WINDOWS_SIGNING_CERTIFICATE_BASE64`: the base64-encoded PFX for the CA-backed
   Authenticode certificate
 - `WINDOWS_SIGNING_CERTIFICATE_PASSWORD`: the PFX password
 
-The release fails closed when either secret is absent. Local unsigned builds
-remain available for development through `packaging/windows/build.ps1`.
+The macOS jobs need:
+
+- `MACOS_SIGNING_CERTIFICATE_BASE64`: the base64-encoded Developer ID
+  Application certificate and private key in PKCS#12 format
+- `MACOS_SIGNING_CERTIFICATE_PASSWORD`: the PKCS#12 password
+- `MACOS_NOTARY_APPLE_ID`: the notarization Apple ID
+- `MACOS_NOTARY_PASSWORD`: an app-specific password
+- `MACOS_NOTARY_TEAM_ID`: the Apple Developer Team ID
+
+The release fails closed when a required credential is absent. Local unsigned
+Windows builds remain available for development through
+`packaging/windows/build.ps1`. The public macOS builder always requires signing
+and notarization.
 
 ```bash
 git switch main
