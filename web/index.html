@@ -380,6 +380,11 @@
   .config-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--n-29); border-radius: 8px; background: var(--n-18); }
   .config-name { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
 
+  .facets { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: -8px; }
+  .chip-count { margin-left: 6px; color: var(--faint); font: 500 11px 'IBM Plex Mono', monospace; }
+  .chip-on .chip-count { color: inherit; opacity: .75; }
+  .chip-clear { border-style: dashed; }
+
   /* Instance tabs */
   .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
   .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
@@ -814,7 +819,17 @@
         <div class="filters">
           <button class="{{ favoritesChipClass }}" onClick="{{ toggleFavoritesOnly }}" aria-pressed="{{ favoritesOnly }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>Favorites</button>
           <label class="chip"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
+          <button class="{{ differentiatedChipClass }}" onClick="{{ toggleDifferentiated }}" aria-pressed="{{ differentiatedOnly }}" title="Hide forks that only copy the upstream description">Says what it does</button>
           <span class="filters-note mono">{{ sortExplanation }}</span>
+        </div>
+
+        <div class="facets" aria-label="Filter by tag">
+          <sc-for list="{{ facetGroups }}" as="f" hint-placeholder-count="6">
+            <button class="{{ f.className }}" onClick="{{ f.toggle }}" aria-pressed="{{ f.pressed }}">{{ f.label }}<span class="chip-count">{{ f.count }}</span></button>
+          </sc-for>
+          <sc-if value="{{ hasActiveTags }}" hint-placeholder-val="{{ false }}">
+            <button class="chip chip-clear" onClick="{{ clearTags }}">Clear {{ activeTagCount }} tag filter(s)</button>
+          </sc-if>
         </div>
 
         <sc-if value="{{ isPluginBrowser }}" hint-placeholder-val="{{ true }}">

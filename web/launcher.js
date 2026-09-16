@@ -88,6 +88,40 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "desktop-app",
+          "web-ui",
+          "actively-maintained",
+          "has-license"
+        ],
+        "families": {
+          "runtime": [
+            "desktop-app",
+            "web-ui"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 2,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -141,6 +175,42 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "orchestration",
+          "desktop-app",
+          "actively-maintained",
+          "has-license"
+        ],
+        "families": {
+          "capability": [
+            "orchestration"
+          ],
+          "runtime": [
+            "desktop-app"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license"
+          ]
+        },
+        "primary_capability": "orchestration",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -183,6 +253,38 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "database",
+          "actively-maintained",
+          "has-license"
+        ],
+        "families": {
+          "integration": [
+            "database"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 4,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -221,6 +323,39 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "runtime": [
+            "desktop-app"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 1,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -259,6 +394,39 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "docker",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "integration": [
+            "docker"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 10,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -297,6 +465,38 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "runtime": [
+            "desktop-app"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 10,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "attention"
+        ]
       }
     },
     {
@@ -335,6 +535,34 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 1,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "attention"
+        ]
       }
     },
     {
@@ -373,6 +601,39 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "runtime": [
+            "desktop-app"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -411,6 +672,35 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 1,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -458,6 +748,36 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "families": {
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 14,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     }
   ],
@@ -545,6 +865,45 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "orchestration",
+          "planning",
+          "actively-maintained",
+          "has-license",
+          "pinned-release",
+          "well-known"
+        ],
+        "families": {
+          "capability": [
+            "orchestration",
+            "planning"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "pinned-release",
+            "well-known"
+          ]
+        },
+        "primary_capability": "orchestration",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     },
     {
@@ -615,6 +974,44 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "review",
+          "security",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "families": {
+          "capability": [
+            "review",
+            "security"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "review",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -685,6 +1082,45 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "code-intelligence",
+          "search",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "families": {
+          "capability": [
+            "code-intelligence",
+            "search"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "code-intelligence",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     },
     {
@@ -756,6 +1192,46 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "memory",
+          "mcp",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "families": {
+          "capability": [
+            "memory"
+          ],
+          "integration": [
+            "mcp"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "memory",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -826,6 +1302,50 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "memory",
+          "orchestration",
+          "review",
+          "mcp",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "families": {
+          "capability": [
+            "memory",
+            "orchestration",
+            "review"
+          ],
+          "integration": [
+            "mcp"
+          ],
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "memory",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -896,6 +1416,38 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "families": {
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "low-visibility",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -966,6 +1518,37 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "pinned-release"
+        ],
+        "families": {
+          "maturity": [
+            "actively-maintained",
+            "has-license",
+            "pinned-release"
+          ]
+        },
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": 0,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     }
   ],
@@ -1069,7 +1652,23 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/agent-teams-builder"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [],
+        "families": {},
+        "primary_capability": "",
+        "tag_source": "deterministic",
+        "days_since_push": null,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": false,
+        "signals": []
+      }
     },
     {
       "schema": "dsh-forge.catalog-package/v1",
@@ -1185,7 +1784,29 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/code-review-lab"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "review"
+        ],
+        "families": {
+          "capability": [
+            "review"
+          ]
+        },
+        "primary_capability": "review",
+        "tag_source": "deterministic",
+        "days_since_push": null,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": false,
+        "signals": []
+      }
     },
     {
       "schema": "dsh-forge.catalog-package/v1",
@@ -1297,7 +1918,29 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/auditable-memory-lab"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "schema": "dsh-forge.enrichment/v1",
+        "policy": "dsh-forge.tags/v1",
+        "tags": [
+          "memory"
+        ],
+        "families": {
+          "capability": [
+            "memory"
+          ]
+        },
+        "primary_capability": "memory",
+        "tag_source": "deterministic",
+        "days_since_push": null,
+        "claims": {
+          "executed": false,
+          "code_inspected": false,
+          "metadata_only": true
+        },
+        "differentiated": false,
+        "signals": []
+      }
     }
   ],
   "package_browser": {
@@ -1323,12 +1966,21 @@ function catalogDate(value) {
 // catalog store hands back verbatim.
 function mapRepositoryArtifact(a) {
   const hiddenGem = a.hidden_gem && a.hidden_gem.policy ? a.hidden_gem : null;
+  const enrichment = a.enrichment && a.enrichment.tags ? a.enrichment : null;
+  const enrichmentTags = enrichment ? enrichment.tags : [];
   return ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
   url: a.repository_url, base: a.head_sha || 'Not captured',
+  enrichmentTags,
+  descriptiveTags: enrichment
+    ? [...(enrichment.families.capability || []), ...(enrichment.families.integration || []), ...(enrichment.families.runtime || [])]
+    : [],
+  primaryCapability: enrichment ? enrichment.primary_capability : '',
+  differentiated: enrichment ? !!enrichment.differentiated : true,
   terms: [
     ...(a.topics || []),
+    ...enrichmentTags,
     ...((a.curation && a.curation.taxonomy) || []),
     ...((a.divergence && a.divergence.changed_paths) || []).slice(0, 64),
     ...((a.compatibility && a.compatibility.changed_surfaces) || []),
@@ -1508,6 +2160,8 @@ class Component extends DCLogic {
       catalogSort: 'recommended',
       knownLicenseOnly: false,
       favoritesOnly: false,
+      activeTags: [],
+      differentiatedOnly: false,
       artifactId: initialRoute.artifactId || (initialRoute.packageSlug
         ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
         : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id),
@@ -2138,7 +2792,10 @@ class Component extends DCLogic {
   }
 
   catalogQueryKey(state = this.state) {
-    return JSON.stringify([state.query.trim(), state.catalogType, state.catalogSort, !!state.knownLicenseOnly]);
+    return JSON.stringify([
+      state.query.trim(), state.catalogType, state.catalogSort,
+      !!state.knownLicenseOnly, [...state.activeTags].sort(), !!state.differentiatedOnly
+    ]);
   }
 
   /** Fetch one page from the imported catalog store. */
@@ -2155,6 +2812,8 @@ class Component extends DCLogic {
     parameters.set('sort', sortMap[s.catalogSort] || 'relevance');
     parameters.set('limit', '50');
     if (s.knownLicenseOnly) parameters.set('licensed', '1');
+    if (s.activeTags.length) parameters.set('tags', [...s.activeTags].sort().join(','));
+    if (s.differentiatedOnly) parameters.set('differentiated', '1');
     if (append && s.storeCursor) parameters.set('cursor', s.storeCursor);
     this.setState({ storeLoading: true, storeError: '' });
     try {
@@ -2524,13 +3183,18 @@ class Component extends DCLogic {
 
     const storeActive = this.usingCatalogStore(s);
     const queryTerms = s.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // Every active tag must be present, so chips narrow rather than widen.
+    const matchesTags = a => !s.activeTags.length
+      || s.activeTags.every(tag => (a.enrichmentTags || []).includes(tag));
     // The store already applied the query, filters, and sort, so its page is
     // used as-is. Without a store the embedded snapshot is filtered here.
     const embeddedFiltered = CATALOG.filter(a => {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
         a.type === s.catalogType &&
-        (!s.knownLicenseOnly || a.licenseOk);
+        (!s.knownLicenseOnly || a.licenseOk) &&
+        matchesTags(a) &&
+        (!s.differentiatedOnly || a.differentiated !== false);
     }).sort((a, b) => {
       if (s.catalogSort === 'name') return a.slug.localeCompare(b.slug);
       if (s.catalogSort === 'recent') return (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0) || (a.seed_rank || 999) - (b.seed_rank || 999);
@@ -2547,7 +3211,7 @@ class Component extends DCLogic {
       .map(item => CATALOG.find(a => a.id === item.id) || s.storeArtifacts.find(a => a.id === item.id) || item)
       .filter(a => {
         const searchable = [a.slug, a.description, a.terms, a.language, a.licenseLabel].join(' ').toLowerCase();
-        return queryTerms.every(term => searchable.includes(term)) && (!s.knownLicenseOnly || a.licenseOk);
+        return queryTerms.every(term => searchable.includes(term)) && (!s.knownLicenseOnly || a.licenseOk) && matchesTags(a);
       });
     // Store pages are keyed by type so a tab switch never shows the previous tab's records.
     const filtered = s.favoritesOnly
@@ -2580,7 +3244,9 @@ class Component extends DCLogic {
       ...a,
       featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
-      tags: ((a.curation && a.curation.taxonomy) || a.topics || []).slice(0, 2),
+      tags: (a.descriptiveTags && a.descriptiveTags.length
+        ? a.descriptiveTags
+        : ((a.curation && a.curation.taxonomy) || a.topics || [])).slice(0, 3),
       riskText: a.riskLabel ? a.riskLabel.replace(/^./, ch => ch.toUpperCase()) : '',
       riskColor: RISK_COLORS[(a.curation && a.curation.security_risk) || (a.risk && a.risk.level)] || MUTED,
       forksLabel: Number.isInteger(a.forks_count) ? a.forks_count.toLocaleString('en-US') : '—',
@@ -2700,7 +3366,7 @@ class Component extends DCLogic {
             ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. Favorites are saved in this browser.'
             : 'Try a name, author, capability, taxonomy term, or clear the current filters.',
           action: s.favoritesOnly ? 'Show all' : 'Clear filters',
-          run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false }); this.scheduleCatalogRefresh(); }
+          run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false, activeTags: [], differentiatedOnly: false }); this.scheduleCatalogRefresh(); }
         };
 
     const livePreview = s.previewData;
@@ -2812,6 +3478,40 @@ class Component extends DCLogic {
 
       query: s.query,
       setQuery: e => { this.setState({ query: e.target.value, detailOpen: false, detailArtifact: null }); this.scheduleCatalogRefresh(); },
+      facetGroups: (() => {
+        const counts = new Map();
+        for (const a of filtered) {
+          for (const tag of (a.enrichmentTags || [])) counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+        for (const tag of s.activeTags) if (!counts.has(tag)) counts.set(tag, 0);
+        const ordered = [...counts.entries()]
+          .sort((a, b) => (s.activeTags.includes(b[0]) ? 1 : 0) - (s.activeTags.includes(a[0]) ? 1 : 0)
+            || b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 14);
+        return ordered.map(([tag, count]) => ({
+          tag,
+          label: tag.replace(/-/g, ' '),
+          count: count.toLocaleString('en-US'),
+          className: s.activeTags.includes(tag) ? 'chip chip-on' : 'chip',
+          pressed: s.activeTags.includes(tag),
+          toggle: () => {
+            const next = s.activeTags.includes(tag)
+              ? s.activeTags.filter(item => item !== tag)
+              : [...s.activeTags, tag];
+            this.setState({ activeTags: next, detailOpen: false });
+            this.scheduleCatalogRefresh();
+          }
+        }));
+      })(),
+      hasActiveTags: s.activeTags.length > 0,
+      activeTagCount: s.activeTags.length,
+      clearTags: () => { this.setState({ activeTags: [], detailOpen: false }); this.scheduleCatalogRefresh(); },
+      differentiatedOnly: s.differentiatedOnly,
+      differentiatedChipClass: s.differentiatedOnly ? 'chip chip-on' : 'chip',
+      toggleDifferentiated: () => {
+        this.setState({ differentiatedOnly: !s.differentiatedOnly, detailOpen: false });
+        this.scheduleCatalogRefresh();
+      },
       catalogSort: s.catalogSort,
       setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,

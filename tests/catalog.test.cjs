@@ -87,11 +87,24 @@ test('mobile fork layout removes every unused desktop grid column', () => {
 });
 
 test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
-  assert.deepEqual(CATALOG_SNAPSHOT, {
+  // Embedding derives discovery tags but must not otherwise alter a record.
+  const withoutEnrichment = value => Array.isArray(value)
+    ? value.map(record => { const { enrichment, ...rest } = record; return rest; })
+    : value;
+  assert.deepEqual({
+    ...CATALOG_SNAPSHOT,
+    entries: withoutEnrichment(CATALOG_SNAPSHOT.entries),
+    supplemental_entries: withoutEnrichment(CATALOG_SNAPSHOT.supplemental_entries),
+    package_entries: withoutEnrichment(CATALOG_SNAPSHOT.package_entries),
+  }, {
     ...snapshot,
     package_entries: packageFeed.packages,
     package_catalog_digest: packageFeed.catalog_digest,
   });
+  const embedded = [...CATALOG_SNAPSHOT.entries, ...CATALOG_SNAPSHOT.supplemental_entries];
+  assert(embedded.every(record => Array.isArray(record.enrichment.tags)),
+    'the offline snapshot carries the same tags as the published feed');
+  assert(embedded.every(record => record.enrichment.claims.executed === false));
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
   const forks = CATALOG.filter(r => r.type === 'fork');
   const plugins = CATALOG.filter(r => r.type === 'plugin');
@@ -1245,4 +1258,34 @@ test('open tabs survive a reload and re-resolve their session URL', async () => 
   assert.deepEqual(next.state.instanceTabs.map(tab => tab.id), ['kept']);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(next.state.instanceTabs[0].url, 'http://127.0.0.1:3109/session');
+});
+
+
+test('catalog tag filters narrow results and every requested tag must match', async () => {
+  const tagged = (id, tags, type = 'plugin') => ({
+    artifact_id: id, full_name: 'o/' + id, name: id, owner: 'o', artifact_type: type,
+    description: '', pushed_at: '2026-01-01T00:00:00Z', github_stars: 1,
+    license: { spdx: 'MIT' }, enrichment: { tags, differentiated: tags.length > 0 }
+  });
+  const catalog = {
+    artifacts: [
+      tagged('a', ['memory', 'mcp']),
+      tagged('b', ['memory']),
+      tagged('c', ['search']),
+      tagged('d', [])
+    ],
+    hiddenGems: new Map(),
+    byId: new Map()
+  };
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const query = search => endpoint.queryCatalog(catalog, new URL('https://x/api/catalog?type=plugin&' + search));
+  assert.deepEqual(query('tags=memory').artifacts.map(r => r.artifact_id), ['a', 'b']);
+  // Both tags required, not either.
+  assert.deepEqual(query('tags=memory,mcp').artifacts.map(r => r.artifact_id), ['a']);
+  assert.deepEqual(query('tags=nope').artifacts.map(r => r.artifact_id), []);
+  assert.equal(query('').artifacts.length, 4, 'no tag filter returns everything');
+  assert.deepEqual(
+    query('differentiated=1').artifacts.map(r => r.artifact_id), ['a', 'b', 'c'],
+    'records that say nothing about themselves are excluded on request'
+  );
 });

@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from dsh_forge.catalog import load_json, validate_feed  # noqa: E402
+from dsh_forge.enrichment import enrich_snapshot  # noqa: E402
 
 UPSTREAM = "deepseek-ai/deepseek-harness"
 
@@ -153,6 +154,9 @@ def main():
     snapshot["package_entries"] = package_feed["packages"]
     snapshot["package_catalog_digest"] = package_feed["catalog_digest"]
     validate(snapshot, package_feed)
+    # Tags are derived after validation so the seed contract stays untouched and
+    # the offline snapshot facets exactly like the published feed.
+    enrich_snapshot(snapshot)
     html = args.html.read_text(encoding="utf-8")
     start, end = "// CATALOG_SNAPSHOT_START", "// CATALOG_SNAPSHOT_END"
     if html.count(start) != 1 or html.count(end) != 1:

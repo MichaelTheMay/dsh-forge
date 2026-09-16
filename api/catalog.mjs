@@ -153,6 +153,11 @@ function textFor(artifact) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
+function tagsOf(artifact) {
+  const enrichment = artifact.enrichment;
+  return enrichment && Array.isArray(enrichment.tags) ? enrichment.tags : [];
+}
+
 function knownLicense(artifact) {
   const spdx = String((artifact.license && artifact.license.spdx) || '').toUpperCase();
   return !!spdx && spdx !== 'NOASSERTION' && spdx !== 'UNKNOWN';
@@ -180,6 +185,11 @@ export function queryCatalog(catalog, url) {
   if (query.length > 120) fail('Catalog query is too long', 400);
   const terms = query.split(/\s+/).filter(Boolean);
   const licensed = url.searchParams.get('licensed') === '1';
+  const differentiated = url.searchParams.get('differentiated') === '1';
+  const rawTags = (url.searchParams.get('tags') || '').trim();
+  if (rawTags.length > 200) fail('Too many catalog tag filters', 400);
+  // Every requested tag must be present, so filters narrow rather than widen.
+  const tags = rawTags ? rawTags.split(',').map(value => value.trim()).filter(Boolean).slice(0, 12) : [];
   const limit = Math.min(50, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '50', 10) || 50));
   const cursorText = url.searchParams.get('cursor') || '0';
   if (!/^\d+$/.test(cursorText)) fail('Invalid catalog cursor', 400);
@@ -189,6 +199,11 @@ export function queryCatalog(catalog, url) {
   const scored = [];
   for (const artifact of catalog.artifacts) {
     if (artifact.artifact_type !== type || (licensed && !knownLicense(artifact))) continue;
+    if (differentiated && artifact.enrichment && artifact.enrichment.differentiated === false) continue;
+    if (tags.length) {
+      const own = tagsOf(artifact);
+      if (!tags.every(tag => own.includes(tag))) continue;
+    }
     const score = relevance(artifact, terms);
     if (score >= 0) scored.push({ artifact, score, rank: catalog.hiddenGems.get(artifact.artifact_id)?.rank ?? Infinity });
   }
