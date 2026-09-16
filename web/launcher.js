@@ -2,16 +2,16 @@
 
 window.__dcPrecompiledLogicFactories = window.__dcPrecompiledLogicFactories || {};
 window.__dcPrecompiledLogicFactories.$root = function precompileRootLogic(DCLogic) {
-const OK = 'oklch(0.74 0.15 155)';
-const WARN = 'oklch(0.8 0.14 85)';
-const BAD = 'oklch(0.7 0.16 25)';
-const BLUE = 'oklch(0.74 0.12 235)';
-const MUTED = 'oklch(0.62 0.01 255)';
-const TXT = 'oklch(0.86 0.01 255)';
+const OK = 'var(--status-ok)';
+const WARN = 'var(--status-warn)';
+const BAD = 'var(--status-bad)';
+const BLUE = 'var(--status-info)';
+const MUTED = 'var(--muted)';
+const TXT = 'var(--text-2)';
 const RISK_LEVELS = ['low', 'medium', 'medium-high', 'high', 'critical'];
 const RISK_COLORS = {
-  low: 'oklch(0.74 0.14 155)', medium: 'oklch(0.8 0.11 85)', 'medium-high': 'oklch(0.78 0.12 65)',
-  high: 'oklch(0.74 0.13 45)', critical: 'oklch(0.7 0.15 25)'
+  low: 'var(--risk-low)', medium: 'var(--risk-medium)', 'medium-high': 'var(--risk-medium-high)',
+  high: 'var(--risk-high)', critical: 'var(--risk-critical)'
 };
 
 // Only a plain `a || b || c` list of exact versions is checked; real semver
@@ -2536,7 +2536,7 @@ class Component extends DCLogic {
         return {
           version: item.primary_tree.version, path: item.path, listed, unlisted: !listed,
           label: listed ? 'Listed by the plugin' : 'Not in the declared list',
-          color: listed ? 'oklch(0.8 0.1 155)' : 'oklch(0.82 0.1 80)'
+          color: listed ? 'var(--green-86)' : 'var(--gold-82)'
         };
       }) : [];
     const divergence = detail.divergence || null;
@@ -2575,7 +2575,7 @@ class Component extends DCLogic {
     const previewLines = livePreview ? [
       { k: 'tree', v: livePreview.tree.path + '  (' + livePreview.tree.trust + ', ' + livePreview.tree.launchability + ')', color: TXT },
       { k: 'cwd', v: livePreview.cwd, color: TXT },
-      { k: 'argv', v: livePreview.argv.join(' '), color: 'oklch(0.86 0.11 155)' },
+      { k: 'argv', v: livePreview.argv.join(' '), color: 'var(--green-86)' },
       { k: 'home', v: 'DSH_HOME=' + livePreview.home, color: TXT },
       { k: 'env', v: (livePreview.environment_keys || []).join(', ') + ' (keys only)', color: MUTED },
       { k: 'secrets', v: (livePreview.credential_keys || []).length ? livePreview.credential_keys.join(', ') + ' = <injected>' : 'no credential keys present', color: MUTED },
@@ -2755,7 +2755,7 @@ class Component extends DCLogic {
       riskLevelLabel: detailRiskLevel.replace(/^./, ch => ch.toUpperCase()),
       riskLevelColor: RISK_COLORS[detailRiskLevel] || MUTED,
       riskSegments: RISK_LEVELS.map((level, index) => ({
-        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'oklch(0.28 0.012 255)'
+        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'var(--risk-off)'
       })),
       forkUpstream: detail.source_repository || detail.parent_repository || 'Upstream not reported',
       forkHead: (detail.default_branch || 'default branch') + ' @ ' + (detail.head_sha ? detail.head_sha.slice(0, 7) : 'not captured'),
