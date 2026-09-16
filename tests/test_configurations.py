@@ -8,7 +8,11 @@ import unittest
 from unittest import mock
 
 from dsh_forge.assistant_server import AssistantServer
-from dsh_forge.configurations import ConfigurationError, ConfigurationRegistry
+from dsh_forge.configurations import (
+    SHARED_CONFIGURATION_SCHEMA,
+    ConfigurationError,
+    ConfigurationRegistry,
+)
 from dsh_forge.launcher import Launcher, LauncherError
 from dsh_forge.mcp_server import CatalogIndex, ForgeMCP, serve_stdio
 from tests.helpers import FakeCellSandbox
@@ -190,3 +194,80 @@ class ConfigurationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SharingTests(unittest.TestCase):
+    def registry(self):
+        self._directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._directory.cleanup)
+        return ConfigurationRegistry(self._directory.name)
+
+    def saved(self, registry):
+        return registry.save(
+            name="Memory stack",
+            description="Memory plus search.",
+            version_id="version_123456789abc",
+            selections=[{"type": "plugin", "id": "github:1"}],
+            launch={"surface": "web", "profile": "web", "port": "auto",
+                    "open_browser": False, "network": "host", "resources": {"gpu": "none"}},
+        )
+
+    def test_export_carries_what_to_run_and_no_local_identifiers(self):
+        registry = self.registry()
+        record = self.saved(registry)
+        document = registry.export(record["id"])
+        self.assertEqual(document["schema"], SHARED_CONFIGURATION_SCHEMA)
+        self.assertEqual(document["name"], "Memory stack")
+        self.assertEqual(document["selections"], record["selections"])
+        # A version id or configuration id means nothing on another machine.
+        self.assertNotIn("version_id", document)
+        self.assertNotIn("id", document)
+
+    def test_export_never_claims_the_named_artifacts_were_reviewed(self):
+        registry = self.registry()
+        document = registry.export(self.saved(registry)["id"])
+        self.assertIs(document["claims"]["executed"], False)
+        self.assertIs(document["claims"]["reviewed"], False)
+
+    def test_an_imported_configuration_arrives_as_a_draft(self):
+        registry = self.registry()
+        document = registry.export(self.saved(registry)["id"])
+        imported = registry.import_document(document, version_id="version_abcdef123456")
+        self.assertEqual(imported["status"], "draft")
+        self.assertEqual(imported["source"], "imported")
+        self.assertEqual(imported["version_id"], "version_abcdef123456")
+        self.assertNotEqual(imported["id"], self.saved(registry)["id"])
+
+    def test_a_round_trip_preserves_what_to_run(self):
+        registry = self.registry()
+        original = self.saved(registry)
+        imported = registry.import_document(registry.export(original["id"]),
+                                            version_id="version_abcdef123456")
+        self.assertEqual(imported["selections"], original["selections"])
+        self.assertEqual(imported["launch"], original["launch"])
+
+    def test_a_foreign_document_is_rejected_rather_than_trusted(self):
+        registry = self.registry()
+        for bad in (None, {}, {"schema": "something-else"}, [], "text"):
+            with self.assertRaises(ConfigurationError):
+                registry.import_document(bad, version_id="version_abcdef123456")
+
+    def test_a_hostile_document_cannot_smuggle_fields_past_validation(self):
+        registry = self.registry()
+        document = registry.export(self.saved(registry)["id"])
+        hostile = {
+            **document,
+            "id": "config_" + "f" * 20,
+            "status": "ready",
+            "source": "user",
+            "launch": {**document["launch"], "network": "host", "resources": {"gpu": "allocated"}},
+        }
+        imported = registry.import_document(hostile, version_id="version_abcdef123456")
+        # The importer decides status and source, not the document.
+        self.assertEqual(imported["status"], "draft")
+        self.assertEqual(imported["source"], "imported")
+        self.assertNotEqual(imported["id"], hostile["id"])
+
+    def test_exporting_an_unknown_configuration_fails(self):
+        with self.assertRaises(ConfigurationError):
+            self.registry().export("config_" + "a" * 20)

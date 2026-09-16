@@ -406,6 +406,18 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     HTTPStatus.CREATED,
                 )
                 return
+            if path == "/api/v1/configurations/export":
+                self._json(self.server.launcher.export_configuration(body.get("configuration_id")))
+                return
+            if path == "/api/v1/configurations/import":
+                version_id = body.get("version_id")
+                if not isinstance(version_id, str):
+                    raise LauncherError("version_id must be a string")
+                self._json(
+                    self.server.launcher.import_configuration(body.get("document"), version_id=version_id),
+                    HTTPStatus.CREATED,
+                )
+                return
             if path == "/api/v1/configurations/approve":
                 self._json(self.server.launcher.approve_configuration(body.get("id")))
                 return

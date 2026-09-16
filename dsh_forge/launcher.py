@@ -1537,6 +1537,21 @@ class Launcher:
             raise LauncherError(str(error)) from error
         return self._configuration_runtime(record)
 
+    def export_configuration(self, configuration_id: str) -> dict[str, Any]:
+        try:
+            return self.configuration_registry.export(configuration_id)
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+
+    def import_configuration(self, document: Any, *, version_id: str) -> dict[str, Any]:
+        """Adopt a shared configuration. It arrives as a draft, never runnable."""
+
+        try:
+            record = self.configuration_registry.import_document(document, version_id=version_id)
+        except ConfigurationError as error:
+            raise LauncherError(str(error)) from error
+        return self._configuration_runtime(record)
+
     def remove_configuration(self, configuration_id: str) -> list[dict[str, Any]]:
         try:
             records = self.configuration_registry.remove(configuration_id)
