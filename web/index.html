@@ -147,7 +147,7 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
 
   /* Shell */
-  .app-root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--n-18); color: var(--n-94); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .app-root { position: relative; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--n-18); color: var(--n-94); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
   .app-header { flex: 0 0 auto; display: flex; align-items: center; gap: 36px; height: 56px; padding: 0 28px; border-bottom: 1px solid var(--n-29); background: var(--n-21); }
   .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
   .tabs { display: flex; gap: 26px; align-self: stretch; }
@@ -379,6 +379,24 @@
   .assistant-frame .empty { margin: auto; border: 0; }
   .config-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--n-29); border-radius: 8px; background: var(--n-18); }
   .config-name { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+
+  /* Instance tabs */
+  .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
+  .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
+  .itab:hover { color: var(--text-2); }
+  .itab-on { color: var(--text); border-bottom-color: var(--accent); }
+  .itab-main { display: flex; align-items: center; gap: 7px; max-width: 190px; padding: 0 2px 0 0; border: 0; background: transparent; color: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .itab-x { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 2px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--n-58); }
+  .itab-x:hover { background: var(--surface-3); color: var(--text-2); }
+  /* Every open instance stays mounted; only the active one is shown, so switching
+     tabs never reloads a running session. */
+  .instance-deck { position: relative; flex: 1 1 auto; min-height: 0; }
+  .iframe-host { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+  .iframe-host iframe { width: 100%; height: 100%; border: 0; background: white; }
+  .iframe-host .empty { margin: auto; border: 0; }
+  .iframe-hidden { visibility: hidden; pointer-events: none; }
+  /* Parked off-layout rather than unmounted, so the sessions keep running. */
+  .deck-hidden { position: absolute; inset: 0; visibility: hidden; pointer-events: none; z-index: -1; }
 
   /* Dialogs */
   .scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--scrim); }
@@ -615,6 +633,19 @@
         <button class="{{ forksTabClass }}" onClick="{{ goForks }}" aria-current="{{ forksTabCurrent }}">Forks</button>
       </sc-if>
       <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
+      <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+        <span class="tab-sep" aria-hidden="true"></span>
+        <sc-for list="{{ instanceTabs }}" as="t" hint-placeholder-count="2">
+          <span class="{{ t.className }}">
+            <button class="itab-main" onClick="{{ t.select }}" aria-current="{{ t.current }}" title="{{ t.subtitle }}">
+              <span class="dot" style="background: {{ t.statusColor }};"></span>{{ t.title }}
+            </button>
+            <button class="itab-x" onClick="{{ t.close }}" aria-label="{{ t.closeLabel }}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </span>
+        </sc-for>
+      </sc-if>
     </nav>
     <span class="spacer"></span>
     <sc-if value="{{ showUpdate }}" hint-placeholder-val="{{ false }}"><a class="update-link" href="{{ updateUrl }}" target="_blank" rel="noopener noreferrer">{{ updateLabel }}</a></sc-if>
@@ -1020,6 +1051,21 @@
     </div>
     </sc-if>
   </main>
+  </sc-if>
+
+  <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+  <div class="{{ instanceDeckClass }}" aria-label="Running DSH instances">
+    <sc-for list="{{ instanceTabs }}" as="t" hint-placeholder-count="1">
+      <div class="{{ t.bodyClass }}">
+        <sc-if value="{{ t.ready }}" hint-placeholder-val="{{ true }}">
+          <iframe data-instance-url="{{ t.url }}" data-instance-id="{{ t.id }}" title="{{ t.title }}"></iframe>
+        </sc-if>
+        <sc-if value="{{ t.pending }}" hint-placeholder-val="{{ false }}">
+          <div class="empty"><h2>{{ t.title }}</h2><p>{{ t.pendingLabel }}</p></div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
   </sc-if>
 
   <sc-if value="{{ showAssistant }}" hint-placeholder-val="{{ false }}">

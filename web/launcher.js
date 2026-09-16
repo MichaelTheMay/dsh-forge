@@ -1501,6 +1501,8 @@ class Component extends DCLogic {
       versionSettingsId: null,
       preview: null,
       logCell: null,
+      instanceTabs: [],
+      activeInstanceId: null,
       query: '',
       catalogType: initialRoute.type,
       catalogSort: 'recommended',
@@ -1530,6 +1532,7 @@ class Component extends DCLogic {
   }
 
   componentDidMount() {
+    this.restoreInstanceTabs();
     this.timer = setInterval(() => this.forceUpdate(), 1000);
     if (!this.isPublicWeb()) this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
     this.scanTimer = setInterval(() => {
@@ -1578,6 +1581,7 @@ class Component extends DCLogic {
   }
   componentDidUpdate() {
     this.syncAssistantFrame();
+    this.syncInstanceFrames();
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1590,16 +1594,144 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
+  // A cell is only ever framed from its own loopback port. Anything else is dropped.
+  safeLoopbackUrl(value) {
+    try {
+      const url = new URL(value || '');
+      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) return '';
+      return url.href;
+    } catch {
+      return '';
+    }
+  }
+
   syncAssistantFrame() {
     if (typeof document === 'undefined') return;
     const frame = document.querySelector('iframe[data-assistant-url]');
     if (!frame) return;
+    const url = this.safeLoopbackUrl(frame.dataset.assistantUrl);
+    if (!url) frame.removeAttribute('src');
+    else if (frame.src !== url) frame.src = url;
+  }
+
+  // Instance frames stay mounted while their tab is open so switching tabs never
+  // reloads a running session; only the active one is visible.
+  syncInstanceFrames() {
+    if (typeof document === 'undefined') return;
+    for (const frame of document.querySelectorAll('iframe[data-instance-url]')) {
+      const url = this.safeLoopbackUrl(frame.dataset.instanceUrl);
+      if (!url) frame.removeAttribute('src');
+      else if (frame.src !== url) frame.src = url;
+    }
+  }
+
+  // The sidecar needs a moment after launch before the authenticated URL exists.
+  async resolveCellUrl(cell) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+        const url = this.safeLoopbackUrl(payload.url);
+        if (url) return url;
+      } catch {
+        // not ready yet
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return '';
+  }
+
+  instanceTabTitle(cell) {
+    return cell.version || cell.profile || cell.name || 'Instance';
+  }
+
+  async addInstanceTab(cell) {
+    if (!cell || !cell.id) return;
+    const existing = this.state.instanceTabs.find(tab => tab.id === cell.id);
+    if (existing) return this.activateInstanceTab(cell.id);
+    const pending = {
+      id: cell.id,
+      title: this.instanceTabTitle(cell),
+      subtitle: cell.port ? '127.0.0.1:' + cell.port : '',
+      url: '',
+      loading: true
+    };
+    this.setState({
+      instanceTabs: [...this.state.instanceTabs, pending],
+      activeInstanceId: cell.id,
+      view: 'instance'
+    }, () => this.persistInstanceTabs());
+    const url = await this.resolveCellUrl(cell);
+    const tabs = this.state.instanceTabs.map(tab => tab.id === cell.id
+      ? { ...tab, url, loading: false }
+      : tab);
+    this.setState({ instanceTabs: tabs }, () => this.persistInstanceTabs());
+    if (!url) this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
+  }
+
+  activateInstanceTab(id) {
+    this.setState({ view: 'instance', activeInstanceId: id, detailOpen: false });
+  }
+
+  // Closing a tab detaches the frame. The cell keeps running; stopping it stays an
+  // explicit action on the Local tab.
+  closeInstanceTab(id) {
+    const remaining = this.state.instanceTabs.filter(tab => tab.id !== id);
+    const wasActive = this.state.activeInstanceId === id;
+    const nextActive = wasActive ? (remaining.length ? remaining[remaining.length - 1].id : null) : this.state.activeInstanceId;
+    this.setState({
+      instanceTabs: remaining,
+      activeInstanceId: nextActive,
+      ...(wasActive && !remaining.length ? { view: 'launch' } : {})
+    }, () => this.persistInstanceTabs());
+  }
+
+  // Drop tabs whose cell the sidecar no longer reports.
+  pruneInstanceTabs(cells) {
+    if (!this.state.instanceTabs.length) return;
+    const live = new Set((cells || []).map(cell => cell.id));
+    const remaining = this.state.instanceTabs.filter(tab => live.has(tab.id));
+    if (remaining.length === this.state.instanceTabs.length) return;
+    const activeGone = this.state.activeInstanceId && !live.has(this.state.activeInstanceId);
+    this.setState({
+      instanceTabs: remaining,
+      ...(activeGone ? {
+        activeInstanceId: remaining.length ? remaining[remaining.length - 1].id : null,
+        ...(remaining.length ? {} : { view: this.state.view === 'instance' ? 'launch' : this.state.view })
+      } : {})
+    }, () => this.persistInstanceTabs());
+  }
+
+  persistInstanceTabs() {
     try {
-      const url = new URL(frame.dataset.assistantUrl || '');
-      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) throw new Error('unsafe');
-      if (frame.src !== url.href) frame.src = url.href;
+      window.localStorage.setItem('dsh-forge.instance-tabs', JSON.stringify(
+        this.state.instanceTabs.map(tab => ({ id: tab.id, title: tab.title, subtitle: tab.subtitle }))
+      ));
     } catch {
-      frame.removeAttribute('src');
+      // storage is optional
+    }
+  }
+
+  // Restored tabs re-resolve their URL, and refreshStatus drops any whose cell is gone.
+  restoreInstanceTabs() {
+    let saved = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem('dsh-forge.instance-tabs') || '[]');
+    } catch {
+      saved = [];
+    }
+    if (!Array.isArray(saved) || !saved.length) return;
+    const tabs = saved
+      .filter(tab => tab && typeof tab.id === 'string')
+      .slice(0, 12)
+      .map(tab => ({ id: tab.id, title: String(tab.title || 'Instance'), subtitle: String(tab.subtitle || ''), url: '', loading: true }));
+    if (!tabs.length) return;
+    this.setState({ instanceTabs: tabs });
+    for (const tab of tabs) {
+      this.resolveCellUrl({ id: tab.id }).then(url => {
+        this.setState({
+          instanceTabs: this.state.instanceTabs.map(item => item.id === tab.id ? { ...item, url, loading: false } : item)
+        });
+      });
     }
   }
 
@@ -1623,7 +1755,7 @@ class Component extends DCLogic {
   }
 
   navigate(view, type = 'package') {
-    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null });
+    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null, activeInstanceId: null });
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
         ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
@@ -1895,7 +2027,6 @@ class Component extends DCLogic {
   async startLocalProfile() {
     const spec = this.state.pendingProfile;
     if (!spec) return this.flash('Choose a detected profile first');
-    const pendingWindow = spec.open_browser ? window.open('about:blank', '_blank') : null;
     this.setState({ profileBusy: true });
     try {
       const cell = await this.api('/api/v1/profiles/run', {
@@ -1904,9 +2035,8 @@ class Component extends DCLogic {
       this.setState({ preview: null, previewData: null, pendingProfile: null, logCell: cell.id, inspectorTab: 'logs' });
       await this.refreshStatus(true);
       this.flash('Started local profile ' + cell.profile + ' on the host');
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (spec.open_browser) await this.addInstanceTab(cell);
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
     } finally {
       this.setState({ profileBusy: false });
@@ -2093,7 +2223,9 @@ class Component extends DCLogic {
     try {
       const status = await this.api('/api/v1/status');
       this.applyStatus(status);
-      await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
+      const cells = Array.isArray(status.cells) ? status.cells : [];
+      this.pruneInstanceTabs(cells);
+      await this.refreshAssistantUrl(cells);
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
@@ -2189,7 +2321,6 @@ class Component extends DCLogic {
       surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
       home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
     };
-    const pendingWindow = launch.open_browser ? window.open('about:blank', '_blank') : null;
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId,
@@ -2205,9 +2336,8 @@ class Component extends DCLogic {
       await this.refreshStatus(true);
       await this.inspectCell(cell, 'logs');
       this.flash('Launched ' + version.version + ' on port ' + cell.port);
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (launch.open_browser) await this.addInstanceTab(cell);
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
     }
   }
@@ -2225,16 +2355,17 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
-  async openCell(cell, existingWindow = null) {
-    const target = existingWindow || window.open('about:blank', '_blank');
-    for (let attempt = 0; attempt < 30; attempt++) {
-      try {
-        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-        if (target) target.location.replace(payload.url);
-        return;
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+  async openCell(cell) {
+    return this.addInstanceTab(cell);
+  }
+
+  // Secondary action for anyone who wants the session in its own browser window.
+  async openCellWindow(cell) {
+    const target = window.open('about:blank', '_blank');
+    const url = await this.resolveCellUrl(cell);
+    if (url) {
+      if (target) target.location.replace(url);
+      return;
     }
     if (target) target.close();
     this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
@@ -2364,6 +2495,7 @@ class Component extends DCLogic {
           ? this.setState({ logCell: null, logLines: [], artifacts: [] })
           : this.inspectCell(c, 'logs'),
         open: () => this.openCell(c),
+        openWindow: () => this.openCellWindow(c),
         stop: () => this.cellAction(c, 'stop'),
         restart: () => this.cellAction(c, 'restart'),
         clone: () => this.cellAction(c, 'clone'),
@@ -2588,6 +2720,23 @@ class Component extends DCLogic {
       showLanding: s.view === 'landing',
       showAppShell: s.view !== 'landing',
       showLaunch: s.view === 'launch',
+      showInstance: s.view === 'instance',
+      instanceDeckClass: s.view === 'instance' ? 'instance-deck' : 'instance-deck deck-hidden',
+      hasInstanceTabs: s.instanceTabs.length > 0,
+      instanceTabs: s.instanceTabs.map(tab => ({
+        ...tab,
+        className: s.view === 'instance' && s.activeInstanceId === tab.id ? 'itab itab-on' : 'itab',
+        current: s.view === 'instance' && s.activeInstanceId === tab.id ? 'page' : 'false',
+        bodyClass: s.view === 'instance' && s.activeInstanceId === tab.id ? 'iframe-host' : 'iframe-host iframe-hidden',
+        statusLabel: tab.loading ? 'Connecting' : (tab.url ? 'Live' : 'Unavailable'),
+        statusColor: tab.loading ? WARN : (tab.url ? OK : BAD),
+        ready: !!tab.url,
+        pending: !tab.url,
+        pendingLabel: tab.loading ? 'Connecting to this session…' : 'This session is not reachable. Check its logs on the Local tab.',
+        select: () => this.activateInstanceTab(tab.id),
+        close: (event) => { if (event && event.stopPropagation) event.stopPropagation(); this.closeInstanceTab(tab.id); },
+        closeLabel: 'Close ' + tab.title + ' tab'
+      })),
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
       goLaunch: () => this.navigate('launch'),

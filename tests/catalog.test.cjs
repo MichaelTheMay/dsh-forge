@@ -1132,3 +1132,117 @@ test('Assistant tab starts a saved Harness through its dedicated endpoint', asyn
   });
   assert.match(html, /Isolated DeepSeek Harness Forge Assistant/);
 });
+
+test('instance frames are inert in source and accept only a loopback URL', () => {
+  // Same contract as the assistant frame: never a templated src attribute.
+  assert(!/iframe[^>]+src="\{\{/.test(html));
+  assert.match(html, /iframe data-instance-url="\{\{ t\.url \}\}"/);
+  const c = instance();
+  for (const bad of ['', 'https://example.com/x', 'http://example.com/x', 'http://127.0.0.1/x', 'javascript:alert(1)']) {
+    assert.equal(c.safeLoopbackUrl(bad), '', 'must reject ' + bad);
+  }
+  assert.equal(c.safeLoopbackUrl('http://127.0.0.1:3100/s'), 'http://127.0.0.1:3100/s');
+  assert.equal(c.safeLoopbackUrl('http://localhost:3100/s'), 'http://localhost:3100/s');
+});
+
+test('syncInstanceFrames only assigns validated loopback URLs', () => {
+  const c = instance();
+  const good = { dataset: { instanceUrl: 'http://127.0.0.1:3100/s' }, src: '', removeAttribute() { this.src = ''; } };
+  const bad = { dataset: { instanceUrl: 'https://evil.example/x' }, src: 'stale', removeAttribute() { this.src = ''; } };
+  global.document = { querySelectorAll: () => [good, bad], querySelector: () => null };
+  try {
+    c.syncInstanceFrames();
+    assert.equal(good.src, 'http://127.0.0.1:3100/s');
+    assert.equal(bad.src, '');
+  } finally {
+    delete global.document;
+  }
+});
+
+test('opening a cell adds an instance tab instead of a browser window', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3101/session' });
+  await c.addInstanceTab({ id: 'cell-1', version: '1.2.3', port: 3101 });
+  assert.equal(c.state.instanceTabs.length, 1);
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell-1');
+  const [tab] = c.state.instanceTabs;
+  assert.equal(tab.title, '1.2.3');
+  assert.equal(tab.url, 'http://127.0.0.1:3101/session');
+  assert.equal(tab.loading, false);
+});
+
+test('re-opening the same cell activates its tab rather than duplicating it', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3102/session' });
+  await c.addInstanceTab({ id: 'cell-a', version: 'a', port: 3102 });
+  await c.addInstanceTab({ id: 'cell-b', version: 'b', port: 3103 });
+  c.navigate('launch');
+  assert.equal(c.state.view, 'launch');
+  await c.addInstanceTab({ id: 'cell-a', version: 'a', port: 3102 });
+  assert.equal(c.state.instanceTabs.length, 2);
+  assert.equal(c.state.activeInstanceId, 'cell-a');
+  assert.equal(c.state.view, 'instance');
+});
+
+test('several instances stay open at once, each on its own loopback port', async () => {
+  const c = instance();
+  let port = 3200;
+  c.api = async () => ({ url: 'http://127.0.0.1:' + (port++) + '/session' });
+  for (const id of ['c1', 'c2', 'c3']) await c.addInstanceTab({ id, version: id, port });
+  assert.equal(c.state.instanceTabs.length, 3);
+  const urls = new Set(c.state.instanceTabs.map(tab => tab.url));
+  assert.equal(urls.size, 3, 'each instance keeps a distinct session URL');
+});
+
+test('closing a tab detaches it without stopping the cell', async () => {
+  const c = instance();
+  const calls = [];
+  c.api = async path => { calls.push(path); return { url: 'http://127.0.0.1:3104/session' }; };
+  await c.addInstanceTab({ id: 'cell-x', version: 'x', port: 3104 });
+  c.closeInstanceTab('cell-x');
+  assert.equal(c.state.instanceTabs.length, 0);
+  assert.equal(c.state.activeInstanceId, null);
+  assert.equal(c.state.view, 'launch', 'falls back to Local when the last tab closes');
+  assert(!calls.some(path => /\/(stop|restart)$/.test(path)), 'closing a tab must not stop the cell');
+});
+
+test('closing a background tab leaves the active one alone', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3105/session' });
+  await c.addInstanceTab({ id: 'one', version: 'one', port: 3105 });
+  await c.addInstanceTab({ id: 'two', version: 'two', port: 3106 });
+  c.closeInstanceTab('one');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['two']);
+  assert.equal(c.state.activeInstanceId, 'two');
+  assert.equal(c.state.view, 'instance');
+});
+
+test('tabs whose cell the sidecar stopped reporting are pruned', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3107/session' });
+  await c.addInstanceTab({ id: 'alive', version: 'alive', port: 3107 });
+  await c.addInstanceTab({ id: 'gone', version: 'gone', port: 3108 });
+  c.pruneInstanceTabs([{ id: 'alive' }]);
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['alive']);
+  assert.equal(c.state.activeInstanceId, 'alive');
+  c.pruneInstanceTabs([]);
+  assert.equal(c.state.instanceTabs.length, 0);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('open tabs survive a reload and re-resolve their session URL', async () => {
+  const first = instance();
+  first.api = async () => ({ url: 'http://127.0.0.1:3109/session' });
+  await first.addInstanceTab({ id: 'kept', version: '9.9', port: 3109 });
+  const saved = JSON.parse(stored.get('dsh-forge.instance-tabs'));
+  assert.deepEqual(saved, [{ id: 'kept', title: '9.9', subtitle: '127.0.0.1:3109' }]);
+  assert(!('url' in saved[0]), 'the session URL is re-resolved, never persisted');
+
+  const next = instance();
+  next.api = async () => ({ url: 'http://127.0.0.1:3109/session' });
+  next.restoreInstanceTabs();
+  assert.deepEqual(next.state.instanceTabs.map(tab => tab.id), ['kept']);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(next.state.instanceTabs[0].url, 'http://127.0.0.1:3109/session');
+});
