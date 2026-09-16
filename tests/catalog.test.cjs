@@ -1289,3 +1289,42 @@ test('catalog tag filters narrow results and every requested tag must match', as
     'records that say nothing about themselves are excluded on request'
   );
 });
+
+test('discovery rails span the catalog and exclude records that say nothing', async () => {
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const make = (id, capability, stars, pushed, differentiated = true) => ({
+    artifact_id: id, full_name: 'o/' + id, name: id, owner: 'o', artifact_type: 'plugin',
+    description: '', pushed_at: pushed, github_stars: stars, license: { spdx: 'MIT' },
+    enrichment: {
+      tags: capability ? [capability] : [], differentiated,
+      primary_capability: capability, families: { capability: capability ? [capability] : [] }
+    }
+  });
+  const now = Date.parse('2026-09-15T00:00:00Z');
+  const catalog = {
+    artifacts: [
+      make('gem', 'memory', 3, '2026-09-10T00:00:00Z'),
+      make('popular', 'search', 4000, '2026-09-12T00:00:00Z'),
+      make('stale', 'memory', 10, '2025-01-01T00:00:00Z'),
+      make('clone', '', 0, '2026-09-14T00:00:00Z', false)
+    ],
+    hiddenGems: new Map([['gem', { rank: 1, score: 90 }]])
+  };
+  const { rails } = endpoint.buildRails(catalog, 'plugin', now);
+  const byId = Object.fromEntries(rails.map(r => [r.id, r.artifacts.map(a => a.artifact_id)]));
+
+  assert.deepEqual(byId['hidden-gems'], ['gem']);
+  // Novelty excludes the already-popular record and the stale one.
+  assert.deepEqual(byId['new-and-novel'], ['gem']);
+  // One leader per capability, so a rail never stacks the same niche.
+  assert.deepEqual(byId['best-in-class'].sort(), ['gem', 'popular']);
+  assert.deepEqual(byId['recently-active'], ['popular', 'gem', 'stale']);
+  for (const rail of rails) {
+    assert(!rail.artifacts.some(a => a.artifact_id === 'clone'),
+      rail.id + ' must exclude records with no distinguishing signal');
+    assert(rail.artifacts.length > 0, 'empty rails are dropped rather than shown');
+  }
+  assert(rails.every(rail => typeof rail.note === 'string' && rail.note.length > 0));
+  const recent = rails.find(rail => rail.id === 'recently-active');
+  assert.match(recent.note, /not claimed/, 'the rail must not imply star velocity it cannot compute');
+});

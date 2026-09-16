@@ -1962,6 +1962,29 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+// Almost no catalog record ships an image, so every card gets a generated one
+// instead: a stable hue per repository plus its initials. Deriving it from the
+// slug means the same record always looks the same, with no network fetch and
+// no blank tiles.
+const THUMB_NOISE = ['dsh', 'deepseek', 'harness', 'plugin', 'plugins', 'fork', 'the'];
+function thumbnailFor(slug, name) {
+  let hash = 0;
+  for (let index = 0; index < slug.length; index++) hash = (hash * 31 + slug.charCodeAt(index)) >>> 0;
+  const hue = hash % 360;
+  const words = String(name || slug).split(/[-_\s./]+/)
+    .map(word => word.toLowerCase())
+    .filter(word => word && !THUMB_NOISE.includes(word));
+  const source = words.length ? words : [String(name || slug).replace(/[^a-z0-9]/gi, '') || '?'];
+  const initials = (source.length > 1
+    ? source[0][0] + source[1][0]
+    : source[0].slice(0, 2)).toUpperCase();
+  return {
+    bg: 'oklch(0.3 0.06 ' + hue + ')',
+    fg: 'oklch(0.88 0.11 ' + hue + ')',
+    initials
+  };
+}
+
 // One mapping serves both corpora: the embedded snapshot and the records the
 // catalog store hands back verbatim.
 function mapRepositoryArtifact(a) {
@@ -1973,6 +1996,7 @@ function mapRepositoryArtifact(a) {
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
   url: a.repository_url, base: a.head_sha || 'Not captured',
   enrichmentTags,
+  thumb: thumbnailFor(a.full_name || a.artifact_id || '', a.name),
   descriptiveTags: enrichment
     ? [...(enrichment.families.capability || []), ...(enrichment.families.integration || []), ...(enrichment.families.runtime || [])]
     : [],
@@ -2162,6 +2186,8 @@ class Component extends DCLogic {
       favoritesOnly: false,
       activeTags: [],
       differentiatedOnly: false,
+      rails: [],
+      railsType: '',
       artifactId: initialRoute.artifactId || (initialRoute.packageSlug
         ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
         : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id),
@@ -2187,6 +2213,7 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.restoreInstanceTabs();
+    if (this.state.view === 'catalog') this.loadRails(this.state.catalogType);
     this.timer = setInterval(() => this.forceUpdate(), 1000);
     if (!this.isPublicWeb()) this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
     this.scanTimer = setInterval(() => {
@@ -2219,6 +2246,7 @@ class Component extends DCLogic {
             this.scheduleCatalogRefresh();
           }
         }
+        if (route.view === 'catalog') this.loadRails(route.type);
       });
     };
     window.addEventListener('hashchange', this.hashListener);
@@ -2419,6 +2447,7 @@ class Component extends DCLogic {
 
   openBrowser(type) {
     this.navigate('catalog', type);
+    this.loadRails(type);
     if (this.isPublicWeb() && !this.state.sidecarConnected && !(this.state.catalogStore && this.state.catalogStore.public)) {
       this.loadPublicCatalog(type);
     } else {
@@ -2755,6 +2784,55 @@ class Component extends DCLogic {
     if (!(state.catalogStore && state.catalogStore.available && (state.sidecarConnected || state.catalogStore.public))) return false;
     const counts = state.catalogStore.counts;
     return !counts || Number(counts[state.catalogType] || 0) > 0;
+  }
+
+  async loadRails(type = this.state.catalogType) {
+    if (this.state.railsType === type && this.state.rails.length) return;
+    if (this.isPublicWeb() && !this.state.sidecarConnected) {
+      try {
+        const payload = await this.api('/api/catalog?rails=1&type=' + encodeURIComponent(type));
+        const research = payload.research || {};
+        this.setState({
+          railsType: type,
+          rails: (payload.rails || []).map(rail => ({
+            ...rail,
+            artifacts: (rail.artifacts || []).map(record => mapCatalogRecord({
+              ...record,
+              hidden_gem: research[record.artifact_id] || null
+            }))
+          }))
+        });
+        return;
+      } catch {
+        // fall through to the embedded snapshot
+      }
+    }
+    this.setState({ railsType: type, rails: this.localRails(type) });
+  }
+
+  // Offline equivalent of the published rails, over whatever corpus is loaded.
+  localRails(type) {
+    const pool = [...CATALOG, ...this.state.storeArtifacts]
+      .filter((a, index, all) => a.type === type && all.findIndex(item => item.id === a.id) === index)
+      .filter(a => a.differentiated !== false);
+    if (!pool.length) return [];
+    const byRecent = [...pool].sort((a, b) => (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0));
+    const gems = pool.filter(a => a.hiddenGem || a.featured).slice(0, 12);
+    const capable = a => (a.descriptiveTags || []).length > 0;
+    const novel = byRecent.filter(a => capable(a) && (a.github_stars || 0) <= 200).slice(0, 12);
+    const seen = new Map();
+    for (const a of pool) {
+      const capability = a.primaryCapability;
+      if (!capability) continue;
+      const held = seen.get(capability);
+      if (!held || (a.github_stars || 0) > (held.github_stars || 0)) seen.set(capability, a);
+    }
+    return [
+      { id: 'hidden-gems', title: 'Hidden gems', note: 'Explainable discovery score over low-visibility records. Not a security verdict.', artifacts: gems },
+      { id: 'new-and-novel', title: 'New and novel', note: 'Recently pushed, states a capability, not yet widely known.', artifacts: novel },
+      { id: 'best-in-class', title: 'Best in class', note: 'The leading record for each capability, one per capability.', artifacts: [...seen.values()].slice(0, 12) },
+      { id: 'recently-active', title: 'Recently active', note: 'Most recently pushed. Star velocity needs two snapshots and is not claimed here.', artifacts: byRecent.slice(0, 12) }
+    ].filter(rail => rail.artifacts.length);
   }
 
   async loadPublicCatalog(type = this.state.catalogType) {
@@ -3478,6 +3556,24 @@ class Component extends DCLogic {
 
       query: s.query,
       setQuery: e => { this.setState({ query: e.target.value, detailOpen: false, detailArtifact: null }); this.scheduleCatalogRefresh(); },
+      // Rails are a browse surface: once someone searches or filters they want
+      // results, not editorial shelves.
+      showRails: !s.query.trim() && !s.activeTags.length && !s.favoritesOnly && !s.detailOpen && s.rails.length > 0,
+      rails: s.rails.map(rail => ({
+        ...rail,
+        cards: rail.artifacts.map(a => ({
+          ...a,
+          tags: (a.descriptiveTags || []).slice(0, 2),
+          thumbBg: (a.thumb || {}).bg || 'var(--surface-3)',
+          thumbFg: (a.thumb || {}).fg || 'var(--text-2)',
+          thumbInitials: (a.thumb || {}).initials || '??',
+          gemLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
+          hasGem: !!(a.hiddenGem && a.hiddenGem.candidate) || !!a.featured,
+          capabilityLabel: (a.rail_capability || a.primaryCapability || '').replace(/-/g, ' '),
+          hasCapability: !!(a.rail_capability || a.primaryCapability),
+          select: () => this.selectCatalogArtifact(a)
+        }))
+      })),
       facetGroups: (() => {
         const counts = new Map();
         for (const a of filtered) {

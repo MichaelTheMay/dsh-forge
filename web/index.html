@@ -394,6 +394,22 @@
   .drawer .facts { padding-top: 12px; }
   .hero-trust { max-width: 640px; }
 
+  /* Discovery rails */
+  .rails { display: flex; flex-direction: column; gap: var(--s-6); }
+  .rail-head { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
+  .rail-track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(248px, 1fr); gap: var(--s-3); overflow-x: auto; padding-bottom: var(--s-2); scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .rail-track > * { scroll-snap-align: start; }
+  .rcard { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); color: var(--text-2); text-align: left; }
+  .rcard:hover { border-color: var(--line-3); background: var(--surface-2); }
+  .rcard-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .thumb { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: var(--r-lg); font: 600 13px 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
+  .rcard-id { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+  .rcard-name { overflow: hidden; font-size: 13px; font-weight: 600; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+  .rcard-owner { overflow: hidden; font-size: 11px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+  .rcard-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; min-height: 54px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+  .rcard-foot { display: flex; align-items: center; gap: var(--s-2); }
+  @media (max-width: 800px) { .rail-track { grid-auto-columns: minmax(216px, 1fr); } }
+
   /* Instance tabs */
   .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
   .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
@@ -840,6 +856,39 @@
             <button class="chip chip-clear" onClick="{{ clearTags }}">Clear {{ activeTagCount }} tag filter(s)</button>
           </sc-if>
         </div>
+
+        <sc-if value="{{ showRails }}" hint-placeholder-val="{{ false }}">
+          <div class="rails">
+            <sc-for list="{{ rails }}" as="rail" hint-placeholder-count="2">
+              <section class="rail" aria-label="{{ rail.title }}">
+                <div class="rail-head">
+                  <h2 class="h2">{{ rail.title }}</h2>
+                  <span class="note">{{ rail.note }}</span>
+                </div>
+                <div class="rail-track">
+                  <sc-for list="{{ rail.cards }}" as="c" hint-placeholder-count="4">
+                    <button class="rcard" onClick="{{ c.select }}" aria-label="{{ c.accessibleLabel }}">
+                      <span class="rcard-top">
+                        <span class="thumb" style="background: {{ c.thumbBg }}; color: {{ c.thumbFg }};">{{ c.thumbInitials }}</span>
+                        <span class="rcard-id">
+                          <span class="rcard-name">{{ c.name }}</span>
+                          <span class="rcard-owner mono">{{ c.owner }}</span>
+                        </span>
+                      </span>
+                      <span class="rcard-desc">{{ c.description }}</span>
+                      <span class="rcard-foot">
+                        <sc-if value="{{ c.hasCapability }}" hint-placeholder-val="{{ true }}"><span class="tag">{{ c.capabilityLabel }}</span></sc-if>
+                        <span class="spacer"></span>
+                        <sc-if value="{{ c.hasGem }}" hint-placeholder-val="{{ false }}"><span class="gem">{{ c.gemLabel }}</span></sc-if>
+                        <span class="stars">{{ c.starsLabel }}</span>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </section>
+            </sc-for>
+          </div>
+        </sc-if>
 
         <sc-if value="{{ isPluginBrowser }}" hint-placeholder-val="{{ true }}">
           <div class="pgrid">

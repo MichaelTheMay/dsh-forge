@@ -226,6 +226,102 @@ export function queryCatalog(catalog, url) {
   };
 }
 
+const RAIL_SIZE = 12;
+const NOVELTY_DAYS = 60;
+
+function enrichmentOf(artifact) {
+  const value = artifact.enrichment;
+  return value && typeof value === 'object' ? value : null;
+}
+
+function isDifferentiated(artifact) {
+  const enrichment = enrichmentOf(artifact);
+  // Records from before enrichment existed are given the benefit of the doubt.
+  return !enrichment || enrichment.differentiated !== false;
+}
+
+function daysSince(value, now) {
+  const at = Date.parse(value);
+  return Number.isFinite(at) ? Math.max(0, (now - at) / 86400000) : Infinity;
+}
+
+// Rails are computed over the whole catalog, not the page the browser happens to
+// have loaded, and each is capped so the payload stays small.
+export function buildRails(catalog, type, now = Date.now()) {
+  const pool = catalog.artifacts.filter(a => a.artifact_type === type && isDifferentiated(a));
+  const gemRank = a => catalog.hiddenGems.get(a.artifact_id)?.rank ?? Infinity;
+  const gemScore = a => catalog.hiddenGems.get(a.artifact_id)?.score ?? -1;
+  const stars = a => (a.github_stars ?? 0);
+
+  const hiddenGems = pool
+    .filter(a => catalog.hiddenGems.has(a.artifact_id))
+    .sort((a, b) => gemRank(a) - gemRank(b))
+    .slice(0, RAIL_SIZE);
+
+  // New and novel: recently pushed, says what it does, and not already popular.
+  const novel = pool
+    .filter(a => {
+      const enrichment = enrichmentOf(a);
+      const capable = enrichment && (enrichment.families?.capability || []).length > 0;
+      return capable && daysSince(a.pushed_at, now) <= NOVELTY_DAYS && stars(a) <= 200;
+    })
+    .sort((a, b) => (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0))
+    .slice(0, RAIL_SIZE);
+
+  // Best in class: one leader per capability, so the rail spans the taxonomy
+  // instead of stacking several entries from the same niche.
+  const byCapability = new Map();
+  for (const artifact of pool) {
+    const capability = enrichmentOf(artifact)?.primary_capability;
+    if (!capability) continue;
+    const held = byCapability.get(capability);
+    const better = !held
+      || gemScore(artifact) > gemScore(held)
+      || (gemScore(artifact) === gemScore(held) && stars(artifact) > stars(held));
+    if (better) byCapability.set(capability, artifact);
+  }
+  const bestInClass = [...byCapability.entries()]
+    .sort((a, b) => gemScore(b[1]) - gemScore(a[1]) || stars(b[1]) - stars(a[1]))
+    .slice(0, RAIL_SIZE)
+    .map(([capability, artifact]) => ({ ...artifact, rail_capability: capability }));
+
+  const recentlyActive = pool
+    .slice()
+    .sort((a, b) => (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0))
+    .slice(0, RAIL_SIZE);
+
+  const research = {};
+  for (const artifact of [...hiddenGems, ...novel, ...bestInClass, ...recentlyActive]) {
+    const report = catalog.hiddenGems.get(artifact.artifact_id);
+    if (report) research[artifact.artifact_id] = report;
+  }
+  return {
+    rails: [
+      {
+        id: 'hidden-gems', title: 'Hidden gems',
+        note: 'Explainable discovery score over low-visibility records. Not a security verdict.',
+        artifacts: hiddenGems
+      },
+      {
+        id: 'new-and-novel', title: 'New and novel',
+        note: 'Pushed in the last ' + NOVELTY_DAYS + ' days, states a capability, not yet widely known.',
+        artifacts: novel
+      },
+      {
+        id: 'best-in-class', title: 'Best in class',
+        note: 'The highest-scoring record for each capability, one per capability.',
+        artifacts: bestInClass
+      },
+      {
+        id: 'recently-active', title: 'Recently active',
+        note: 'Most recently pushed. Star velocity needs two snapshots and is not claimed here.',
+        artifacts: recentlyActive
+      }
+    ].filter(rail => rail.artifacts.length > 0),
+    research
+  };
+}
+
 function storeMetadata(catalog) {
   const { feed } = catalog;
   return {
@@ -251,6 +347,10 @@ export async function GET(request) {
       const artifact = catalog.byId.get(id);
       if (!artifact) fail('Unknown catalog artifact', 404);
       body = { ...artifact, hidden_gem: catalog.hiddenGems.get(id) || null };
+    } else if (url.searchParams.get('rails') === '1') {
+      const type = url.searchParams.get('type') || 'plugin';
+      if (!['plugin', 'fork', 'package'].includes(type)) fail('Unknown catalog type', 400);
+      body = { ...buildRails(catalog, type), catalog_store: storeMetadata(catalog) };
     } else {
       body = { ...queryCatalog(catalog, url), catalog_store: storeMetadata(catalog) };
     }
