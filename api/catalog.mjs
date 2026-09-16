@@ -261,8 +261,9 @@ export function buildRails(catalog, type, now = Date.now()) {
   // New and novel: recently pushed, says what it does, and not already popular.
   const novel = pool
     .filter(a => {
-      const enrichment = enrichmentOf(a);
-      const capable = enrichment && (enrichment.families?.capability || []).length > 0;
+      // A record qualifies as novel only if it states what it does, which the
+      // derived maturity flags do not.
+      const capable = !!enrichmentOf(a)?.primary_capability;
       return capable && daysSince(a.pushed_at, now) <= NOVELTY_DAYS && stars(a) <= 200;
     })
     .sort((a, b) => (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0))

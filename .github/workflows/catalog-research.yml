@@ -59,8 +59,10 @@ jobs:
           assert records, 'registry must not be empty'
           enriched = [r for r in records if isinstance(r.get('enrichment'), dict)]
           assert len(enriched) == len(records), 'every record must carry enrichment'
-          assert all(r['enrichment']['schema'] == 'dsh-forge.enrichment/v1' for r in enriched)
-          assert all(r['enrichment']['claims']['executed'] is False for r in enriched)
+          meta = registry['enrichment_metadata']
+          assert meta['schema'] == 'dsh-forge.enrichment/v1'
+          assert meta['claims']['executed'] is False
+          assert all(isinstance(r['enrichment'].get('tags'), list) for r in enriched)
           differentiated = sum(1 for r in enriched if r['enrichment']['differentiated'])
           assert differentiated > 0, 'no record carries a distinguishing signal'
           assert all(item['status'] in {'complete', 'incomplete'} for item in registry['coverage'])

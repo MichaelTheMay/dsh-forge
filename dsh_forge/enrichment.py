@@ -179,21 +179,38 @@ def primary_capability(families: Mapping[str, Iterable[str]]) -> str:
     return capabilities[0] if capabilities else ""
 
 
+#: The per-record block repeats for every record in a 37,000-record feed, so it
+#: carries only what varies. Everything constant — schema, policy, and the claim
+#: that nothing was executed — is stated once per snapshot in
+#: :func:`enrichment_metadata`. Empty fields are omitted rather than stored.
 def enrich_record(record: Mapping[str, Any], observed_at: Any = None) -> dict[str, Any]:
-    """Build the enrichment block for one record."""
+    """Build the compact per-record enrichment block."""
 
     families = derive_tags(record, observed_at)
-    tags = flatten_tags(families)
+    block: dict[str, Any] = {"tags": flatten_tags(families)}
+    capability = primary_capability(families)
+    if capability:
+        block["primary_capability"] = capability
+    return block
+
+
+def enrichment_metadata() -> dict[str, Any]:
+    """The constant half of enrichment, stated once per snapshot."""
+
     return {
         "schema": ENRICHMENT_SCHEMA,
         "policy": ENRICHMENT_POLICY,
-        "tags": tags,
-        "families": families,
-        "primary_capability": primary_capability(families),
         "tag_source": "deterministic",
-        "days_since_push": _days_since_push(record, observed_at),
+        "maturity_tags": sorted(TAXONOMY["maturity"]),
         "claims": {"executed": False, "code_inspected": False, "metadata_only": True},
     }
+
+
+def descriptive_tags(tags: Iterable[str]) -> list[str]:
+    """Tags that say what a record does, excluding the derived maturity flags."""
+
+    maturity = set(TAXONOMY["maturity"])
+    return [tag for tag in tags if tag not in maturity]
 
 
 def _boilerplate_descriptions(records: Iterable[Mapping[str, Any]]) -> set[str]:
@@ -238,7 +255,7 @@ def differentiation(record: Mapping[str, Any], boilerplate: frozenset[str] | set
     package = record.get("package")
     if isinstance(package, Mapping) and package.get("name"):
         reasons.append("published-package")
-    return {"differentiated": bool(reasons), "signals": reasons}
+    return {"differentiated": True, "signals": reasons} if reasons else {"differentiated": False}
 
 
 def enrich_snapshot(snapshot: MutableMapping[str, Any], observed_at: Any = None) -> dict[str, Any]:
@@ -247,6 +264,7 @@ def enrich_snapshot(snapshot: MutableMapping[str, Any], observed_at: Any = None)
     Mutates the snapshot in place and returns coverage counts.
     """
 
+    snapshot["enrichment_metadata"] = enrichment_metadata()
     observed = observed_at or snapshot.get("completed_at") or snapshot.get("fetched_at")
     counts = {"records": 0, "tagged": 0, "untagged": 0, "differentiated": 0, "boilerplate": 0}
     tag_totals: dict[str, int] = {}

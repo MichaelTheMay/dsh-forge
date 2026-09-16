@@ -90,32 +90,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "desktop-app",
           "web-ui",
           "actively-maintained",
           "has-license"
         ],
-        "families": {
-          "runtime": [
-            "desktop-app",
-            "web-ui"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 2,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -177,34 +157,13 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "orchestration",
           "desktop-app",
           "actively-maintained",
           "has-license"
         ],
-        "families": {
-          "capability": [
-            "orchestration"
-          ],
-          "runtime": [
-            "desktop-app"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license"
-          ]
-        },
         "primary_capability": "orchestration",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -255,30 +214,11 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "database",
           "actively-maintained",
           "has-license"
         ],
-        "families": {
-          "integration": [
-            "database"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 4,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -325,32 +265,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "desktop-app",
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "runtime": [
-            "desktop-app"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 1,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -396,32 +316,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "docker",
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "integration": [
-            "docker"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 10,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -467,32 +367,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "desktop-app",
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "runtime": [
-            "desktop-app"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 10,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "attention"
@@ -537,28 +417,11 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 1,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "attention"
@@ -603,32 +466,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "desktop-app",
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "runtime": [
-            "desktop-app"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -674,28 +517,11 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 1,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -750,28 +576,11 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "actively-maintained",
           "has-license",
           "low-visibility"
         ],
-        "families": {
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 14,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -867,8 +676,6 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "orchestration",
           "planning",
@@ -877,26 +684,7 @@ const CATALOG_SNAPSHOT = {
           "pinned-release",
           "well-known"
         ],
-        "families": {
-          "capability": [
-            "orchestration",
-            "planning"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "pinned-release",
-            "well-known"
-          ]
-        },
         "primary_capability": "orchestration",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -976,8 +764,6 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "review",
           "security",
@@ -986,26 +772,7 @@ const CATALOG_SNAPSHOT = {
           "low-visibility",
           "pinned-release"
         ],
-        "families": {
-          "capability": [
-            "review",
-            "security"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility",
-            "pinned-release"
-          ]
-        },
         "primary_capability": "review",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1084,8 +851,6 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "code-intelligence",
           "search",
@@ -1094,26 +859,7 @@ const CATALOG_SNAPSHOT = {
           "low-visibility",
           "pinned-release"
         ],
-        "families": {
-          "capability": [
-            "code-intelligence",
-            "search"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility",
-            "pinned-release"
-          ]
-        },
         "primary_capability": "code-intelligence",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1194,8 +940,6 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "memory",
           "mcp",
@@ -1204,28 +948,7 @@ const CATALOG_SNAPSHOT = {
           "low-visibility",
           "pinned-release"
         ],
-        "families": {
-          "capability": [
-            "memory"
-          ],
-          "integration": [
-            "mcp"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility",
-            "pinned-release"
-          ]
-        },
         "primary_capability": "memory",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1304,8 +1027,6 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "memory",
           "orchestration",
@@ -1316,30 +1037,7 @@ const CATALOG_SNAPSHOT = {
           "low-visibility",
           "pinned-release"
         ],
-        "families": {
-          "capability": [
-            "memory",
-            "orchestration",
-            "review"
-          ],
-          "integration": [
-            "mcp"
-          ],
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility",
-            "pinned-release"
-          ]
-        },
         "primary_capability": "memory",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1418,30 +1116,12 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "actively-maintained",
           "has-license",
           "low-visibility",
           "pinned-release"
         ],
-        "families": {
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "low-visibility",
-            "pinned-release"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1520,28 +1200,11 @@ const CATALOG_SNAPSHOT = {
         "security_verified": false
       },
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "actively-maintained",
           "has-license",
           "pinned-release"
         ],
-        "families": {
-          "maturity": [
-            "actively-maintained",
-            "has-license",
-            "pinned-release"
-          ]
-        },
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": 0,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
         "differentiated": true,
         "signals": [
           "own-description",
@@ -1654,20 +1317,8 @@ const CATALOG_SNAPSHOT = {
       },
       "updated_at": "2026-09-05T21:30:00Z",
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [],
-        "families": {},
-        "primary_capability": "",
-        "tag_source": "deterministic",
-        "days_since_push": null,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
-        "differentiated": false,
-        "signals": []
+        "differentiated": false
       }
     },
     {
@@ -1786,26 +1437,11 @@ const CATALOG_SNAPSHOT = {
       },
       "updated_at": "2026-09-05T21:30:00Z",
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "review"
         ],
-        "families": {
-          "capability": [
-            "review"
-          ]
-        },
         "primary_capability": "review",
-        "tag_source": "deterministic",
-        "days_since_push": null,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
-        "differentiated": false,
-        "signals": []
+        "differentiated": false
       }
     },
     {
@@ -1920,26 +1556,11 @@ const CATALOG_SNAPSHOT = {
       },
       "updated_at": "2026-09-05T21:30:00Z",
       "enrichment": {
-        "schema": "dsh-forge.enrichment/v1",
-        "policy": "dsh-forge.tags/v1",
         "tags": [
           "memory"
         ],
-        "families": {
-          "capability": [
-            "memory"
-          ]
-        },
         "primary_capability": "memory",
-        "tag_source": "deterministic",
-        "days_since_push": null,
-        "claims": {
-          "executed": false,
-          "code_inspected": false,
-          "metadata_only": true
-        },
-        "differentiated": false,
-        "signals": []
+        "differentiated": false
       }
     }
   ],
@@ -1953,7 +1574,25 @@ const CATALOG_SNAPSHOT = {
     "execution_enabled": false,
     "note": "Schema-valid metadata packages and dedicated routes are available. Each recipe still requires a trusted DSSE envelope before acquisition; upload, installation, and execution remain disconnected."
   },
-  "package_catalog_digest": "sha256:859db6e98ac43f2700d8efc66c0205ec5a9cfdb579f70b8f9641cc089a702c1c"
+  "package_catalog_digest": "sha256:859db6e98ac43f2700d8efc66c0205ec5a9cfdb579f70b8f9641cc089a702c1c",
+  "enrichment_metadata": {
+    "schema": "dsh-forge.enrichment/v1",
+    "policy": "dsh-forge.tags/v1",
+    "tag_source": "deterministic",
+    "maturity_tags": [
+      "actively-maintained",
+      "archived",
+      "has-license",
+      "low-visibility",
+      "pinned-release",
+      "well-known"
+    ],
+    "claims": {
+      "executed": false,
+      "code_inspected": false,
+      "metadata_only": true
+    }
+  }
 };
 // CATALOG_SNAPSHOT_END
 
@@ -1972,6 +1611,9 @@ function communityInstallable(record) {
 // instead: a stable hue per repository plus its initials. Deriving it from the
 // slug means the same record always looks the same, with no network fetch and
 // no blank tiles.
+// Mirrors enrichment_metadata.maturity_tags. These are derived flags rather than
+// statements about what a record does, so cards exclude them.
+const MATURITY_TAGS = new Set(['actively-maintained', 'archived', 'has-license', 'pinned-release', 'well-known', 'low-visibility']);
 const THUMB_NOISE = ['dsh', 'deepseek', 'harness', 'plugin', 'plugins', 'fork', 'the'];
 function thumbnailFor(slug, name) {
   let hash = 0;
@@ -2003,9 +1645,7 @@ function mapRepositoryArtifact(a) {
   url: a.repository_url, base: a.head_sha || 'Not captured',
   enrichmentTags,
   thumb: thumbnailFor(a.full_name || a.artifact_id || '', a.name),
-  descriptiveTags: enrichment
-    ? [...(enrichment.families.capability || []), ...(enrichment.families.integration || []), ...(enrichment.families.runtime || [])]
-    : [],
+  descriptiveTags: enrichmentTags.filter(tag => !MATURITY_TAGS.has(tag)),
   primaryCapability: enrichment ? enrichment.primary_capability : '',
   differentiated: enrichment ? !!enrichment.differentiated : true,
   terms: [

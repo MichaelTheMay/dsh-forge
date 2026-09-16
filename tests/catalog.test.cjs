@@ -91,8 +91,11 @@ test('embedded snapshot preserves forks and plugins and adds only schema-generat
   const withoutEnrichment = value => Array.isArray(value)
     ? value.map(record => { const { enrichment, ...rest } = record; return rest; })
     : value;
+  const { enrichment_metadata: metadata, ...embeddedSnapshot } = CATALOG_SNAPSHOT;
+  assert.equal(metadata.schema, 'dsh-forge.enrichment/v1');
+  assert.equal(metadata.claims.executed, false);
   assert.deepEqual({
-    ...CATALOG_SNAPSHOT,
+    ...embeddedSnapshot,
     entries: withoutEnrichment(CATALOG_SNAPSHOT.entries),
     supplemental_entries: withoutEnrichment(CATALOG_SNAPSHOT.supplemental_entries),
     package_entries: withoutEnrichment(CATALOG_SNAPSHOT.package_entries),
@@ -104,7 +107,8 @@ test('embedded snapshot preserves forks and plugins and adds only schema-generat
   const embedded = [...CATALOG_SNAPSHOT.entries, ...CATALOG_SNAPSHOT.supplemental_entries];
   assert(embedded.every(record => Array.isArray(record.enrichment.tags)),
     'the offline snapshot carries the same tags as the published feed');
-  assert(embedded.every(record => record.enrichment.claims.executed === false));
+  // The per-record block repeats 37,000 times in the feed, so it holds only what varies.
+  assert(embedded.every(record => !('claims' in record.enrichment) && !('schema' in record.enrichment)));
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
   const forks = CATALOG.filter(r => r.type === 'fork');
   const plugins = CATALOG.filter(r => r.type === 'plugin');

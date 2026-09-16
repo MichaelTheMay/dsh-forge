@@ -120,7 +120,7 @@ class DifferentiationTests(unittest.TestCase):
         }
         result = differentiation(record, self.boilerplate)
         self.assertFalse(result["differentiated"])
-        self.assertEqual(result["signals"], [])
+        self.assertNotIn("signals", result)
 
     def test_its_own_description_differentiates_a_fork(self):
         record = {"description": "Adds Kafka-backed multi-user sessions.", "topics": [], "github_stars": 0}
@@ -208,11 +208,24 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(snapshot["entries"][0]["enrichment"]["differentiated"])
 
     def test_enrichment_never_claims_the_code_was_examined(self):
-        record = enrich_record(plugin(), observed_at="2026-09-15T00:00:00Z")
+        # The claim is stated once per snapshot rather than on every record.
+        snapshot = self.snapshot()
+        enrich_snapshot(snapshot)
         self.assertEqual(
-            record["claims"],
+            snapshot["enrichment_metadata"]["claims"],
             {"executed": False, "code_inspected": False, "metadata_only": True},
         )
+        self.assertEqual(snapshot["enrichment_metadata"]["schema"], "dsh-forge.enrichment/v1")
+
+    def test_the_per_record_block_carries_only_what_varies(self):
+        # This block repeats 37,000 times in the published feed.
+        snapshot = self.snapshot()
+        enrich_snapshot(snapshot)
+        clone = snapshot["entries"][0]["enrichment"]
+        self.assertEqual(set(clone), {"tags", "differentiated"})
+        self.assertNotIn("claims", clone)
+        self.assertNotIn("schema", clone)
+        self.assertNotIn("families", clone)
 
     def test_enriching_twice_changes_nothing(self):
         first, second = self.snapshot(), self.snapshot()
