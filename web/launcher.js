@@ -3559,6 +3559,14 @@ class Component extends DCLogic {
       noResults: results.length === 0 && !catalogPending,
       hasDetail: !!detail.id,
       noDetail: !detail.id,
+      detailRowCount: detailRows.length ? detailRows.length + ' fields' : '',
+      // One plain sentence replaces the pile of digests above the fold. The feed
+      // reports security_verified: false, so this never implies a review.
+      detailTrustLine: !detail.id ? '' : (detail.catalogPackage
+        ? 'Signed package metadata. Components are pinned to exact versions. Forge has not run or reviewed them.'
+        : (artifactExecution.eligible
+          ? 'Runs sandboxed from a pinned commit. Forge has not reviewed this code.'
+          : 'Community code. It runs sandboxed if you install it. Forge has not reviewed it.')),
       showCatalogFeed: !s.detailOpen,
       showArtifactPage: s.detailOpen,
       detail,

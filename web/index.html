@@ -385,6 +385,15 @@
   .chip-on .chip-count { color: inherit; opacity: .75; }
   .chip-clear { border-style: dashed; }
 
+  .drawer { border-top: 1px solid var(--line); }
+  .drawer-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 12px 0 2px; color: var(--text-3); font-size: 12.5px; font-weight: 500; cursor: pointer; list-style: none; }
+  .drawer-summary::-webkit-details-marker { display: none; }
+  .drawer-summary::after { content: '⌄'; color: var(--faint); font-size: 14px; line-height: 1; }
+  .drawer[open] .drawer-summary::after { content: '⌃'; }
+  .drawer-summary:hover { color: var(--text); }
+  .drawer .facts { padding-top: 12px; }
+  .hero-trust { max-width: 640px; }
+
   /* Instance tabs */
   .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
   .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
@@ -912,6 +921,7 @@
                 </div>
               </div>
               <p class="hero-desc">{{ detail.description }}</p>
+              <p class="note hero-trust">{{ detailTrustLine }}</p>
               <div class="hero-meta">
                 <sc-if value="{{ hasDetailStars }}" hint-placeholder-val="{{ true }}"><span class="stars"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ detail.starsLabel }}</span></sc-if>
                 <sc-for list="{{ detailMetaItems }}" as="m" hint-placeholder-count="4"><span>{{ m }}</span></sc-for>
@@ -1046,10 +1056,14 @@
 
             <div class="stack">
               <section class="card">
-                <h2 class="h2">Source and provenance</h2>
-                <dl class="facts">
-                  <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="6"><div class="fact"><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
-                </dl>
+                <h2 class="h2">Source</h2>
+                <p class="prose">{{ detailTrustLine }}</p>
+                <details class="drawer">
+                  <summary class="drawer-summary">Technical details<span class="note">{{ detailRowCount }}</span></summary>
+                  <dl class="facts">
+                    <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="6"><div class="fact"><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
+                  </dl>
+                </details>
                 <div class="links">
                   <a href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a>
                   <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ false }}"><a href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
