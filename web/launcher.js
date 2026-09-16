@@ -1962,6 +1962,12 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+// Lane B needs a full commit on github.com; the sidecar enforces the same rule.
+function communityInstallable(record) {
+  return !!(record && /^[a-f0-9]{40}$/.test(String(record.head_sha || '')) &&
+    /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/.test(String(record.repository_url || '')));
+}
+
 // Almost no catalog record ships an image, so every card gets a generated one
 // instead: a stable hue per repository plus its initials. Deriving it from the
 // slug means the same record always looks the same, with no network fetch and
@@ -2161,6 +2167,7 @@ class Component extends DCLogic {
       artifactRunBusy: false,
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
+      artifactRunLane: 'verified',
       configurationBusy: false,
       catalogStore: { available: false },
       storeArtifacts: [],
@@ -2505,7 +2512,24 @@ class Component extends DCLogic {
     this.setState({
       packageVersionId: versionId,
       artifactRunConfirmation: detail,
-      artifactRiskAcknowledged: false
+      artifactRiskAcknowledged: false,
+      artifactRunLane: 'verified'
+    });
+  }
+
+  // Lane B: no signed recipe exists, so the record is installed at its pinned
+  // commit on the operator's explicit say-so. Same sandbox, different voucher.
+  confirmCommunityRun(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!versionId) return this.flash('Add a launch-ready Harness version on the Local tab first');
+    if (!communityInstallable(detail)) {
+      return this.flash('This record has no captured commit on github.com, so it cannot be pinned for install');
+    }
+    this.setState({
+      packageVersionId: versionId,
+      artifactRunConfirmation: detail,
+      artifactRiskAcknowledged: false,
+      artifactRunLane: 'community'
     });
   }
 
@@ -2515,7 +2539,8 @@ class Component extends DCLogic {
     if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
     this.setState({ artifactRunBusy: true });
     try {
-      const result = await this.api('/api/v1/catalog/install-run', {
+      const community = this.state.artifactRunLane === 'community';
+      const result = await this.api(community ? '/api/v1/catalog/install-run-community' : '/api/v1/catalog/install-run', {
         method: 'POST',
         body: JSON.stringify({ artifact_id: detail.id, version_id: versionId, acknowledge_risk: true })
       });
@@ -2528,8 +2553,10 @@ class Component extends DCLogic {
         logCell: result.cell.id,
         inspectorTab: 'logs'
       });
-      if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Plugin verified, installed, and started in a disposable cell');
+      await this.addInstanceTab(result.cell);
+      this.flash(community
+        ? 'Installed at its pinned commit and started in a sandboxed cell. Not reviewed by Forge.'
+        : 'Plugin verified, installed, and started in a disposable cell');
     } catch (error) {
       await this.refreshStatus(true);
       this.setState({ artifactRunBusy: false });
@@ -3782,6 +3809,12 @@ class Component extends DCLogic {
       })),
       noConfigurations: s.configurations.length === 0,
 
+      communityRunAvailable: !artifactExecution.eligible && communityInstallable(detail) && !!s.sidecarConnected,
+      communityRunDisabled: !selectedPackageVersion || s.artifactRunBusy,
+      communityRunLabel: s.artifactRunBusy ? 'Installing…' : 'Install and run unverified',
+      communityRun: () => detail.id ? this.confirmCommunityRun(detail) : undefined,
+      isCommunityRun: s.artifactRunLane === 'community',
+      isVerifiedRun: s.artifactRunLane !== 'community',
       artifactRunConfirmationOpen: !!s.artifactRunConfirmation,
       artifactRunBusy: s.artifactRunBusy,
       artifactRunArtifact: s.artifactRunConfirmation || {},

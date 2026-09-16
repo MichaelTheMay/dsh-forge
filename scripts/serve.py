@@ -377,6 +377,20 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     HTTPStatus.CREATED,
                 )
                 return
+            if path == "/api/v1/catalog/install-run-community":
+                artifact_id = body.get("artifact_id")
+                version_id = body.get("version_id")
+                if not isinstance(artifact_id, str) or not isinstance(version_id, str):
+                    raise LauncherError("artifact_id and version_id must be strings")
+                self._json(
+                    self.server.launcher.install_and_run_community_artifact(
+                        artifact_id=artifact_id,
+                        version_id=version_id,
+                        acknowledge_risk=body.get("acknowledge_risk") is True,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
             if path == "/api/v1/configurations":
                 self._json(
                     self.server.launcher.save_configuration(

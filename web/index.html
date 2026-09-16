@@ -988,7 +988,11 @@
                 </label>
                 <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a launch-ready Harness version on the Local tab first.</p></sc-if>
                 <button class="btn btn-go btn-lg btn-block" onClick="{{ installAndRun }}" disabled="{{ installAndRunDisabled }}">{{ installAndRunLabel }}</button>
-                <p class="note">{{ installAndRunReason }}. Forge only enables this for a single-plugin recipe whose signed package identity, version, integrity, repository, and commit match this record. It installs offline into a disposable profile and smoke-tests it in Apptainer. There is no host install fallback.</p>
+                <p class="note">{{ installAndRunReason }}.</p>
+                <sc-if value="{{ communityRunAvailable }}" hint-placeholder-val="{{ false }}">
+                  <button class="btn btn-lg btn-block" onClick="{{ communityRun }}" disabled="{{ communityRunDisabled }}">{{ communityRunLabel }}</button>
+                  <p class="note">No curator has reviewed this record. Forge can still install it at its captured commit and run it in the same sandbox.</p>
+                </sc-if>
                 <div class="divider"></div>
                 <div class="btn-pair">
                   <button class="{{ favoriteClass }}" onClick="{{ toggleFavorite }}" aria-pressed="{{ isFavorite }}"><svg class="fav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>{{ favoriteLabel }}</button>
@@ -1184,10 +1188,15 @@
         <header class="modal-head">
           <span class="label">Community code · explicit approval</span>
           <h2 id="artifact-run-title" class="modal-title">Install and run {{ artifactRunArtifact.name }}?</h2>
-          <p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p>
+          <sc-if value="{{ isVerifiedRun }}" hint-placeholder-val="{{ true }}"><p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p></sc-if>
+          <sc-if value="{{ isCommunityRun }}" hint-placeholder-val="{{ false }}"><p class="note">No reviewed recipe. Pinned to the commit in this record.</p></sc-if>
         </header>
         <div class="modal-body">
-          <p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p>
+          <sc-if value="{{ isVerifiedRun }}" hint-placeholder-val="{{ true }}"><p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p></sc-if>
+          <sc-if value="{{ isCommunityRun }}" hint-placeholder-val="{{ false }}">
+            <p class="prose">This executes third-party code that <strong>nobody has reviewed</strong>. Forge downloads the source archive for the exact commit in this record, records its digest so a later change is detected, inspects the archive, disables package scripts, installs without network access, smoke-tests it in Apptainer, then clones the tested profile into a disposable cell.</p>
+            <div class="warn-box">Forge is not vouching for this code. The only assurances are that it came from the commit shown and that it runs in the sandbox. Nobody has read it.</div>
+          </sc-if>
           <div class="warn-box">Sandboxing reduces risk but does not eliminate it. Apptainer shares the host kernel, and the running web surface uses host networking for its loopback port. Forge does not mount your host DSH home or forward launcher secrets.</div>
           <label class="ack"><input type="checkbox" checked="{{ artifactRiskAcknowledged }}" onChange="{{ toggleArtifactRisk }}" /><span>I understand that this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>

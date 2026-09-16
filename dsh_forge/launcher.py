@@ -25,6 +25,7 @@ from typing import Any, Iterable, Mapping
 
 
 from .catalog_store import CatalogStore, CatalogStoreError, build, verify_snapshot
+from .community import CommunityError, prepare_install as prepare_community_install
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError
@@ -1930,6 +1931,105 @@ class Launcher:
         )
         cell = self.run_configuration(configuration["id"])
         return {"artifact_id": artifact_id, "installation": installation, "configuration": configuration, "cell": cell}
+
+    def _community_pin_path(self) -> Path:
+        return self.state_root / "community-pins.json"
+
+    def _community_pin(self, artifact_id: str, commit: str) -> dict[str, Any] | None:
+        """The digest recorded the first time this exact commit was installed."""
+
+        try:
+            raw = json.loads(self._community_pin_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(raw, dict):
+            return None
+        entry = raw.get(f"{artifact_id}@{commit}")
+        return entry if isinstance(entry, dict) and entry.get("integrity") else None
+
+    def _record_community_pin(self, artifact_id: str, commit: str, pin: Mapping[str, Any]) -> None:
+        path = self._community_pin_path()
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raw = {}
+        except (OSError, ValueError):
+            raw = {}
+        raw[f"{artifact_id}@{commit}"] = {
+            "integrity": str(pin.get("integrity") or ""),
+            "bytes": pin.get("bytes"),
+            "pinned_at": pin.get("pinned_at"),
+        }
+        temporary = path.with_suffix(".tmp")
+        try:
+            temporary.write_text(json.dumps(raw, indent=2, sort_keys=True), encoding="utf-8")
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, path)
+        except OSError as error:
+            raise LauncherError(f"Could not record the community pin: {error}") from error
+
+    def install_and_run_community_artifact(
+        self,
+        *,
+        artifact_id: str,
+        version_id: str,
+        acknowledge_risk: bool,
+    ) -> dict[str, Any]:
+        """Install an unreviewed catalog record at its pinned commit and run it sandboxed.
+
+        The record is not curator-reviewed. It is built into a manifest, signed
+        locally, and then handed to the same signed install path Lane A uses, so
+        the sandbox boundary is identical and a failure still fails closed.
+        """
+
+        if acknowledge_risk is not True:
+            raise LauncherError("Explicit community-code risk acknowledgment is required")
+        artifact = self.catalog_artifact(artifact_id)
+        commit = str(artifact.get("head_sha") or "")
+        if not commit:
+            raise LauncherError("This record has no captured commit, so it cannot be pinned for install")
+        try:
+            prepared = prepare_community_install(
+                artifact,
+                known_pin=self._community_pin(artifact_id, commit),
+            )
+        except CommunityError as error:
+            raise LauncherError(str(error)) from error
+        installation = self.install_package(
+            version_id=version_id,
+            envelope=prepared["envelope"],
+            trust_root=prepared["trust_root"],
+            profile="web",
+        )
+        # Only pin after the sandbox accepted it, so a rejected artifact does not
+        # become the trusted baseline for later installs.
+        self._record_community_pin(artifact_id, commit, prepared["pin"])
+        installation = self._update_package_installation(
+            installation["id"],
+            artifact_id=artifact_id,
+            community_code_risk_acknowledged=True,
+            disposable_run_requested=True,
+        )
+        configuration = self.save_configuration(
+            name=str(artifact.get("name") or artifact.get("full_name") or "Community record")[:80],
+            description="Installed from the public catalog at a pinned commit. Not reviewed by Forge.",
+            version_id=version_id,
+            selections=[{"type": "plugin", "id": artifact_id}],
+            launch={
+                "surface": "web", "profile": "web", "port": "auto",
+                "open_browser": False, "network": "host", "resources": {"gpu": "none"},
+            },
+        )
+        cell = self.run_configuration(configuration["id"])
+        return {
+            "artifact_id": artifact_id,
+            "lane": prepared["lane"],
+            "claims": prepared["claims"],
+            "pin": prepared["pin"],
+            "installation": installation,
+            "configuration": configuration,
+            "cell": cell,
+        }
 
     def install_trusted_catalog_package(
         self,

@@ -511,6 +511,7 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
   values.toggleArtifactRisk({ target: { checked: true } });
   let request;
   c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3400/session' };
     request = { url, body: JSON.parse(options.body) };
     return { cell: { id: 'cell_plugin' } };
   };
@@ -520,8 +521,10 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  // The new session opens on the Local tab with its startup logs showing.
-  assert.equal(c.state.view, 'launch');
+  // The installed plugin opens as its own instance tab, already running.
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell_plugin');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.url), ['http://127.0.0.1:3400/session']);
   assert.equal(c.state.logCell, 'cell_plugin');
   assert.equal(c.state.artifactRunConfirmation, null);
   assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
@@ -1327,4 +1330,74 @@ test('discovery rails span the catalog and exclude records that say nothing', as
   assert(rails.every(rail => typeof rail.note === 'string' && rail.note.length > 0));
   const recent = rails.find(rail => rail.id === 'recently-active');
   assert.match(recent.note, /not claimed/, 'the rail must not imply star velocity it cannot compute');
+});
+
+
+test('an unreviewed record offers the community lane and says nobody read it', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.setState({
+    detailOpen: true,
+    artifactId: plugin.id,
+    detailArtifact: {
+      ...plugin,
+      head_sha: 'a'.repeat(40),
+      repository_url: 'https://github.com/Owner/repo',
+      execution: { eligible: false, reason: 'No signed recipe is configured' }
+    }
+  });
+  let values = c.renderVals();
+  assert.equal(values.communityRunAvailable, true, 'the lane appears when no signed recipe exists');
+  assert.equal(values.installAndRunDisabled, true, 'the verified lane stays disabled');
+  values.communityRun();
+  values = c.renderVals();
+  assert.equal(values.artifactRunConfirmationOpen, true);
+  assert.equal(values.isCommunityRun, true);
+  assert.equal(values.artifactRunConfirmDisabled, true, 'approval is required first');
+  values.toggleArtifactRisk({ target: { checked: true } });
+
+  let request;
+  c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3401/session' };
+    request = { url, body: JSON.parse(options.body) };
+    return { cell: { id: 'cell_community' } };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().startArtifactRun();
+  assert.deepEqual(request, {
+    url: '/api/v1/catalog/install-run-community',
+    body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
+  });
+  assert.equal(c.state.activeInstanceId, 'cell_community');
+  assert.match(html, /nobody has reviewed|nobody has read it/i);
+});
+
+test('the community lane is withheld from records that cannot be pinned', () => {
+  const c = instance();
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const withDetail = detail => {
+    c.setState({ detailOpen: true, artifactId: plugin.id, detailArtifact: { ...plugin, ...detail,
+      execution: { eligible: false, reason: 'No signed recipe is configured' } } });
+    return c.renderVals().communityRunAvailable;
+  };
+  assert.equal(withDetail({ head_sha: 'main', repository_url: 'https://github.com/Owner/repo' }), false,
+    'a branch name is not a pinned commit');
+  assert.equal(withDetail({ head_sha: 'a'.repeat(40), repository_url: 'https://evil.example/Owner/repo' }), false,
+    'only github.com records can be pinned');
+  assert.equal(withDetail({ head_sha: '', repository_url: 'https://github.com/Owner/repo' }), false,
+    'a record with no captured commit is not offered');
 });
