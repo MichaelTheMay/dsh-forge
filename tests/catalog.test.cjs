@@ -87,11 +87,28 @@ test('mobile fork layout removes every unused desktop grid column', () => {
 });
 
 test('embedded snapshot preserves forks and plugins and adds only schema-generated packages', () => {
-  assert.deepEqual(CATALOG_SNAPSHOT, {
+  // Embedding derives discovery tags but must not otherwise alter a record.
+  const withoutEnrichment = value => Array.isArray(value)
+    ? value.map(record => { const { enrichment, ...rest } = record; return rest; })
+    : value;
+  const { enrichment_metadata: metadata, ...embeddedSnapshot } = CATALOG_SNAPSHOT;
+  assert.equal(metadata.schema, 'dsh-forge.enrichment/v1');
+  assert.equal(metadata.claims.executed, false);
+  assert.deepEqual({
+    ...embeddedSnapshot,
+    entries: withoutEnrichment(CATALOG_SNAPSHOT.entries),
+    supplemental_entries: withoutEnrichment(CATALOG_SNAPSHOT.supplemental_entries),
+    package_entries: withoutEnrichment(CATALOG_SNAPSHOT.package_entries),
+  }, {
     ...snapshot,
     package_entries: packageFeed.packages,
     package_catalog_digest: packageFeed.catalog_digest,
   });
+  const embedded = [...CATALOG_SNAPSHOT.entries, ...CATALOG_SNAPSHOT.supplemental_entries];
+  assert(embedded.every(record => Array.isArray(record.enrichment.tags)),
+    'the offline snapshot carries the same tags as the published feed');
+  // The per-record block repeats 37,000 times in the feed, so it holds only what varies.
+  assert(embedded.every(record => !('claims' in record.enrichment) && !('schema' in record.enrichment)));
   const raw = JSON.parse(fs.readFileSync(path.join(root, 'data/github-forks.response.json'), 'utf8'));
   const forks = CATALOG.filter(r => r.type === 'fork');
   const plugins = CATALOG.filter(r => r.type === 'plugin');
@@ -498,6 +515,7 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
   values.toggleArtifactRisk({ target: { checked: true } });
   let request;
   c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3400/session' };
     request = { url, body: JSON.parse(options.body) };
     return { cell: { id: 'cell_plugin' } };
   };
@@ -507,8 +525,10 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  // The new session opens on the Local tab with its startup logs showing.
-  assert.equal(c.state.view, 'launch');
+  // The installed plugin opens as its own instance tab, already running.
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell_plugin');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.url), ['http://127.0.0.1:3400/session']);
   assert.equal(c.state.logCell, 'cell_plugin');
   assert.equal(c.state.artifactRunConfirmation, null);
   assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
@@ -680,8 +700,10 @@ test('without an imported store the browser still reads the embedded snapshot', 
   let values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
   assert.equal(values.catalogSourceLabel, 'Embedded snapshot');
-  assert.equal(values.catalogFeedStatus, 'End of results');
   assert(values.results.length > 0);
+  // The bundled snapshot must never present itself as the whole index.
+  assert.match(values.catalogFeedStatus, /not the full index/);
+  assert.doesNotMatch(values.catalogFeedStatus, /end of results/i);
 
   // A connected sidecar with nothing imported keeps using the embedded corpus.
   c.api = async () => ({ artifacts: [], total: 0 });
@@ -689,6 +711,37 @@ test('without an imported store the browser still reads the embedded snapshot', 
   values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
   assert.match(values.catalogSourceLabel, /no store imported/);
+  // and it offers the way out rather than leaving the reader stuck.
+  assert.equal(values.showCatalogSync, true);
+  assert.equal(values.showLoadMore, false);
+});
+
+test('loading the full catalog is offered, reported, and surfaces its own failure', async () => {
+  const c = instance();
+  c.renderVals().goPlugins();
+  connectedStore(c, { available: false, reason: 'No catalog store is imported yet' });
+  assert.equal(c.renderVals().showCatalogSync, true, 'the offline browser offers a way to load the index');
+
+  let posted;
+  c.api = async (url, options) => {
+    if (url === '/api/v1/catalog/sync') { posted = { url, method: options.method }; return { artifact_count: 37355 }; }
+    return { artifacts: [], total: 0 };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().syncFullCatalog();
+  assert.deepEqual(posted, { url: '/api/v1/catalog/sync', method: 'POST' });
+  assert.match(c.lastMessage, /37,355/, 'the real count is reported back');
+
+  // A failed sync must be visible in the UI, not only on the server's stderr.
+  const failing = instance();
+  failing.renderVals().goPlugins();
+  connectedStore(failing, { available: false, reason: 'No catalog store is imported yet' });
+  failing.api = async () => { throw new Error('Could not load the published catalog: offline'); };
+  failing.refreshStatus = async () => {};
+  await failing.renderVals().syncFullCatalog();
+  const values = failing.renderVals();
+  assert.equal(values.hasCatalogSyncError, true);
+  assert.match(values.catalogSyncError, /Could not load the published catalog/);
 });
 
 test('an imported store replaces the embedded inventory and maps records identically', async () => {
@@ -715,7 +768,11 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.equal(values.results[0].commitUrl, embedded.commitUrl);
   // The count reports the corpus size, not just the page.
   assert.match(values.resultCount, /1 of 23,890 forks/);
-  assert.equal(values.catalogFeedStatus, 'Scroll for more');
+  // The footer states the corpus size rather than implying the page is all of it.
+  assert.equal(values.catalogFeedStatus, 'Showing 1 of 23,890');
+  // Paging must not depend on a scroll event reaching the right element.
+  assert.equal(values.showLoadMore, true);
+  assert.equal(values.showCatalogSync, false, 'no sync prompt once the store is serving');
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
 });
 
@@ -1131,4 +1188,338 @@ test('Assistant tab starts a saved Harness through its dedicated endpoint', asyn
     url: '/api/v1/assistant/start', body: { version_id: saved.id }
   });
   assert.match(html, /Isolated DeepSeek Harness Forge Assistant/);
+});
+
+test('instance frames are inert in source and accept only a loopback URL', () => {
+  // Same contract as the assistant frame: never a templated src attribute.
+  assert(!/iframe[^>]+src="\{\{/.test(html));
+  assert.match(html, /iframe data-instance-url="\{\{ t\.url \}\}"/);
+  const c = instance();
+  for (const bad of ['', 'https://example.com/x', 'http://example.com/x', 'http://127.0.0.1/x', 'javascript:alert(1)']) {
+    assert.equal(c.safeLoopbackUrl(bad), '', 'must reject ' + bad);
+  }
+  assert.equal(c.safeLoopbackUrl('http://127.0.0.1:3100/s'), 'http://127.0.0.1:3100/s');
+  assert.equal(c.safeLoopbackUrl('http://localhost:3100/s'), 'http://localhost:3100/s');
+});
+
+test('syncInstanceFrames only assigns validated loopback URLs', () => {
+  const c = instance();
+  const good = { dataset: { instanceUrl: 'http://127.0.0.1:3100/s' }, src: '', removeAttribute() { this.src = ''; } };
+  const bad = { dataset: { instanceUrl: 'https://evil.example/x' }, src: 'stale', removeAttribute() { this.src = ''; } };
+  global.document = { querySelectorAll: () => [good, bad], querySelector: () => null };
+  try {
+    c.syncInstanceFrames();
+    assert.equal(good.src, 'http://127.0.0.1:3100/s');
+    assert.equal(bad.src, '');
+  } finally {
+    delete global.document;
+  }
+});
+
+test('opening a cell adds an instance tab instead of a browser window', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3101/session' });
+  await c.addInstanceTab({ id: 'cell-1', version: '1.2.3', port: 3101 });
+  assert.equal(c.state.instanceTabs.length, 1);
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell-1');
+  const [tab] = c.state.instanceTabs;
+  assert.equal(tab.title, '1.2.3');
+  assert.equal(tab.url, 'http://127.0.0.1:3101/session');
+  assert.equal(tab.loading, false);
+});
+
+test('re-opening the same cell activates its tab rather than duplicating it', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3102/session' });
+  await c.addInstanceTab({ id: 'cell-a', version: 'a', port: 3102 });
+  await c.addInstanceTab({ id: 'cell-b', version: 'b', port: 3103 });
+  c.navigate('launch');
+  assert.equal(c.state.view, 'launch');
+  await c.addInstanceTab({ id: 'cell-a', version: 'a', port: 3102 });
+  assert.equal(c.state.instanceTabs.length, 2);
+  assert.equal(c.state.activeInstanceId, 'cell-a');
+  assert.equal(c.state.view, 'instance');
+});
+
+test('several instances stay open at once, each on its own loopback port', async () => {
+  const c = instance();
+  let port = 3200;
+  c.api = async () => ({ url: 'http://127.0.0.1:' + (port++) + '/session' });
+  for (const id of ['c1', 'c2', 'c3']) await c.addInstanceTab({ id, version: id, port });
+  assert.equal(c.state.instanceTabs.length, 3);
+  const urls = new Set(c.state.instanceTabs.map(tab => tab.url));
+  assert.equal(urls.size, 3, 'each instance keeps a distinct session URL');
+});
+
+test('closing a tab detaches it without stopping the cell', async () => {
+  const c = instance();
+  const calls = [];
+  c.api = async path => { calls.push(path); return { url: 'http://127.0.0.1:3104/session' }; };
+  await c.addInstanceTab({ id: 'cell-x', version: 'x', port: 3104 });
+  c.closeInstanceTab('cell-x');
+  assert.equal(c.state.instanceTabs.length, 0);
+  assert.equal(c.state.activeInstanceId, null);
+  assert.equal(c.state.view, 'launch', 'falls back to Local when the last tab closes');
+  assert(!calls.some(path => /\/(stop|restart)$/.test(path)), 'closing a tab must not stop the cell');
+});
+
+test('closing a background tab leaves the active one alone', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3105/session' });
+  await c.addInstanceTab({ id: 'one', version: 'one', port: 3105 });
+  await c.addInstanceTab({ id: 'two', version: 'two', port: 3106 });
+  c.closeInstanceTab('one');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['two']);
+  assert.equal(c.state.activeInstanceId, 'two');
+  assert.equal(c.state.view, 'instance');
+});
+
+test('tabs whose cell the sidecar stopped reporting are pruned', async () => {
+  const c = instance();
+  c.api = async () => ({ url: 'http://127.0.0.1:3107/session' });
+  await c.addInstanceTab({ id: 'alive', version: 'alive', port: 3107 });
+  await c.addInstanceTab({ id: 'gone', version: 'gone', port: 3108 });
+  c.pruneInstanceTabs([{ id: 'alive' }]);
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['alive']);
+  assert.equal(c.state.activeInstanceId, 'alive');
+  c.pruneInstanceTabs([]);
+  assert.equal(c.state.instanceTabs.length, 0);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('open tabs survive a reload and re-resolve their session URL', async () => {
+  const first = instance();
+  first.api = async () => ({ url: 'http://127.0.0.1:3109/session' });
+  await first.addInstanceTab({ id: 'kept', version: '9.9', port: 3109 });
+  const saved = JSON.parse(stored.get('dsh-forge.instance-tabs'));
+  assert.deepEqual(saved, [{ id: 'kept', title: '9.9', subtitle: '127.0.0.1:3109' }]);
+  assert(!('url' in saved[0]), 'the session URL is re-resolved, never persisted');
+
+  const next = instance();
+  next.api = async () => ({ url: 'http://127.0.0.1:3109/session' });
+  next.restoreInstanceTabs();
+  assert.deepEqual(next.state.instanceTabs.map(tab => tab.id), ['kept']);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(next.state.instanceTabs[0].url, 'http://127.0.0.1:3109/session');
+});
+
+
+test('catalog tag filters narrow results and every requested tag must match', async () => {
+  const tagged = (id, tags, type = 'plugin') => ({
+    artifact_id: id, full_name: 'o/' + id, name: id, owner: 'o', artifact_type: type,
+    description: '', pushed_at: '2026-01-01T00:00:00Z', github_stars: 1,
+    license: { spdx: 'MIT' }, enrichment: { tags, differentiated: tags.length > 0 }
+  });
+  const catalog = {
+    artifacts: [
+      tagged('a', ['memory', 'mcp']),
+      tagged('b', ['memory']),
+      tagged('c', ['search']),
+      tagged('d', [])
+    ],
+    hiddenGems: new Map(),
+    byId: new Map()
+  };
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const query = search => endpoint.queryCatalog(catalog, new URL('https://x/api/catalog?type=plugin&' + search));
+  assert.deepEqual(query('tags=memory').artifacts.map(r => r.artifact_id), ['a', 'b']);
+  // Both tags required, not either.
+  assert.deepEqual(query('tags=memory,mcp').artifacts.map(r => r.artifact_id), ['a']);
+  assert.deepEqual(query('tags=nope').artifacts.map(r => r.artifact_id), []);
+  assert.equal(query('').artifacts.length, 4, 'no tag filter returns everything');
+  assert.deepEqual(
+    query('differentiated=1').artifacts.map(r => r.artifact_id), ['a', 'b', 'c'],
+    'records that say nothing about themselves are excluded on request'
+  );
+});
+
+test('discovery rails span the catalog and exclude records that say nothing', async () => {
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const make = (id, capability, stars, pushed, differentiated = true) => ({
+    artifact_id: id, full_name: 'o/' + id, name: id, owner: 'o', artifact_type: 'plugin',
+    description: '', pushed_at: pushed, github_stars: stars, license: { spdx: 'MIT' },
+    enrichment: {
+      tags: capability ? [capability] : [], differentiated,
+      primary_capability: capability, families: { capability: capability ? [capability] : [] }
+    }
+  });
+  const now = Date.parse('2026-09-15T00:00:00Z');
+  const catalog = {
+    artifacts: [
+      make('gem', 'memory', 3, '2026-09-10T00:00:00Z'),
+      make('popular', 'search', 4000, '2026-09-12T00:00:00Z'),
+      make('stale', 'memory', 10, '2025-01-01T00:00:00Z'),
+      make('clone', '', 0, '2026-09-14T00:00:00Z', false)
+    ],
+    hiddenGems: new Map([['gem', { rank: 1, score: 90 }]])
+  };
+  const { rails } = endpoint.buildRails(catalog, 'plugin', now);
+  const byId = Object.fromEntries(rails.map(r => [r.id, r.artifacts.map(a => a.artifact_id)]));
+
+  assert.deepEqual(byId['hidden-gems'], ['gem']);
+  // Novelty excludes the already-popular record and the stale one.
+  assert.deepEqual(byId['new-and-novel'], ['gem']);
+  // One leader per capability, so a rail never stacks the same niche.
+  assert.deepEqual(byId['best-in-class'].sort(), ['gem', 'popular']);
+  assert.deepEqual(byId['recently-active'], ['popular', 'gem', 'stale']);
+  for (const rail of rails) {
+    assert(!rail.artifacts.some(a => a.artifact_id === 'clone'),
+      rail.id + ' must exclude records with no distinguishing signal');
+    assert(rail.artifacts.length > 0, 'empty rails are dropped rather than shown');
+  }
+  assert(rails.every(rail => typeof rail.note === 'string' && rail.note.length > 0));
+  const recent = rails.find(rail => rail.id === 'recently-active');
+  assert.match(recent.note, /not claimed/, 'the rail must not imply star velocity it cannot compute');
+});
+
+
+test('an unreviewed record offers the community lane and says nobody read it', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2-rc.1' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.setState({
+    detailOpen: true,
+    artifactId: plugin.id,
+    detailArtifact: {
+      ...plugin,
+      head_sha: 'a'.repeat(40),
+      repository_url: 'https://github.com/Owner/repo',
+      execution: { eligible: false, reason: 'No signed recipe is configured' }
+    }
+  });
+  let values = c.renderVals();
+  assert.equal(values.communityRunAvailable, true, 'the lane appears when no signed recipe exists');
+  assert.equal(values.installAndRunDisabled, true, 'the verified lane stays disabled');
+  values.communityRun();
+  values = c.renderVals();
+  assert.equal(values.artifactRunConfirmationOpen, true);
+  assert.equal(values.isCommunityRun, true);
+  assert.equal(values.artifactRunConfirmDisabled, true, 'approval is required first');
+  values.toggleArtifactRisk({ target: { checked: true } });
+
+  let request;
+  c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3401/session' };
+    request = { url, body: JSON.parse(options.body) };
+    return { cell: { id: 'cell_community' } };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().startArtifactRun();
+  assert.deepEqual(request, {
+    url: '/api/v1/catalog/install-run-community',
+    body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
+  });
+  assert.equal(c.state.activeInstanceId, 'cell_community');
+  assert.match(html, /nobody has reviewed|nobody has read it/i);
+});
+
+test('the community lane is withheld from records that cannot be pinned', () => {
+  const c = instance();
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const withDetail = detail => {
+    c.setState({ detailOpen: true, artifactId: plugin.id, detailArtifact: { ...plugin, ...detail,
+      execution: { eligible: false, reason: 'No signed recipe is configured' } } });
+    return c.renderVals().communityRunAvailable;
+  };
+  assert.equal(withDetail({ head_sha: 'main', repository_url: 'https://github.com/Owner/repo' }), false,
+    'a branch name is not a pinned commit');
+  assert.equal(withDetail({ head_sha: 'a'.repeat(40), repository_url: 'https://evil.example/Owner/repo' }), false,
+    'only github.com records can be pinned');
+  assert.equal(withDetail({ head_sha: '', repository_url: 'https://github.com/Owner/repo' }), false,
+    'a record with no captured commit is not offered');
+});
+
+test('a record can be favourited from a card without opening it', () => {
+  const c = instance();
+  c.setState({ favoriteArtifacts: [] });
+  c.renderVals().goPlugins();
+  const [card] = c.renderVals().results;
+  assert.equal(card.isFavorite, false);
+  let opened = 0;
+  c.selectCatalogArtifact = () => { opened += 1; };
+  let stopped = false, prevented = false;
+  card.toggleFavorite({ stopPropagation: () => { stopped = true; }, preventDefault: () => { prevented = true; } });
+  assert(stopped && prevented, 'the click must not also open the record');
+  assert.equal(opened, 0);
+  assert.equal(c.state.favoriteArtifacts.length, 1);
+  assert.equal(c.renderVals().results[0].isFavorite, true);
+});
+
+test('favourites appear on the home page and can be run or removed there', async () => {
+  const c = instance();
+  c.setState({ favoriteArtifacts: [] });
+  c.renderVals().goPlugins();
+  const [card] = c.renderVals().results;
+  card.toggleFavorite({ stopPropagation() {}, preventDefault() {} });
+  c.renderVals().goLaunch();
+
+  let values = c.renderVals();
+  assert.equal(values.hasHomeFavorites, true);
+  assert.equal(values.homeFavorites.length, 1);
+  const [entry] = values.homeFavorites;
+  assert.equal(entry.kindLabel, 'Plugin');
+  assert(entry.thumbInitials && entry.thumbInitials.length <= 2);
+  // No sidecar, so running is offered but disabled rather than failing obscurely.
+  assert.equal(entry.runDisabled, true);
+
+  entry.remove({ stopPropagation() {} });
+  assert.equal(c.renderVals().hasHomeFavorites, false);
+});
+
+test('running a favourite routes plugins and forks to their own lanes', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const calls = [];
+  c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3500/session' };
+    calls.push({ url, body: JSON.parse(options.body) });
+    return { cell: { id: 'cell_ran' } };
+  };
+  c.refreshStatus = async () => {};
+
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  await c.runFavorite(plugin);
+  assert.equal(calls.at(-1).url, '/api/v1/catalog/install-run-community');
+  assert.equal(calls.at(-1).body.version_id, saved.id, 'a plugin installs into a chosen version');
+
+  const fork = CATALOG.find(item => item.type === 'fork');
+  await c.runFavorite(fork);
+  assert.equal(calls.at(-1).url, '/api/v1/catalog/launch-fork');
+  assert(!('version_id' in calls.at(-1).body), 'a fork is its own harness, not installed into one');
+  assert.equal(calls.at(-1).body.acknowledge_risk, true);
+
+  // Both land in an instance tab rather than leaving the reader to find the cell.
+  assert.equal(c.state.activeInstanceId, 'cell_ran');
+  assert.match(c.lastMessage, /not reviewed by Forge/);
+});
+
+test('running a favourite without a sidecar explains itself instead of failing', async () => {
+  const c = instance();
+  let called = false;
+  c.api = async () => { called = true; return {}; };
+  await c.runFavorite(CATALOG.find(item => item.type === 'plugin'));
+  assert.equal(called, false, 'no request is attempted without a local launcher');
+  assert.match(c.lastMessage, /Start the local launcher/);
 });

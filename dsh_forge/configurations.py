@@ -22,6 +22,7 @@ from .file_lock import lock as lock_file, unlock as unlock_file
 
 
 CONFIGURATION_SCHEMA = "dsh-forge.configuration/v1"
+SHARED_CONFIGURATION_SCHEMA = "dsh-forge.shared-configuration/v1"
 CONFIGURATION_REGISTRY_SCHEMA_VERSION = 1
 _CONFIGURATION_ID = re.compile(r"config_[a-f0-9]{20}")
 _VERSION_ID = re.compile(r"version_[a-f0-9]{12}")
@@ -196,7 +197,9 @@ class ConfigurationRegistry:
             "selections": normalize_selections(raw.get("selections")),
             "launch": normalize_launch(raw.get("launch")),
             "status": status,
-            "source": str(raw.get("source")) if raw.get("source") in {"user", "mcp-draft"} else "user",
+            # "imported" is kept distinct so a configuration that arrived from
+            # another machine is never displayed as one the operator authored.
+            "source": str(raw.get("source")) if raw.get("source") in {"user", "mcp-draft", "imported"} else "user",
             "created_at": created_at,
             "updated_at": updated_at,
         }
@@ -245,6 +248,56 @@ class ConfigurationRegistry:
             records.append(candidate)
             self._save_unlocked(records)
         return candidate
+
+    def export(self, identity: str) -> dict[str, Any]:
+        """Return one configuration as a portable document.
+
+        Only the parts that describe *what to run* travel. Local identifiers and
+        timestamps are dropped, because a version id means nothing on another
+        machine and importing one would silently point at the wrong checkout.
+        """
+
+        record = self.get(identity)
+        return {
+            "schema": SHARED_CONFIGURATION_SCHEMA,
+            "name": record["name"],
+            "description": record["description"],
+            "selections": record["selections"],
+            "launch": record["launch"],
+            "exported_at": int(time.time() * 1000),
+            "claims": {
+                "executed": False,
+                "reviewed": False,
+                "note": (
+                    "A shared configuration lists what to run. It carries no code and "
+                    "vouches for nothing it names."
+                ),
+            },
+        }
+
+    def import_document(self, document: Any, *, version_id: str) -> dict[str, Any]:
+        """Adopt a shared configuration against a local Harness version.
+
+        The document is untrusted input from another machine, so it is
+        re-validated exactly like a locally created record and lands as a draft
+        for explicit approval rather than becoming runnable on arrival.
+        """
+
+        if not isinstance(document, Mapping):
+            raise ConfigurationError("A shared configuration document is required")
+        if document.get("schema") != SHARED_CONFIGURATION_SCHEMA:
+            raise ConfigurationError("Unsupported shared configuration schema")
+        return self.save(
+            name=_text(document.get("name"), label="name", minimum=1, maximum=80),
+            description=_text(
+                document.get("description") or "", label="description", minimum=0, maximum=280
+            ),
+            version_id=version_id,
+            selections=normalize_selections(document.get("selections")),
+            launch=normalize_launch(document.get("launch")),
+            status="draft",
+            source="imported",
+        )
 
     def approve(self, identity: str) -> dict[str, Any]:
         with self._lock():

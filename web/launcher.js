@@ -2,16 +2,16 @@
 
 window.__dcPrecompiledLogicFactories = window.__dcPrecompiledLogicFactories || {};
 window.__dcPrecompiledLogicFactories.$root = function precompileRootLogic(DCLogic) {
-const OK = 'oklch(0.74 0.15 155)';
-const WARN = 'oklch(0.8 0.14 85)';
-const BAD = 'oklch(0.7 0.16 25)';
-const BLUE = 'oklch(0.74 0.12 235)';
-const MUTED = 'oklch(0.62 0.01 255)';
-const TXT = 'oklch(0.86 0.01 255)';
+const OK = 'var(--status-ok)';
+const WARN = 'var(--status-warn)';
+const BAD = 'var(--status-bad)';
+const BLUE = 'var(--status-info)';
+const MUTED = 'var(--muted)';
+const TXT = 'var(--text-2)';
 const RISK_LEVELS = ['low', 'medium', 'medium-high', 'high', 'critical'];
 const RISK_COLORS = {
-  low: 'oklch(0.74 0.14 155)', medium: 'oklch(0.8 0.11 85)', 'medium-high': 'oklch(0.78 0.12 65)',
-  high: 'oklch(0.74 0.13 45)', critical: 'oklch(0.7 0.15 25)'
+  low: 'var(--risk-low)', medium: 'var(--risk-medium)', 'medium-high': 'var(--risk-medium-high)',
+  high: 'var(--risk-high)', critical: 'var(--risk-critical)'
 };
 
 // Only a plain `a || b || c` list of exact versions is checked; real semver
@@ -88,6 +88,20 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "desktop-app",
+          "web-ui",
+          "actively-maintained",
+          "has-license"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -141,6 +155,21 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "orchestration",
+          "desktop-app",
+          "actively-maintained",
+          "has-license"
+        ],
+        "primary_capability": "orchestration",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -183,6 +212,19 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "database",
+          "actively-maintained",
+          "has-license"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     },
     {
@@ -221,6 +263,19 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -259,6 +314,19 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "docker",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -297,6 +365,18 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "attention"
+        ]
       }
     },
     {
@@ -335,6 +415,17 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "attention"
+        ]
       }
     },
     {
@@ -373,6 +464,19 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "desktop-app",
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -411,6 +515,18 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "attention"
+        ]
       }
     },
     {
@@ -458,6 +574,19 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention"
+        ]
       }
     }
   ],
@@ -545,6 +674,24 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "orchestration",
+          "planning",
+          "actively-maintained",
+          "has-license",
+          "pinned-release",
+          "well-known"
+        ],
+        "primary_capability": "orchestration",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     },
     {
@@ -615,6 +762,23 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "review",
+          "security",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "primary_capability": "review",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -685,6 +849,24 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "code-intelligence",
+          "search",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "primary_capability": "code-intelligence",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     },
     {
@@ -756,6 +938,23 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "memory",
+          "mcp",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "primary_capability": "memory",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -826,6 +1025,25 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "memory",
+          "orchestration",
+          "review",
+          "mcp",
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "primary_capability": "memory",
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -896,6 +1114,20 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "low-visibility",
+          "pinned-release"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "published-package"
+        ]
       }
     },
     {
@@ -966,6 +1198,20 @@ const CATALOG_SNAPSHOT = {
         "metadata_only": true,
         "executed": false,
         "security_verified": false
+      },
+      "enrichment": {
+        "tags": [
+          "actively-maintained",
+          "has-license",
+          "pinned-release"
+        ],
+        "differentiated": true,
+        "signals": [
+          "own-description",
+          "own-topics",
+          "attention",
+          "published-package"
+        ]
       }
     }
   ],
@@ -1069,7 +1315,11 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/agent-teams-builder"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "tags": [],
+        "differentiated": false
+      }
     },
     {
       "schema": "dsh-forge.catalog-package/v1",
@@ -1185,7 +1435,14 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/code-review-lab"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "tags": [
+          "review"
+        ],
+        "primary_capability": "review",
+        "differentiated": false
+      }
     },
     {
       "schema": "dsh-forge.catalog-package/v1",
@@ -1297,7 +1554,14 @@ const CATALOG_SNAPSHOT = {
       "page": {
         "route": "#packages/auditable-memory-lab"
       },
-      "updated_at": "2026-09-05T21:30:00Z"
+      "updated_at": "2026-09-05T21:30:00Z",
+      "enrichment": {
+        "tags": [
+          "memory"
+        ],
+        "primary_capability": "memory",
+        "differentiated": false
+      }
     }
   ],
   "package_browser": {
@@ -1310,7 +1574,25 @@ const CATALOG_SNAPSHOT = {
     "execution_enabled": false,
     "note": "Schema-valid metadata packages and dedicated routes are available. Each recipe still requires a trusted DSSE envelope before acquisition; upload, installation, and execution remain disconnected."
   },
-  "package_catalog_digest": "sha256:859db6e98ac43f2700d8efc66c0205ec5a9cfdb579f70b8f9641cc089a702c1c"
+  "package_catalog_digest": "sha256:859db6e98ac43f2700d8efc66c0205ec5a9cfdb579f70b8f9641cc089a702c1c",
+  "enrichment_metadata": {
+    "schema": "dsh-forge.enrichment/v1",
+    "policy": "dsh-forge.tags/v1",
+    "tag_source": "deterministic",
+    "maturity_tags": [
+      "actively-maintained",
+      "archived",
+      "has-license",
+      "low-visibility",
+      "pinned-release",
+      "well-known"
+    ],
+    "claims": {
+      "executed": false,
+      "code_inspected": false,
+      "metadata_only": true
+    }
+  }
 };
 // CATALOG_SNAPSHOT_END
 
@@ -1319,16 +1601,56 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+// Lane B needs a full commit on github.com; the sidecar enforces the same rule.
+function communityInstallable(record) {
+  return !!(record && /^[a-f0-9]{40}$/.test(String(record.head_sha || '')) &&
+    /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/.test(String(record.repository_url || '')));
+}
+
+// Almost no catalog record ships an image, so every card gets a generated one
+// instead: a stable hue per repository plus its initials. Deriving it from the
+// slug means the same record always looks the same, with no network fetch and
+// no blank tiles.
+// Mirrors enrichment_metadata.maturity_tags. These are derived flags rather than
+// statements about what a record does, so cards exclude them.
+const MATURITY_TAGS = new Set(['actively-maintained', 'archived', 'has-license', 'pinned-release', 'well-known', 'low-visibility']);
+const THUMB_NOISE = ['dsh', 'deepseek', 'harness', 'plugin', 'plugins', 'fork', 'the'];
+function thumbnailFor(slug, name) {
+  let hash = 0;
+  for (let index = 0; index < slug.length; index++) hash = (hash * 31 + slug.charCodeAt(index)) >>> 0;
+  const hue = hash % 360;
+  const words = String(name || slug).split(/[-_\s./]+/)
+    .map(word => word.toLowerCase())
+    .filter(word => word && !THUMB_NOISE.includes(word));
+  const source = words.length ? words : [String(name || slug).replace(/[^a-z0-9]/gi, '') || '?'];
+  const initials = (source.length > 1
+    ? source[0][0] + source[1][0]
+    : source[0].slice(0, 2)).toUpperCase();
+  return {
+    bg: 'oklch(0.3 0.06 ' + hue + ')',
+    fg: 'oklch(0.88 0.11 ' + hue + ')',
+    initials
+  };
+}
+
 // One mapping serves both corpora: the embedded snapshot and the records the
 // catalog store hands back verbatim.
 function mapRepositoryArtifact(a) {
   const hiddenGem = a.hidden_gem && a.hidden_gem.policy ? a.hidden_gem : null;
+  const enrichment = a.enrichment && a.enrichment.tags ? a.enrichment : null;
+  const enrichmentTags = enrichment ? enrichment.tags : [];
   return ({
   ...a,
   id: a.artifact_id, slug: a.full_name, type: a.artifact_type,
   url: a.repository_url, base: a.head_sha || 'Not captured',
+  enrichmentTags,
+  thumb: thumbnailFor(a.full_name || a.artifact_id || '', a.name),
+  descriptiveTags: enrichmentTags.filter(tag => !MATURITY_TAGS.has(tag)),
+  primaryCapability: enrichment ? enrichment.primary_capability : '',
+  differentiated: enrichment ? !!enrichment.differentiated : true,
   terms: [
     ...(a.topics || []),
+    ...enrichmentTags,
     ...((a.curation && a.curation.taxonomy) || []),
     ...((a.divergence && a.divergence.changed_paths) || []).slice(0, 64),
     ...((a.compatibility && a.compatibility.changed_surfaces) || []),
@@ -1485,8 +1807,11 @@ class Component extends DCLogic {
       artifactRunBusy: false,
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
+      artifactRunLane: 'verified',
       configurationBusy: false,
       catalogStore: { available: false },
+      catalogSyncBusy: false,
+      catalogSyncError: '',
       storeArtifacts: [],
       storeTotal: 0,
       storeCursor: '',
@@ -1501,11 +1826,17 @@ class Component extends DCLogic {
       versionSettingsId: null,
       preview: null,
       logCell: null,
+      instanceTabs: [],
+      activeInstanceId: null,
       query: '',
       catalogType: initialRoute.type,
       catalogSort: 'recommended',
       knownLicenseOnly: false,
       favoritesOnly: false,
+      activeTags: [],
+      differentiatedOnly: false,
+      rails: [],
+      railsType: '',
       artifactId: initialRoute.artifactId || (initialRoute.packageSlug
         ? ((PACKAGE_CATALOG.find(item => item.slug === initialRoute.packageSlug) || {}).id || null)
         : (CATALOG.find(item => item.type === initialRoute.type) || CATALOG[0] || {}).id),
@@ -1530,6 +1861,8 @@ class Component extends DCLogic {
   }
 
   componentDidMount() {
+    this.restoreInstanceTabs();
+    if (this.state.view === 'catalog') this.loadRails(this.state.catalogType);
     this.timer = setInterval(() => this.forceUpdate(), 1000);
     if (!this.isPublicWeb()) this.statusTimer = setInterval(() => this.refreshStatus(true), 3000);
     this.scanTimer = setInterval(() => {
@@ -1562,6 +1895,7 @@ class Component extends DCLogic {
             this.scheduleCatalogRefresh();
           }
         }
+        if (route.view === 'catalog') this.loadRails(route.type);
       });
     };
     window.addEventListener('hashchange', this.hashListener);
@@ -1578,6 +1912,7 @@ class Component extends DCLogic {
   }
   componentDidUpdate() {
     this.syncAssistantFrame();
+    this.syncInstanceFrames();
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1590,16 +1925,144 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
+  // A cell is only ever framed from its own loopback port. Anything else is dropped.
+  safeLoopbackUrl(value) {
+    try {
+      const url = new URL(value || '');
+      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) return '';
+      return url.href;
+    } catch {
+      return '';
+    }
+  }
+
   syncAssistantFrame() {
     if (typeof document === 'undefined') return;
     const frame = document.querySelector('iframe[data-assistant-url]');
     if (!frame) return;
+    const url = this.safeLoopbackUrl(frame.dataset.assistantUrl);
+    if (!url) frame.removeAttribute('src');
+    else if (frame.src !== url) frame.src = url;
+  }
+
+  // Instance frames stay mounted while their tab is open so switching tabs never
+  // reloads a running session; only the active one is visible.
+  syncInstanceFrames() {
+    if (typeof document === 'undefined') return;
+    for (const frame of document.querySelectorAll('iframe[data-instance-url]')) {
+      const url = this.safeLoopbackUrl(frame.dataset.instanceUrl);
+      if (!url) frame.removeAttribute('src');
+      else if (frame.src !== url) frame.src = url;
+    }
+  }
+
+  // The sidecar needs a moment after launch before the authenticated URL exists.
+  async resolveCellUrl(cell) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+        const url = this.safeLoopbackUrl(payload.url);
+        if (url) return url;
+      } catch {
+        // not ready yet
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return '';
+  }
+
+  instanceTabTitle(cell) {
+    return cell.version || cell.profile || cell.name || 'Instance';
+  }
+
+  async addInstanceTab(cell) {
+    if (!cell || !cell.id) return;
+    const existing = this.state.instanceTabs.find(tab => tab.id === cell.id);
+    if (existing) return this.activateInstanceTab(cell.id);
+    const pending = {
+      id: cell.id,
+      title: this.instanceTabTitle(cell),
+      subtitle: cell.port ? '127.0.0.1:' + cell.port : '',
+      url: '',
+      loading: true
+    };
+    this.setState({
+      instanceTabs: [...this.state.instanceTabs, pending],
+      activeInstanceId: cell.id,
+      view: 'instance'
+    }, () => this.persistInstanceTabs());
+    const url = await this.resolveCellUrl(cell);
+    const tabs = this.state.instanceTabs.map(tab => tab.id === cell.id
+      ? { ...tab, url, loading: false }
+      : tab);
+    this.setState({ instanceTabs: tabs }, () => this.persistInstanceTabs());
+    if (!url) this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
+  }
+
+  activateInstanceTab(id) {
+    this.setState({ view: 'instance', activeInstanceId: id, detailOpen: false });
+  }
+
+  // Closing a tab detaches the frame. The cell keeps running; stopping it stays an
+  // explicit action on the Local tab.
+  closeInstanceTab(id) {
+    const remaining = this.state.instanceTabs.filter(tab => tab.id !== id);
+    const wasActive = this.state.activeInstanceId === id;
+    const nextActive = wasActive ? (remaining.length ? remaining[remaining.length - 1].id : null) : this.state.activeInstanceId;
+    this.setState({
+      instanceTabs: remaining,
+      activeInstanceId: nextActive,
+      ...(wasActive && !remaining.length ? { view: 'launch' } : {})
+    }, () => this.persistInstanceTabs());
+  }
+
+  // Drop tabs whose cell the sidecar no longer reports.
+  pruneInstanceTabs(cells) {
+    if (!this.state.instanceTabs.length) return;
+    const live = new Set((cells || []).map(cell => cell.id));
+    const remaining = this.state.instanceTabs.filter(tab => live.has(tab.id));
+    if (remaining.length === this.state.instanceTabs.length) return;
+    const activeGone = this.state.activeInstanceId && !live.has(this.state.activeInstanceId);
+    this.setState({
+      instanceTabs: remaining,
+      ...(activeGone ? {
+        activeInstanceId: remaining.length ? remaining[remaining.length - 1].id : null,
+        ...(remaining.length ? {} : { view: this.state.view === 'instance' ? 'launch' : this.state.view })
+      } : {})
+    }, () => this.persistInstanceTabs());
+  }
+
+  persistInstanceTabs() {
     try {
-      const url = new URL(frame.dataset.assistantUrl || '');
-      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) throw new Error('unsafe');
-      if (frame.src !== url.href) frame.src = url.href;
+      window.localStorage.setItem('dsh-forge.instance-tabs', JSON.stringify(
+        this.state.instanceTabs.map(tab => ({ id: tab.id, title: tab.title, subtitle: tab.subtitle }))
+      ));
     } catch {
-      frame.removeAttribute('src');
+      // storage is optional
+    }
+  }
+
+  // Restored tabs re-resolve their URL, and refreshStatus drops any whose cell is gone.
+  restoreInstanceTabs() {
+    let saved = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem('dsh-forge.instance-tabs') || '[]');
+    } catch {
+      saved = [];
+    }
+    if (!Array.isArray(saved) || !saved.length) return;
+    const tabs = saved
+      .filter(tab => tab && typeof tab.id === 'string')
+      .slice(0, 12)
+      .map(tab => ({ id: tab.id, title: String(tab.title || 'Instance'), subtitle: String(tab.subtitle || ''), url: '', loading: true }));
+    if (!tabs.length) return;
+    this.setState({ instanceTabs: tabs });
+    for (const tab of tabs) {
+      this.resolveCellUrl({ id: tab.id }).then(url => {
+        this.setState({
+          instanceTabs: this.state.instanceTabs.map(item => item.id === tab.id ? { ...item, url, loading: false } : item)
+        });
+      });
     }
   }
 
@@ -1623,7 +2086,7 @@ class Component extends DCLogic {
   }
 
   navigate(view, type = 'package') {
-    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null });
+    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null, activeInstanceId: null });
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
         ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
@@ -1633,6 +2096,7 @@ class Component extends DCLogic {
 
   openBrowser(type) {
     this.navigate('catalog', type);
+    this.loadRails(type);
     if (this.isPublicWeb() && !this.state.sidecarConnected && !(this.state.catalogStore && this.state.catalogStore.public)) {
       this.loadPublicCatalog(type);
     } else {
@@ -1690,7 +2154,24 @@ class Component extends DCLogic {
     this.setState({
       packageVersionId: versionId,
       artifactRunConfirmation: detail,
-      artifactRiskAcknowledged: false
+      artifactRiskAcknowledged: false,
+      artifactRunLane: 'verified'
+    });
+  }
+
+  // Lane B: no signed recipe exists, so the record is installed at its pinned
+  // commit on the operator's explicit say-so. Same sandbox, different voucher.
+  confirmCommunityRun(detail) {
+    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (!versionId) return this.flash('Add a launch-ready Harness version on the Local tab first');
+    if (!communityInstallable(detail)) {
+      return this.flash('This record has no captured commit on github.com, so it cannot be pinned for install');
+    }
+    this.setState({
+      packageVersionId: versionId,
+      artifactRunConfirmation: detail,
+      artifactRiskAcknowledged: false,
+      artifactRunLane: 'community'
     });
   }
 
@@ -1700,7 +2181,8 @@ class Component extends DCLogic {
     if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
     this.setState({ artifactRunBusy: true });
     try {
-      const result = await this.api('/api/v1/catalog/install-run', {
+      const community = this.state.artifactRunLane === 'community';
+      const result = await this.api(community ? '/api/v1/catalog/install-run-community' : '/api/v1/catalog/install-run', {
         method: 'POST',
         body: JSON.stringify({ artifact_id: detail.id, version_id: versionId, acknowledge_risk: true })
       });
@@ -1713,8 +2195,10 @@ class Component extends DCLogic {
         logCell: result.cell.id,
         inspectorTab: 'logs'
       });
-      if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Plugin verified, installed, and started in a disposable cell');
+      await this.addInstanceTab(result.cell);
+      this.flash(community
+        ? 'Installed at its pinned commit and started in a sandboxed cell. Not reviewed by Forge.'
+        : 'Plugin verified, installed, and started in a disposable cell');
     } catch (error) {
       await this.refreshStatus(true);
       this.setState({ artifactRunBusy: false });
@@ -1895,7 +2379,6 @@ class Component extends DCLogic {
   async startLocalProfile() {
     const spec = this.state.pendingProfile;
     if (!spec) return this.flash('Choose a detected profile first');
-    const pendingWindow = spec.open_browser ? window.open('about:blank', '_blank') : null;
     this.setState({ profileBusy: true });
     try {
       const cell = await this.api('/api/v1/profiles/run', {
@@ -1904,9 +2387,8 @@ class Component extends DCLogic {
       this.setState({ preview: null, previewData: null, pendingProfile: null, logCell: cell.id, inspectorTab: 'logs' });
       await this.refreshStatus(true);
       this.flash('Started local profile ' + cell.profile + ' on the host');
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (spec.open_browser) await this.addInstanceTab(cell);
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
     } finally {
       this.setState({ profileBusy: false });
@@ -1967,10 +2449,106 @@ class Component extends DCLogic {
     return payload;
   }
 
+  async runFavorite(record) {
+    if (!record || !record.id) return;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher to run this');
+    const versionId = this.state.packageVersionId
+      || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (record.type !== 'fork' && !versionId) {
+      return this.flash('Add a launch-ready Harness version on the Local tab first');
+    }
+    if (this.state.artifactRunBusy) return;
+    this.setState({ artifactRunBusy: true });
+    try {
+      // A fork is a whole harness, so it is launched as its own version rather
+      // than installed into one.
+      const endpoint = record.type === 'fork'
+        ? '/api/v1/catalog/launch-fork'
+        : '/api/v1/catalog/install-run-community';
+      const body = record.type === 'fork'
+        ? { artifact_id: record.id, acknowledge_risk: true }
+        : { artifact_id: record.id, version_id: versionId, acknowledge_risk: true };
+      const result = await this.api(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      await this.refreshStatus(true);
+      this.setState({ artifactRunBusy: false });
+      await this.addInstanceTab(result.cell);
+      this.flash('Running ' + (record.name || record.slug) + ' · not reviewed by Forge');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.setState({ artifactRunBusy: false });
+      this.flash(error.message);
+    }
+  }
+
+  async syncFullCatalog() {
+    if (this.state.catalogSyncBusy) return;
+    this.setState({ catalogSyncBusy: true, catalogSyncError: '' });
+    try {
+      const result = await this.api('/api/v1/catalog/sync', { method: 'POST', body: '{}' });
+      await this.refreshStatus(true);
+      this.setState({ catalogSyncBusy: false, rails: [], railsType: '' });
+      this.scheduleCatalogRefresh();
+      this.loadRails(this.state.catalogType);
+      this.flash('Loaded ' + Number(result.artifact_count || 0).toLocaleString('en-US') + ' indexed records');
+    } catch (error) {
+      this.setState({ catalogSyncBusy: false, catalogSyncError: error.message });
+      this.flash(error.message);
+    }
+  }
+
   usingCatalogStore(state = this.state) {
     if (!(state.catalogStore && state.catalogStore.available && (state.sidecarConnected || state.catalogStore.public))) return false;
     const counts = state.catalogStore.counts;
     return !counts || Number(counts[state.catalogType] || 0) > 0;
+  }
+
+  async loadRails(type = this.state.catalogType) {
+    if (this.state.railsType === type && this.state.rails.length) return;
+    if (this.isPublicWeb() && !this.state.sidecarConnected) {
+      try {
+        const payload = await this.api('/api/catalog?rails=1&type=' + encodeURIComponent(type));
+        const research = payload.research || {};
+        this.setState({
+          railsType: type,
+          rails: (payload.rails || []).map(rail => ({
+            ...rail,
+            artifacts: (rail.artifacts || []).map(record => mapCatalogRecord({
+              ...record,
+              hidden_gem: research[record.artifact_id] || null
+            }))
+          }))
+        });
+        return;
+      } catch {
+        // fall through to the embedded snapshot
+      }
+    }
+    this.setState({ railsType: type, rails: this.localRails(type) });
+  }
+
+  // Offline equivalent of the published rails, over whatever corpus is loaded.
+  localRails(type) {
+    const pool = [...CATALOG, ...this.state.storeArtifacts]
+      .filter((a, index, all) => a.type === type && all.findIndex(item => item.id === a.id) === index)
+      .filter(a => a.differentiated !== false);
+    if (!pool.length) return [];
+    const byRecent = [...pool].sort((a, b) => (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0));
+    const gems = pool.filter(a => a.hiddenGem || a.featured).slice(0, 12);
+    const capable = a => (a.descriptiveTags || []).length > 0;
+    const novel = byRecent.filter(a => capable(a) && (a.github_stars || 0) <= 200).slice(0, 12);
+    const seen = new Map();
+    for (const a of pool) {
+      const capability = a.primaryCapability;
+      if (!capability) continue;
+      const held = seen.get(capability);
+      if (!held || (a.github_stars || 0) > (held.github_stars || 0)) seen.set(capability, a);
+    }
+    return [
+      { id: 'hidden-gems', title: 'Hidden gems', note: 'Explainable discovery score over low-visibility records. Not a security verdict.', artifacts: gems },
+      { id: 'new-and-novel', title: 'New and novel', note: 'Recently pushed, states a capability, not yet widely known.', artifacts: novel },
+      { id: 'best-in-class', title: 'Best in class', note: 'The leading record for each capability, one per capability.', artifacts: [...seen.values()].slice(0, 12) },
+      { id: 'recently-active', title: 'Recently active', note: 'Most recently pushed. Star velocity needs two snapshots and is not claimed here.', artifacts: byRecent.slice(0, 12) }
+    ].filter(rail => rail.artifacts.length);
   }
 
   async loadPublicCatalog(type = this.state.catalogType) {
@@ -2008,7 +2586,10 @@ class Component extends DCLogic {
   }
 
   catalogQueryKey(state = this.state) {
-    return JSON.stringify([state.query.trim(), state.catalogType, state.catalogSort, !!state.knownLicenseOnly]);
+    return JSON.stringify([
+      state.query.trim(), state.catalogType, state.catalogSort,
+      !!state.knownLicenseOnly, [...state.activeTags].sort(), !!state.differentiatedOnly
+    ]);
   }
 
   /** Fetch one page from the imported catalog store. */
@@ -2025,6 +2606,8 @@ class Component extends DCLogic {
     parameters.set('sort', sortMap[s.catalogSort] || 'relevance');
     parameters.set('limit', '50');
     if (s.knownLicenseOnly) parameters.set('licensed', '1');
+    if (s.activeTags.length) parameters.set('tags', [...s.activeTags].sort().join(','));
+    if (s.differentiatedOnly) parameters.set('differentiated', '1');
     if (append && s.storeCursor) parameters.set('cursor', s.storeCursor);
     this.setState({ storeLoading: true, storeError: '' });
     try {
@@ -2093,7 +2676,9 @@ class Component extends DCLogic {
     try {
       const status = await this.api('/api/v1/status');
       this.applyStatus(status);
-      await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
+      const cells = Array.isArray(status.cells) ? status.cells : [];
+      this.pruneInstanceTabs(cells);
+      await this.refreshAssistantUrl(cells);
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
       if (!silent) this.flash(error.message);
@@ -2189,7 +2774,6 @@ class Component extends DCLogic {
       surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
       home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
     };
-    const pendingWindow = launch.open_browser ? window.open('about:blank', '_blank') : null;
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId,
@@ -2205,9 +2789,8 @@ class Component extends DCLogic {
       await this.refreshStatus(true);
       await this.inspectCell(cell, 'logs');
       this.flash('Launched ' + version.version + ' on port ' + cell.port);
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (launch.open_browser) await this.addInstanceTab(cell);
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
     }
   }
@@ -2225,16 +2808,17 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
-  async openCell(cell, existingWindow = null) {
-    const target = existingWindow || window.open('about:blank', '_blank');
-    for (let attempt = 0; attempt < 30; attempt++) {
-      try {
-        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-        if (target) target.location.replace(payload.url);
-        return;
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+  async openCell(cell) {
+    return this.addInstanceTab(cell);
+  }
+
+  // Secondary action for anyone who wants the session in its own browser window.
+  async openCellWindow(cell) {
+    const target = window.open('about:blank', '_blank');
+    const url = await this.resolveCellUrl(cell);
+    if (url) {
+      if (target) target.location.replace(url);
+      return;
     }
     if (target) target.close();
     this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
@@ -2364,6 +2948,7 @@ class Component extends DCLogic {
           ? this.setState({ logCell: null, logLines: [], artifacts: [] })
           : this.inspectCell(c, 'logs'),
         open: () => this.openCell(c),
+        openWindow: () => this.openCellWindow(c),
         stop: () => this.cellAction(c, 'stop'),
         restart: () => this.cellAction(c, 'restart'),
         clone: () => this.cellAction(c, 'clone'),
@@ -2392,13 +2977,18 @@ class Component extends DCLogic {
 
     const storeActive = this.usingCatalogStore(s);
     const queryTerms = s.query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    // Every active tag must be present, so chips narrow rather than widen.
+    const matchesTags = a => !s.activeTags.length
+      || s.activeTags.every(tag => (a.enrichmentTags || []).includes(tag));
     // The store already applied the query, filters, and sort, so its page is
     // used as-is. Without a store the embedded snapshot is filtered here.
     const embeddedFiltered = CATALOG.filter(a => {
       const searchable = [a.slug, a.description, a.terms, a.type, a.language, a.licenseLabel].join(' ').toLowerCase();
       return queryTerms.every(term => searchable.includes(term)) &&
         a.type === s.catalogType &&
-        (!s.knownLicenseOnly || a.licenseOk);
+        (!s.knownLicenseOnly || a.licenseOk) &&
+        matchesTags(a) &&
+        (!s.differentiatedOnly || a.differentiated !== false);
     }).sort((a, b) => {
       if (s.catalogSort === 'name') return a.slug.localeCompare(b.slug);
       if (s.catalogSort === 'recent') return (Date.parse(b.pushed_at) || 0) - (Date.parse(a.pushed_at) || 0) || (a.seed_rank || 999) - (b.seed_rank || 999);
@@ -2415,7 +3005,7 @@ class Component extends DCLogic {
       .map(item => CATALOG.find(a => a.id === item.id) || s.storeArtifacts.find(a => a.id === item.id) || item)
       .filter(a => {
         const searchable = [a.slug, a.description, a.terms, a.language, a.licenseLabel].join(' ').toLowerCase();
-        return queryTerms.every(term => searchable.includes(term)) && (!s.knownLicenseOnly || a.licenseOk);
+        return queryTerms.every(term => searchable.includes(term)) && (!s.knownLicenseOnly || a.licenseOk) && matchesTags(a);
       });
     // Store pages are keyed by type so a tab switch never shows the previous tab's records.
     const filtered = s.favoritesOnly
@@ -2448,7 +3038,9 @@ class Component extends DCLogic {
       ...a,
       featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
-      tags: ((a.curation && a.curation.taxonomy) || a.topics || []).slice(0, 2),
+      tags: (a.descriptiveTags && a.descriptiveTags.length
+        ? a.descriptiveTags
+        : ((a.curation && a.curation.taxonomy) || a.topics || [])).slice(0, 3),
       riskText: a.riskLabel ? a.riskLabel.replace(/^./, ch => ch.toUpperCase()) : '',
       riskColor: RISK_COLORS[(a.curation && a.curation.security_risk) || (a.risk && a.risk.level)] || MUTED,
       forksLabel: Number.isInteger(a.forks_count) ? a.forks_count.toLocaleString('en-US') : '—',
@@ -2457,6 +3049,15 @@ class Component extends DCLogic {
       aheadLabel: a.divergence ? '+' + a.divergence.ahead_by : '',
       behindLabel: a.divergence ? '/ −' + a.divergence.behind_by : '',
       pushedLabel: catalogDate(a.pushed_at),
+      isFavorite: s.favoriteArtifacts.some(item => item.id === a.id),
+      favoriteClass: (s.favoriteArtifacts.some(item => item.id === a.id) ? 'btn btn-sm btn-icon fav fav-on' : 'btn btn-sm btn-icon fav')
+        + (s.favoritePopId === a.id ? ' fav-pop' : ''),
+      favoriteLabel: s.favoriteArtifacts.some(item => item.id === a.id) ? 'Remove from favorites' : 'Save to favorites',
+      toggleFavorite: event => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (event && event.preventDefault) event.preventDefault();
+        this.toggleFavorite(a);
+      },
       licenseShort: a.licenseOk ? a.licenseLabel : '—',
       select: () => this.selectCatalogArtifact(a)
     }));
@@ -2536,7 +3137,7 @@ class Component extends DCLogic {
         return {
           version: item.primary_tree.version, path: item.path, listed, unlisted: !listed,
           label: listed ? 'Listed by the plugin' : 'Not in the declared list',
-          color: listed ? 'oklch(0.8 0.1 155)' : 'oklch(0.82 0.1 80)'
+          color: listed ? 'var(--green-86)' : 'var(--gold-82)'
         };
       }) : [];
     const divergence = detail.divergence || null;
@@ -2568,14 +3169,14 @@ class Component extends DCLogic {
             ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. Favorites are saved in this browser.'
             : 'Try a name, author, capability, taxonomy term, or clear the current filters.',
           action: s.favoritesOnly ? 'Show all' : 'Clear filters',
-          run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false }); this.scheduleCatalogRefresh(); }
+          run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false, activeTags: [], differentiatedOnly: false }); this.scheduleCatalogRefresh(); }
         };
 
     const livePreview = s.previewData;
     const previewLines = livePreview ? [
       { k: 'tree', v: livePreview.tree.path + '  (' + livePreview.tree.trust + ', ' + livePreview.tree.launchability + ')', color: TXT },
       { k: 'cwd', v: livePreview.cwd, color: TXT },
-      { k: 'argv', v: livePreview.argv.join(' '), color: 'oklch(0.86 0.11 155)' },
+      { k: 'argv', v: livePreview.argv.join(' '), color: 'var(--green-86)' },
       { k: 'home', v: 'DSH_HOME=' + livePreview.home, color: TXT },
       { k: 'env', v: (livePreview.environment_keys || []).join(', ') + ' (keys only)', color: MUTED },
       { k: 'secrets', v: (livePreview.credential_keys || []).length ? livePreview.credential_keys.join(', ') + ' = <injected>' : 'no credential keys present', color: MUTED },
@@ -2588,6 +3189,55 @@ class Component extends DCLogic {
       showLanding: s.view === 'landing',
       showAppShell: s.view !== 'landing',
       showLaunch: s.view === 'launch',
+      hasHomeFavorites: s.favoriteArtifacts.length > 0,
+      homeFavorites: s.favoriteArtifacts.slice(0, 12).map(item => {
+        const record = CATALOG.find(entry => entry.id === item.id)
+          || s.storeArtifacts.find(entry => entry.id === item.id)
+          || mapCatalogRecord({
+            artifact_id: item.id, artifact_type: item.type, full_name: item.slug,
+            name: item.name, owner: item.owner, description: item.description,
+            repository_url: item.url, head_sha: item.head_sha, language: item.language,
+            license: { spdx: item.licenseOk ? item.licenseLabel : '' },
+            github_stars: item.github_stars, pushed_at: item.pushed_at,
+            topics: item.topics || [], package: item.package || null
+          });
+        return {
+          ...record,
+          tags: (record.descriptiveTags || []).slice(0, 2),
+          thumbBg: (record.thumb || {}).bg || 'var(--surface-3)',
+          thumbFg: (record.thumb || {}).fg || 'var(--text-2)',
+          thumbInitials: (record.thumb || {}).initials || '??',
+          kindLabel: record.type === 'fork' ? 'Fork · harness' : 'Plugin',
+          runLabel: s.artifactRunBusy ? 'Starting…' : 'Run',
+          runDisabled: !s.sidecarConnected || !!s.artifactRunBusy,
+          run: event => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.runFavorite(record);
+          },
+          open: () => this.selectCatalogArtifact(record),
+          remove: event => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.toggleFavorite(record);
+          }
+        };
+      }),
+      showInstance: s.view === 'instance',
+      instanceDeckClass: s.view === 'instance' ? 'instance-deck' : 'instance-deck deck-hidden',
+      hasInstanceTabs: s.instanceTabs.length > 0,
+      instanceTabs: s.instanceTabs.map(tab => ({
+        ...tab,
+        className: s.view === 'instance' && s.activeInstanceId === tab.id ? 'itab itab-on' : 'itab',
+        current: s.view === 'instance' && s.activeInstanceId === tab.id ? 'page' : 'false',
+        bodyClass: s.view === 'instance' && s.activeInstanceId === tab.id ? 'iframe-host' : 'iframe-host iframe-hidden',
+        statusLabel: tab.loading ? 'Connecting' : (tab.url ? 'Live' : 'Unavailable'),
+        statusColor: tab.loading ? WARN : (tab.url ? OK : BAD),
+        ready: !!tab.url,
+        pending: !tab.url,
+        pendingLabel: tab.loading ? 'Connecting to this session…' : 'This session is not reachable. Check its logs on the Local tab.',
+        select: () => this.activateInstanceTab(tab.id),
+        close: (event) => { if (event && event.stopPropagation) event.stopPropagation(); this.closeInstanceTab(tab.id); },
+        closeLabel: 'Close ' + tab.title + ' tab'
+      })),
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
       goLaunch: () => this.navigate('launch'),
@@ -2663,6 +3313,58 @@ class Component extends DCLogic {
 
       query: s.query,
       setQuery: e => { this.setState({ query: e.target.value, detailOpen: false, detailArtifact: null }); this.scheduleCatalogRefresh(); },
+      // Rails are a browse surface: once someone searches or filters they want
+      // results, not editorial shelves.
+      showRails: !s.query.trim() && !s.activeTags.length && !s.favoritesOnly && !s.detailOpen && s.rails.length > 0,
+      rails: s.rails.map(rail => ({
+        ...rail,
+        cards: rail.artifacts.map(a => ({
+          ...a,
+          tags: (a.descriptiveTags || []).slice(0, 2),
+          thumbBg: (a.thumb || {}).bg || 'var(--surface-3)',
+          thumbFg: (a.thumb || {}).fg || 'var(--text-2)',
+          thumbInitials: (a.thumb || {}).initials || '??',
+          gemLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
+          hasGem: !!(a.hiddenGem && a.hiddenGem.candidate) || !!a.featured,
+          capabilityLabel: (a.rail_capability || a.primaryCapability || '').replace(/-/g, ' '),
+          hasCapability: !!(a.rail_capability || a.primaryCapability),
+          select: () => this.selectCatalogArtifact(a)
+        }))
+      })),
+      facetGroups: (() => {
+        const counts = new Map();
+        for (const a of filtered) {
+          for (const tag of (a.enrichmentTags || [])) counts.set(tag, (counts.get(tag) || 0) + 1);
+        }
+        for (const tag of s.activeTags) if (!counts.has(tag)) counts.set(tag, 0);
+        const ordered = [...counts.entries()]
+          .sort((a, b) => (s.activeTags.includes(b[0]) ? 1 : 0) - (s.activeTags.includes(a[0]) ? 1 : 0)
+            || b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 14);
+        return ordered.map(([tag, count]) => ({
+          tag,
+          label: tag.replace(/-/g, ' '),
+          count: count.toLocaleString('en-US'),
+          className: s.activeTags.includes(tag) ? 'chip chip-on' : 'chip',
+          pressed: s.activeTags.includes(tag),
+          toggle: () => {
+            const next = s.activeTags.includes(tag)
+              ? s.activeTags.filter(item => item !== tag)
+              : [...s.activeTags, tag];
+            this.setState({ activeTags: next, detailOpen: false });
+            this.scheduleCatalogRefresh();
+          }
+        }));
+      })(),
+      hasActiveTags: s.activeTags.length > 0,
+      activeTagCount: s.activeTags.length,
+      clearTags: () => { this.setState({ activeTags: [], detailOpen: false }); this.scheduleCatalogRefresh(); },
+      differentiatedOnly: s.differentiatedOnly,
+      differentiatedChipClass: s.differentiatedOnly ? 'chip chip-on' : 'chip',
+      toggleDifferentiated: () => {
+        this.setState({ differentiatedOnly: !s.differentiatedOnly, detailOpen: false });
+        this.scheduleCatalogRefresh();
+      },
       catalogSort: s.catalogSort,
       setCatalogSort: e => { this.setState({ catalogSort: e.target.value }); this.scheduleCatalogRefresh(); },
       knownLicenseOnly: s.knownLicenseOnly,
@@ -2698,9 +3400,29 @@ class Component extends DCLogic {
           this.refreshCatalog({ append: true });
         }
       },
+      // "End of results" over the 17-record embedded snapshot read as "this is
+      // the whole catalog". Say which corpus this is instead.
       catalogFeedStatus: s.favoritesOnly
         ? 'Favorites are saved in this browser only'
-        : (catalogPending ? 'Loading results…' : (s.storeCursor ? 'Scroll for more' : 'End of results')),
+        : (catalogPending
+          ? 'Loading results…'
+          : (storeActive
+            ? 'Showing ' + results.length.toLocaleString('en-US') + ' of '
+              + Number(s.storeTotal || results.length).toLocaleString('en-US')
+              + (s.storeCursor ? '' : ' · end of results')
+            : 'Offline snapshot · ' + results.length.toLocaleString('en-US')
+              + ' bundled record(s), not the full index')),
+      showLoadMore: storeActive && !!s.storeCursor && !s.favoritesOnly,
+      loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more',
+      loadMoreDisabled: !!s.storeLoading,
+      loadMore: () => this.refreshCatalog({ append: true }),
+      // Offered whenever the browser is not already serving the imported corpus.
+      showCatalogSync: !!s.sidecarConnected && !storeActive && !s.favoritesOnly,
+      catalogSyncLabel: s.catalogSyncBusy ? 'Loading the full index…' : 'Load the full catalog',
+      catalogSyncDisabled: !!s.catalogSyncBusy,
+      catalogSyncError: s.catalogSyncError,
+      hasCatalogSyncError: !!s.catalogSyncError,
+      syncFullCatalog: () => this.syncFullCatalog(),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
           ? 'Explainable hidden-gem priority · metadata only, not a security verdict'
@@ -2710,6 +3432,14 @@ class Component extends DCLogic {
       noResults: results.length === 0 && !catalogPending,
       hasDetail: !!detail.id,
       noDetail: !detail.id,
+      detailRowCount: detailRows.length ? detailRows.length + ' fields' : '',
+      // One plain sentence replaces the pile of digests above the fold. The feed
+      // reports security_verified: false, so this never implies a review.
+      detailTrustLine: !detail.id ? '' : (detail.catalogPackage
+        ? 'Signed package metadata. Components are pinned to exact versions. Forge has not run or reviewed them.'
+        : (artifactExecution.eligible
+          ? 'Runs sandboxed from a pinned commit. Forge has not reviewed this code.'
+          : 'Community code. It runs sandboxed if you install it. Forge has not reviewed it.')),
       showCatalogFeed: !s.detailOpen,
       showArtifactPage: s.detailOpen,
       detail,
@@ -2755,7 +3485,7 @@ class Component extends DCLogic {
       riskLevelLabel: detailRiskLevel.replace(/^./, ch => ch.toUpperCase()),
       riskLevelColor: RISK_COLORS[detailRiskLevel] || MUTED,
       riskSegments: RISK_LEVELS.map((level, index) => ({
-        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'oklch(0.28 0.012 255)'
+        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'var(--risk-off)'
       })),
       forkUpstream: detail.source_repository || detail.parent_repository || 'Upstream not reported',
       forkHead: (detail.default_branch || 'default branch') + ' @ ' + (detail.head_sha ? detail.head_sha.slice(0, 7) : 'not captured'),
@@ -2829,6 +3559,12 @@ class Component extends DCLogic {
       })),
       noConfigurations: s.configurations.length === 0,
 
+      communityRunAvailable: !artifactExecution.eligible && communityInstallable(detail) && !!s.sidecarConnected,
+      communityRunDisabled: !selectedPackageVersion || s.artifactRunBusy,
+      communityRunLabel: s.artifactRunBusy ? 'Installing…' : 'Install and run unverified',
+      communityRun: () => detail.id ? this.confirmCommunityRun(detail) : undefined,
+      isCommunityRun: s.artifactRunLane === 'community',
+      isVerifiedRun: s.artifactRunLane !== 'community',
       artifactRunConfirmationOpen: !!s.artifactRunConfirmation,
       artifactRunBusy: s.artifactRunBusy,
       artifactRunArtifact: s.artifactRunConfirmation || {},

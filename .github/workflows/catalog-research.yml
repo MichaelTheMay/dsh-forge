@@ -26,6 +26,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/analyze_registry.py --snapshot dist/registry-raw.json --output dist/registry.json
+      - name: Tag every record for discovery
+        run: >-
+          python3 scripts/enrich_registry.py
+          --snapshot dist/registry.json
+          --output dist/registry.json
+          --facets dist/facets.json
+          --force
       - name: Build the evidence-ranked hidden-gem queue
         run: python3 scripts/research_catalog.py --snapshot dist/registry.json --output dist/hidden-gems.json
       - name: Build the compressed public feed
@@ -48,6 +55,16 @@ jobs:
           assert queue['quality']['selection_policy'] == 'dsh-forge.discovery-diversity/v1'
           assert queue['quality']['unique_owners'] > 0
           assert registry['coverage']
+          records = [*registry.get('entries', []), *registry.get('supplemental_entries', [])]
+          assert records, 'registry must not be empty'
+          enriched = [r for r in records if isinstance(r.get('enrichment'), dict)]
+          assert len(enriched) == len(records), 'every record must carry enrichment'
+          meta = registry['enrichment_metadata']
+          assert meta['schema'] == 'dsh-forge.enrichment/v1'
+          assert meta['claims']['executed'] is False
+          assert all(isinstance(r['enrichment'].get('tags'), list) for r in enriched)
+          differentiated = sum(1 for r in enriched if r['enrichment']['differentiated'])
+          assert differentiated > 0, 'no record carries a distinguishing signal'
           assert all(item['status'] in {'complete', 'incomplete'} for item in registry['coverage'])
           analysis = next(item for item in registry['coverage'] if item['source'] == 'github-rest/fork-analysis')
           assert analysis['selected_count'] == analysis['analyzed_count'] + analysis['failed_count']

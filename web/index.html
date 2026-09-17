@@ -18,57 +18,165 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
-  html, body { margin: 0; padding: 0; background: oklch(0.185 0.008 255); }
+  /* ---- Primitive ramps (OKLCH). Single source of truth for colour. ---- */
+  :root {
+    /* n */
+    --n-18: oklch(0.184 0.0083 255);
+    --n-21: oklch(0.212 0.0101 255);
+    --n-25: oklch(0.248 0.0107 255);
+    --n-29: oklch(0.285 0.012 255);
+    --n-32: oklch(0.323 0.0128 255);
+    --n-35: oklch(0.35 0.0136 255);
+    --n-38: oklch(0.38 0.02 255);
+    --n-42: oklch(0.42 0.02 255);
+    --n-51: oklch(0.51 0.012 255);
+    --n-58: oklch(0.575 0.0127 255);
+    --n-61: oklch(0.608 0.0138 255);
+    --n-65: oklch(0.65 0.0125 255);
+    --n-69: oklch(0.69 0.0125 255);
+    --n-73: oklch(0.73 0.012 255);
+    --n-76: oklch(0.76 0.012 255);
+    --n-81: oklch(0.81 0.011 255);
+    --n-86: oklch(0.86 0.011 255);
+    --n-90: oklch(0.905 0.01 255);
+    --n-94: oklch(0.935 0.0075 255);
+    /* blue */
+    --blue-28: oklch(0.285 0.0383 235);
+    --blue-32: oklch(0.32 0.05 235);
+    --blue-46: oklch(0.455 0.08 235);
+    --blue-53: oklch(0.53 0.055 235);
+    --blue-58: oklch(0.58 0.11 235);
+    --blue-69: oklch(0.69 0.1 235);
+    --blue-74: oklch(0.74 0.12 235);
+    --blue-79: oklch(0.79 0.095 235);
+    --blue-85: oklch(0.853 0.0967 235);
+    --blue-88: oklch(0.88 0.08 235);
+    --blue-92: oklch(0.92 0.06 235);
+    /* purple */
+    --purple-28: oklch(0.28 0.0425 300);
+    --purple-33: oklch(0.33 0.055 300);
+    --purple-48: oklch(0.48 0.08 300);
+    --purple-72: oklch(0.72 0.12 300);
+    --purple-79: oklch(0.79 0.105 300);
+    --purple-83: oklch(0.827 0.0933 300);
+    --purple-86: oklch(0.86 0.09 300);
+    --purple-94: oklch(0.935 0.055 300);
+    /* green */
+    --green-29: oklch(0.285 0.05 155);
+    --green-34: oklch(0.34 0.08 155);
+    --green-38: oklch(0.38 0.09 155);
+    --green-52: oklch(0.52 0.13 155);
+    --green-86: oklch(0.86 0.1033 155);
+    --green-96: oklch(0.96 0.035 155);
+    /* gold */
+    --gold-29: oklch(0.29 0.05 85);
+    --gold-32: oklch(0.32 0.06 85);
+    --gold-62: oklch(0.62 0.12 85);
+    --gold-82: oklch(0.82 0.07 85);
+    --gold-87: oklch(0.87 0.12 84);
+    --gold-91: oklch(0.91 0.09 84);
+    /* amber */
+    --amber-23: oklch(0.232 0.0275 73.5);
+    --amber-30: oklch(0.3 0.05 75);
+    --amber-42: oklch(0.42 0.075 70);
+    --amber-50: oklch(0.5 0.09 72);
+    --amber-79: oklch(0.793 0.0933 71.7);
+    --amber-82: oklch(0.82 0.05 75);
+    --shadow-a: oklch(0.05 0.01 255 / 0.5);
+    --shadow-b: oklch(0.05 0.01 255 / 0.7);
+    --scrim: oklch(0.1 0.008 255 / 0.8);
+    --gold-glow: oklch(0.84 0.13 85 / .5);
+    --gold-glow-0: oklch(0.84 0.13 85 / 0);
+
+    /* ---- Semantic aliases. Prefer these in new rules. ---- */
+    --bg: var(--n-18);
+    --surface: var(--n-21);
+    --surface-2: var(--n-25);
+    --surface-3: var(--n-29);
+    --line: var(--n-29);
+    --line-2: var(--n-32);
+    --line-3: var(--n-35);
+    --text: var(--n-94);
+    --text-2: var(--n-86);
+    --text-3: var(--n-76);
+    --muted: var(--n-61);
+    --faint: var(--n-58);
+    --accent: var(--blue-79);
+    --accent-quiet: var(--blue-28);
+    --fork: var(--purple-79);
+    --fork-quiet: var(--purple-28);
+    --ok: var(--green-86);
+    --warn: var(--amber-79);
+    --gold-fav: var(--gold-87);
+
+    /* ---- Status / risk ramp (also consumed from launcher.js) ---- */
+    --status-ok: oklch(0.74 0.15 155);
+    --status-warn: oklch(0.8 0.14 85);
+    --status-bad: oklch(0.7 0.16 25);
+    --status-info: oklch(0.74 0.12 235);
+    --risk-low: oklch(0.74 0.14 155);
+    --risk-medium: oklch(0.8 0.11 85);
+    --risk-medium-high: oklch(0.78 0.12 65);
+    --risk-high: oklch(0.74 0.13 45);
+    --risk-critical: oklch(0.7 0.15 25);
+    --risk-off: var(--n-29);
+
+    /* ---- Shape & rhythm ---- */
+    --r-sm: 6px; --r-md: 7px; --r-lg: 9px; --r-xl: 12px; --r-pill: 999px;
+    --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px;
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--n-18); }
   * { box-sizing: border-box; }
-  a { color: oklch(0.78 0.11 235); text-decoration: none; }
-  a:hover { color: oklch(0.86 0.11 235); text-decoration: underline; }
-  ::selection { background: oklch(0.45 0.09 235); }
+  a { color: var(--blue-79); text-decoration: none; }
+  a:hover { color: var(--blue-85); text-decoration: underline; }
+  ::selection { background: var(--blue-46); }
   h1, h2, h3, p, dl, dd, ul { margin: 0; }
   input, select, button, textarea { font-family: inherit; }
   button { cursor: pointer; }
   button:disabled { cursor: not-allowed; opacity: .45; }
-  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid oklch(0.74 0.12 235); outline-offset: 2px; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--blue-74); outline-offset: 2px; }
   @keyframes dshpulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
   .mono { font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .spacer { flex: 1 1 auto; }
-  .note { font-size: 12px; line-height: 1.6; color: oklch(0.62 0.013 255); }
-  .prose { font-size: 13.5px; line-height: 1.65; color: oklch(0.8 0.01 255); overflow-wrap: anywhere; text-wrap: pretty; }
-  .label { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: oklch(0.62 0.014 255); }
+  .note { font-size: 12px; line-height: 1.6; color: var(--n-61); }
+  .prose { font-size: 13.5px; line-height: 1.65; color: var(--n-81); overflow-wrap: anywhere; text-wrap: pretty; }
+  .label { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--n-61); }
   .h2 { font-size: 15px; font-weight: 600; }
   .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
 
   /* Shell */
-  .app-root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: oklch(0.185 0.008 255); color: oklch(0.93 0.006 255); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
-  .app-header { flex: 0 0 auto; display: flex; align-items: center; gap: 36px; height: 56px; padding: 0 28px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255); }
+  .app-root { position: relative; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--n-18); color: var(--n-94); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .app-header { flex: 0 0 auto; display: flex; align-items: center; gap: 36px; height: 56px; padding: 0 28px; border-bottom: 1px solid var(--n-29); background: var(--n-21); }
   .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
   .tabs { display: flex; gap: 26px; align-self: stretch; }
-  .tab { display: flex; align-items: center; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: oklch(0.66 0.012 255); font-size: 13px; font-weight: 500; white-space: nowrap; }
-  .tab:hover { color: oklch(0.86 0.01 255); }
-  .tab-on { color: oklch(0.95 0.006 255); border-bottom-color: oklch(0.78 0.11 235); }
-  .tab-fork.tab-on { border-bottom-color: oklch(0.78 0.11 300); }
-  .status-pill { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-size: 11.5px; color: oklch(0.7 0.012 255); white-space: nowrap; }
+  .tab { display: flex; align-items: center; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--n-65); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .tab:hover { color: var(--n-86); }
+  .tab-on { color: var(--n-94); border-bottom-color: var(--blue-79); }
+  .tab-fork.tab-on { border-bottom-color: var(--purple-79); }
+  .status-pill { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid var(--n-32); border-radius: 999px; font-size: 11.5px; color: var(--n-69); white-space: nowrap; }
   .update-link { font: 500 11.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
   .page { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .page-inner { width: min(1120px, 100%); margin: 0 auto; padding: 40px 28px 56px; display: flex; flex-direction: column; gap: 32px; }
   .page-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; }
   .page-title { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
-  .page-lede { margin-top: 8px; max-width: 720px; font-size: 13.5px; color: oklch(0.7 0.012 255); }
+  .page-lede { margin-top: 8px; max-width: 720px; font-size: 13.5px; color: var(--n-69); }
   .head-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
-  .head-count { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: oklch(0.62 0.013 255); }
+  .head-count { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; color: var(--n-61); }
 
   /* Controls */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 7px; border: 1px solid oklch(0.36 0.018 255); background: oklch(0.235 0.01 255); color: oklch(0.86 0.012 255); font-size: 12.5px; font-weight: 500; white-space: nowrap; text-decoration: none; }
-  .btn:hover:not(:disabled) { background: oklch(0.27 0.012 255); color: oklch(0.93 0.01 255); text-decoration: none; }
-  .btn-go { border-color: oklch(0.52 0.13 155); background: oklch(0.34 0.08 155); color: oklch(0.95 0.04 155); font-weight: 600; }
-  .btn-go:hover:not(:disabled) { background: oklch(0.38 0.09 155); color: oklch(0.97 0.03 155); }
-  .btn-go:disabled, .btn-fork:disabled, .btn-primary:disabled { border-color: oklch(0.33 0.014 255); background: oklch(0.23 0.01 255); color: oklch(0.72 0.012 255); opacity: .75; }
-  .btn-primary { border-color: oklch(0.46 0.07 235); background: oklch(0.285 0.04 235); color: oklch(0.88 0.08 235); }
-  .btn-primary:hover:not(:disabled) { background: oklch(0.32 0.05 235); color: oklch(0.92 0.07 235); }
-  .btn-fork { border-color: oklch(0.48 0.08 300); background: oklch(0.29 0.045 300); color: oklch(0.92 0.06 300); font-weight: 600; }
-  .btn-fork:hover:not(:disabled) { background: oklch(0.33 0.055 300); color: oklch(0.95 0.05 300); }
-  .btn-ghost { background: transparent; border-color: transparent; color: oklch(0.72 0.012 255); }
-  .btn-ghost:hover:not(:disabled) { background: oklch(0.25 0.012 255); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--n-35); background: var(--n-25); color: var(--n-86); font-size: 12.5px; font-weight: 500; white-space: nowrap; text-decoration: none; }
+  .btn:hover:not(:disabled) { background: var(--n-29); color: var(--n-94); text-decoration: none; }
+  .btn-go { border-color: var(--green-52); background: var(--green-34); color: var(--green-96); font-weight: 600; }
+  .btn-go:hover:not(:disabled) { background: var(--green-38); color: var(--green-96); }
+  .btn-go:disabled, .btn-fork:disabled, .btn-primary:disabled { border-color: var(--n-32); background: var(--n-21); color: var(--n-73); opacity: .75; }
+  .btn-primary { border-color: var(--blue-46); background: var(--blue-28); color: var(--blue-88); }
+  .btn-primary:hover:not(:disabled) { background: var(--blue-32); color: var(--blue-92); }
+  .btn-fork { border-color: var(--purple-48); background: var(--purple-28); color: var(--purple-94); font-weight: 600; }
+  .btn-fork:hover:not(:disabled) { background: var(--purple-33); color: var(--purple-94); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--n-73); }
+  .btn-ghost:hover:not(:disabled) { background: var(--n-25); }
   .btn-sm { height: 28px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
   .btn-lg { height: 40px; font-size: 13px; }
   .btn-block { width: 100%; }
@@ -77,218 +185,273 @@
   /* Favorite eases between neutral and gold; saving also pops the bookmark once. */
   .fav { transition: color .3s ease, border-color .3s ease, background-color .3s ease; }
   .fav-icon path { fill: transparent; transition: fill .3s ease; }
-  .btn.fav-on { border-color: oklch(0.62 0.12 85); background: oklch(0.29 0.05 85); color: oklch(0.88 0.13 88); }
-  .btn.fav-on:hover:not(:disabled) { background: oklch(0.32 0.06 85); color: oklch(0.92 0.12 88); }
+  .btn.fav-on { border-color: var(--gold-62); background: var(--gold-29); color: var(--gold-87); }
+  .btn.fav-on:hover:not(:disabled) { background: var(--gold-32); color: var(--gold-91); }
   .fav-on .fav-icon path { fill: currentColor; }
   .btn.fav-pop { animation: favglow .6s ease-out; }
   .fav-pop .fav-icon { animation: favpop .45s cubic-bezier(.3, 1.6, .5, 1); }
   @keyframes favpop { 0% { transform: scale(.6); } 60% { transform: scale(1.3); } 100% { transform: scale(1); } }
-  @keyframes favglow { from { box-shadow: 0 0 0 0 oklch(0.84 0.13 85 / .5); } to { box-shadow: 0 0 0 9px oklch(0.84 0.13 85 / 0); } }
+  @keyframes favglow { from { box-shadow: 0 0 0 0 var(--gold-glow); } to { box-shadow: 0 0 0 9px var(--gold-glow-0); } }
   @media (prefers-reduced-motion: reduce) {
     .fav, .fav-icon path { transition: none; }
     .btn.fav-pop, .fav-pop .fav-icon { animation: none; }
   }
-  .select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid oklch(0.35 0.012 255); border-radius: 7px; background: oklch(0.185 0.008 255); color: oklch(0.9 0.01 255); font-size: 12.5px; }
-  .select-sm { height: 30px; padding: 0 8px; border: 1px solid oklch(0.35 0.012 255); border-radius: 6px; background: oklch(0.2 0.009 255); color: oklch(0.86 0.012 255); font-size: 12px; }
-  .field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: oklch(0.64 0.013 255); }
-  .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 5px; background: oklch(0.25 0.012 255); color: oklch(0.76 0.014 255); font-size: 11.5px; white-space: nowrap; }
+  .select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--n-35); border-radius: 7px; background: var(--n-18); color: var(--n-90); font-size: 12.5px; }
+  .select-sm { height: 30px; padding: 0 8px; border: 1px solid var(--n-35); border-radius: 6px; background: var(--n-21); color: var(--n-86); font-size: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--n-65); }
+  .tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 5px; background: var(--n-25); color: var(--n-76); font-size: 11.5px; white-space: nowrap; }
   .tag-mono { font: 500 11px 'IBM Plex Mono', monospace; }
-  .tag-ok { background: oklch(0.27 0.04 155); color: oklch(0.86 0.09 155); }
+  .tag-ok { background: var(--green-29); color: var(--green-86); }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid oklch(0.33 0.012 255); color: oklch(0.7 0.012 255); font-size: 12px; font-weight: 500; white-space: nowrap; }
-  .pill-ok { border-color: transparent; background: oklch(0.27 0.04 155); color: oklch(0.86 0.1 155); }
-  .gem { display: inline-flex; align-items: center; flex: 0 0 auto; height: 20px; padding: 0 7px; border-radius: 5px; background: oklch(0.27 0.04 235); color: oklch(0.86 0.09 235); font: 500 10.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
-  .gem-fork { background: oklch(0.27 0.04 300); color: oklch(0.86 0.09 300); }
-  .stars { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; font: 12px 'IBM Plex Mono', monospace; color: oklch(0.82 0.07 85); }
-  .tile { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 9px; background: oklch(0.27 0.04 235); color: oklch(0.84 0.09 235); }
-  .tile-fork { background: oklch(0.27 0.04 300); color: oklch(0.84 0.09 300); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; border: 1px solid var(--n-32); color: var(--n-69); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pill-ok { border-color: transparent; background: var(--green-29); color: var(--green-86); }
+  .gem { display: inline-flex; align-items: center; flex: 0 0 auto; height: 20px; padding: 0 7px; border-radius: 5px; background: var(--blue-28); color: var(--blue-85); font: 500 10.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .gem-fork { background: var(--purple-28); color: var(--purple-86); }
+  .stars { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; font: 12px 'IBM Plex Mono', monospace; color: var(--gold-82); }
+  .tile { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 9px; background: var(--blue-28); color: var(--blue-85); }
+  .tile-fork { background: var(--purple-28); color: var(--purple-83); }
   .tile-sm { width: 32px; height: 32px; border-radius: 8px; }
   .tile-lg { width: 56px; height: 56px; border-radius: 12px; }
-  .panel { border: 1px solid oklch(0.3 0.012 255); border-radius: 12px; background: oklch(0.205 0.01 255); overflow: hidden; }
-  .card { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 22px 24px; border: 1px solid oklch(0.3 0.012 255); border-radius: 12px; background: oklch(0.205 0.01 255); }
+  .panel { border: 1px solid var(--n-29); border-radius: 12px; background: var(--n-21); overflow: hidden; }
+  .card { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 22px 24px; border: 1px solid var(--n-29); border-radius: 12px; background: var(--n-21); }
   .card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  .divider { height: 1px; background: oklch(0.28 0.012 255); }
-  .empty { padding: 36px 24px; border: 1px dashed oklch(0.34 0.014 255); border-radius: 12px; text-align: center; color: oklch(0.64 0.013 255); }
-  .empty h2 { margin-bottom: 8px; color: oklch(0.9 0.008 255); font-size: 15px; font-weight: 600; }
+  .divider { height: 1px; background: var(--n-29); }
+  .empty { padding: 36px 24px; border: 1px dashed var(--n-35); border-radius: 12px; text-align: center; color: var(--n-65); }
+  .empty h2 { margin-bottom: 8px; color: var(--n-90); font-size: 15px; font-weight: 600; }
   .empty p { max-width: 480px; margin: 0 auto; font-size: 13px; line-height: 1.6; }
   .empty .btn { margin-top: 16px; }
   .empty-sm { padding: 18px; font-size: 12.5px; }
 
   /* Local */
-  .sandbox-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: oklch(0.72 0.012 255); }
+  .sandbox-status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--n-73); }
   .sandbox-status .dot { width: 7px; height: 7px; }
-  .platform-note { padding: 13px 16px; border: 1px solid oklch(0.42 0.06 75); border-radius: 9px; background: oklch(0.225 0.02 75); color: oklch(0.82 0.05 75); font-size: 12.5px; line-height: 1.55; }
-  .panel > * + * { border-top: 1px solid oklch(0.3 0.012 255); }
+  .platform-note { padding: 13px 16px; border: 1px solid var(--amber-42); border-radius: 9px; background: var(--amber-23); color: var(--amber-82); font-size: 12.5px; line-height: 1.55; }
+  .panel > * + * { border-top: 1px solid var(--n-29); }
   .vrow { display: flex; align-items: center; gap: 20px; padding: 18px 22px; }
   .vstatus { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; }
-  .vstatus-ring { border: 1.5px solid oklch(0.78 0.1 75); }
+  .vstatus-ring { border: 1.5px solid var(--amber-79); }
   .vname { flex: 0 0 230px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .vversion { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
-  .vversion-muted { color: oklch(0.72 0.012 255); }
-  .vsub { font: 11.5px 'IBM Plex Mono', monospace; color: oklch(0.62 0.013 255); overflow-wrap: anywhere; }
+  .vversion-muted { color: var(--n-73); }
+  .vsub { font: 11.5px 'IBM Plex Mono', monospace; color: var(--n-61); overflow-wrap: anywhere; }
   .vpath { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .vpath-text { font: 12.5px 'IBM Plex Mono', monospace; color: oklch(0.82 0.012 255); overflow-wrap: anywhere; }
-  .vmeta { font-size: 12px; color: oklch(0.62 0.013 255); }
-  .vmeta-warn { color: oklch(0.8 0.09 75); }
+  .vpath-text { font: 12.5px 'IBM Plex Mono', monospace; color: var(--n-81); overflow-wrap: anywhere; }
+  .vmeta { font-size: 12px; color: var(--n-61); }
+  .vmeta-warn { color: var(--amber-79); }
   .vactions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
-  .vsettings { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; padding: 0 22px 16px 51px; font-size: 12.5px; color: oklch(0.74 0.012 255); }
+  .vsettings { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; padding: 0 22px 16px 51px; font-size: 12.5px; color: var(--n-73); }
   .vsettings label { display: flex; align-items: center; gap: 8px; }
-  .vsettings input { accent-color: oklch(0.69 0.1 235); margin: 0; }
-  .group-head { padding: 12px 22px; font-size: 12.5px; font-weight: 600; color: oklch(0.8 0.01 255); }
-  .crow { display: flex; align-items: center; gap: 16px; padding: 10px 22px 10px 51px; border-top: 1px solid oklch(0.27 0.012 255); background: oklch(0.195 0.009 255); }
+  .vsettings input { accent-color: var(--blue-69); margin: 0; }
+  .group-head { padding: 12px 22px; font-size: 12.5px; font-weight: 600; color: var(--n-81); }
+  .crow { display: flex; align-items: center; gap: 16px; padding: 10px 22px 10px 51px; border-top: 1px solid var(--n-29); background: var(--n-18); }
   .cdot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; }
-  .cname { flex: 0 1 190px; min-width: 0; font: 12px 'IBM Plex Mono', monospace; color: oklch(0.86 0.012 255); overflow-wrap: anywhere; }
+  .cname { flex: 0 1 190px; min-width: 0; font: 12px 'IBM Plex Mono', monospace; color: var(--n-86); overflow-wrap: anywhere; }
   .cstate { flex: 0 0 70px; font-size: 12px; }
-  .cport { flex: 0 0 140px; font: 12px 'IBM Plex Mono', monospace; color: oklch(0.7 0.012 255); }
-  .cup { font: 12px 'IBM Plex Mono', monospace; color: oklch(0.6 0.013 255); white-space: nowrap; }
+  .cport { flex: 0 0 140px; font: 12px 'IBM Plex Mono', monospace; color: var(--n-69); }
+  .cup { font: 12px 'IBM Plex Mono', monospace; color: var(--n-61); white-space: nowrap; }
   .cactions { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
-  .cpanel { display: flex; flex-direction: column; gap: 10px; padding: 4px 22px 16px 51px; background: oklch(0.195 0.009 255); }
+  .cpanel { display: flex; flex-direction: column; gap: 10px; padding: 4px 22px 16px 51px; background: var(--n-18); }
   .cpanel-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-  .seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid oklch(0.3 0.012 255); border-radius: 7px; background: oklch(0.2 0.009 255); }
-  .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: oklch(0.66 0.012 255); font-size: 12px; }
-  .seg button.on { background: oklch(0.3 0.035 235); color: oklch(0.93 0.01 255); }
-  .logbox { max-height: 300px; overflow: auto; padding: 10px 12px; border-radius: 8px; background: oklch(0.165 0.008 255); font: 11.5px/1.7 'IBM Plex Mono', monospace; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--n-29); border-radius: 7px; background: var(--n-21); }
+  .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--n-65); font-size: 12px; }
+  .seg button.on { background: var(--blue-28); color: var(--n-94); }
+  .logbox { max-height: 300px; overflow: auto; padding: 10px 12px; border-radius: 8px; background: var(--n-18); font: 11.5px/1.7 'IBM Plex Mono', monospace; }
   .logline { display: flex; gap: 10px; }
-  .log-t { flex: 0 0 auto; color: oklch(0.52 0.01 255); }
+  .log-t { flex: 0 0 auto; color: var(--n-51); }
   .log-level { flex: 0 0 56px; }
-  .log-msg { color: oklch(0.82 0.01 255); overflow-wrap: anywhere; }
+  .log-msg { color: var(--n-81); overflow-wrap: anywhere; }
   .files { display: flex; flex-direction: column; gap: 6px; }
-  .file { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid oklch(0.28 0.012 255); border-radius: 6px; font: 11.5px 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
+  .file { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--n-29); border-radius: 6px; font: 11.5px 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
   .section { display: flex; flex-direction: column; gap: 14px; }
   .section-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
   .prow { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 13px 22px; }
   .pname { flex: 0 1 250px; min-width: 0; font: 13px 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
-  .ptask { flex: 1 0 100%; min-height: 56px; resize: vertical; padding: 8px 10px; border: 1px solid oklch(0.34 0.012 255); border-radius: 7px; background: oklch(0.18 0.008 255); color: oklch(0.9 0.01 255); font: 12px 'IBM Plex Mono', monospace; }
+  .ptask { flex: 1 0 100%; min-height: 56px; resize: vertical; padding: 8px 10px; border: 1px solid var(--n-35); border-radius: 7px; background: var(--n-18); color: var(--n-90); font: 12px 'IBM Plex Mono', monospace; }
 
   /* Browsers */
   .public-browser { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
   .browser { width: min(1440px, 100%); margin: 0 auto; padding: 36px 40px 48px; display: flex; flex-direction: column; gap: 16px; }
   .browser .page-head { margin-bottom: 12px; }
   .controls { display: flex; gap: 10px; }
-  .search { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-width: 0; height: 40px; padding: 0 14px; border: 1px solid oklch(0.35 0.012 255); border-radius: 8px; background: oklch(0.215 0.01 255); color: oklch(0.6 0.015 255); }
-  .search:focus-within { border-color: oklch(0.58 0.11 235); }
-  .search input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: oklch(0.93 0.008 255); font-size: 13px; }
-  .search input::placeholder { color: oklch(0.58 0.015 255); }
-  .sort { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 14px; border: 1px solid oklch(0.35 0.012 255); border-radius: 8px; background: oklch(0.235 0.01 255); color: oklch(0.6 0.013 255); font-size: 12.5px; }
-  .sort select { height: 100%; border: 0; outline: none; background: transparent; color: oklch(0.86 0.012 255); font-size: 12.5px; }
-  .sort option { background: oklch(0.235 0.01 255); }
+  .search { flex: 1 1 auto; display: flex; align-items: center; gap: 10px; min-width: 0; height: 40px; padding: 0 14px; border: 1px solid var(--n-35); border-radius: 8px; background: var(--n-21); color: var(--n-61); }
+  .search:focus-within { border-color: var(--blue-58); }
+  .search input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--n-94); font-size: 13px; }
+  .search input::placeholder { color: var(--n-58); }
+  .sort { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 8px 0 14px; border: 1px solid var(--n-35); border-radius: 8px; background: var(--n-25); color: var(--n-61); font-size: 12.5px; }
+  .sort select { height: 100%; border: 0; outline: none; background: transparent; color: var(--n-86); font-size: 12.5px; }
+  .sort option { background: var(--n-25); }
   .filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-  .filters-note { margin-left: auto; font-size: 11.5px; color: oklch(0.58 0.013 255); }
-  .chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 1px solid oklch(0.33 0.012 255); border-radius: 999px; background: transparent; color: oklch(0.76 0.012 255); font-size: 12.5px; white-space: nowrap; cursor: pointer; }
-  .chip:hover { border-color: oklch(0.42 0.02 255); }
-  .chip-on { border-color: oklch(0.46 0.07 235); background: oklch(0.285 0.04 235); color: oklch(0.92 0.05 235); }
-  .chip input { margin: 0; accent-color: oklch(0.69 0.1 235); }
+  .filters-note { margin-left: auto; font-size: 11.5px; color: var(--n-58); }
+  .chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 1px solid var(--n-32); border-radius: 999px; background: transparent; color: var(--n-76); font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+  .chip:hover { border-color: var(--n-42); }
+  .chip-on { border-color: var(--blue-46); background: var(--blue-28); color: var(--blue-92); }
+  .chip input { margin: 0; accent-color: var(--blue-69); }
   .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
-  .pcard { display: flex; flex-direction: column; gap: 14px; width: 100%; min-width: 0; padding: 20px; border: 1px solid oklch(0.31 0.013 255); border-radius: 12px; background: oklch(0.205 0.01 255); color: inherit; font: inherit; text-align: left; transition: border-color .15s, transform .15s; }
-  .pcard:hover { border-color: oklch(0.53 0.055 235); transform: translateY(-1px); }
+  .pcard { display: flex; flex-direction: column; gap: 14px; width: 100%; min-width: 0; padding: 20px; border: 1px solid var(--n-32); border-radius: 12px; background: var(--n-21); color: inherit; font: inherit; text-align: left; transition: border-color .15s, transform .15s; }
+  .pcard:hover { border-color: var(--blue-53); transform: translateY(-1px); }
   .pcard-head { display: flex; align-items: flex-start; gap: 12px; }
   .pcard-title { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .iname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
-  .iowner { font: 12px 'IBM Plex Mono', monospace; color: oklch(0.62 0.014 255); overflow-wrap: anywhere; }
-  .desc2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 40px; font-size: 13px; line-height: 1.55; color: oklch(0.76 0.012 255); overflow-wrap: anywhere; }
-  .pfoot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 14px; border-top: 1px solid oklch(0.28 0.012 255); font-size: 12px; color: oklch(0.64 0.013 255); }
+  .iowner { font: 12px 'IBM Plex Mono', monospace; color: var(--n-61); overflow-wrap: anywhere; }
+  .desc2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-height: 40px; font-size: 13px; line-height: 1.55; color: var(--n-76); overflow-wrap: anywhere; }
+  .pfoot { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--n-29); font-size: 12px; color: var(--n-65); }
   .pkg { font: 11.5px 'IBM Plex Mono', monospace; }
-  .risk { display: inline-flex; align-items: center; gap: 7px; color: oklch(0.76 0.012 255); }
+  .risk { display: inline-flex; align-items: center; gap: 7px; color: var(--n-76); }
   .risk i { width: 7px; height: 7px; border-radius: 50%; }
   .frow { display: grid; grid-template-columns: minmax(0, 1fr) 84px 64px 140px 104px 80px 16px; align-items: center; gap: 16px; width: 100%; padding: 13px 22px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
-  button.frow:hover { background: oklch(0.225 0.012 255); }
-  .fhead { padding-top: 12px; padding-bottom: 12px; background: oklch(0.215 0.01 255); }
-  .th { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: oklch(0.6 0.014 255); }
+  button.frow:hover { background: var(--n-21); }
+  .fhead { padding-top: 12px; padding-bottom: 12px; background: var(--n-21); }
+  .th { font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--n-61); }
   .who { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .who-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .slug { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13.5px; white-space: nowrap; }
-  .slug-owner { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 12.5px 'IBM Plex Mono', monospace; color: oklch(0.62 0.014 255); }
+  .slug-owner { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 12.5px 'IBM Plex Mono', monospace; color: var(--n-61); }
   .slug-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-  .d1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: oklch(0.7 0.012 255); }
-  .num { font: 12.5px 'IBM Plex Mono', monospace; color: oklch(0.8 0.012 255); white-space: nowrap; }
-  .ahead { font: 500 12.5px 'IBM Plex Mono', monospace; color: oklch(0.8 0.1 300); }
-  .behind { font: 12.5px 'IBM Plex Mono', monospace; color: oklch(0.62 0.013 255); }
-  .not-compared { font-size: 12px; color: oklch(0.56 0.013 255); }
-  .chev { color: oklch(0.5 0.014 255); }
-  .store-note { padding: 10px 12px; border: 1px solid oklch(0.42 0.09 65); border-radius: 8px; color: oklch(0.8 0.09 65); font: 11.5px/1.5 'IBM Plex Mono', monospace; }
-  .feed-status { padding: 8px; text-align: center; font-size: 11.5px; color: oklch(0.56 0.013 255); }
-  .footnote { font-size: 11.5px; line-height: 1.6; color: oklch(0.56 0.013 255); text-align: center; }
+  .d1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--n-69); }
+  .num { font: 12.5px 'IBM Plex Mono', monospace; color: var(--n-81); white-space: nowrap; }
+  .ahead { font: 500 12.5px 'IBM Plex Mono', monospace; color: var(--purple-79); }
+  .behind { font: 12.5px 'IBM Plex Mono', monospace; color: var(--n-61); }
+  .not-compared { font-size: 12px; color: var(--n-58); }
+  .chev { color: var(--n-51); }
+  .store-note { padding: 10px 12px; border: 1px solid var(--amber-42); border-radius: 8px; color: var(--amber-79); font: 11.5px/1.5 'IBM Plex Mono', monospace; }
+  .feed-status { padding: 8px; text-align: center; font-size: 11.5px; color: var(--n-58); }
+  .footnote { font-size: 11.5px; line-height: 1.6; color: var(--n-58); text-align: center; }
 
   /* Detail pages */
   .detail { width: min(1200px, 100%); margin: 0 auto; padding: 28px 28px 64px; display: flex; flex-direction: column; gap: 28px; }
-  .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: oklch(0.62 0.013 255); }
-  .crumb-back { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: oklch(0.8 0.08 235); font-size: 13px; }
-  .crumb-fork { color: oklch(0.82 0.09 300); }
-  .crumb-current { color: oklch(0.86 0.012 255); overflow-wrap: anywhere; }
+  .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--n-61); }
+  .crumb-back { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--blue-79); font-size: 13px; }
+  .crumb-fork { color: var(--purple-83); }
+  .crumb-current { color: var(--n-86); overflow-wrap: anywhere; }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) 372px; gap: 48px; align-items: start; }
   .stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
   .hero { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
   .hero-id { display: flex; align-items: center; gap: 16px; min-width: 0; }
   .hero-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .hero-owner { font-size: 13px; color: oklch(0.64 0.013 255); overflow-wrap: anywhere; }
+  .hero-owner { font-size: 13px; color: var(--n-65); overflow-wrap: anywhere; }
   .hero-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
   .hero-name { font-size: 30px; font-weight: 500; letter-spacing: -0.025em; line-height: 1.2; overflow-wrap: anywhere; }
-  .hero-desc { max-width: 700px; font-size: 15px; line-height: 1.6; color: oklch(0.82 0.01 255); overflow-wrap: anywhere; text-wrap: pretty; }
-  .hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: oklch(0.68 0.013 255); }
+  .hero-desc { max-width: 700px; font-size: 15px; line-height: 1.6; color: var(--n-81); overflow-wrap: anywhere; text-wrap: pretty; }
+  .hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: var(--n-69); }
   .kvs { display: flex; flex-direction: column; gap: 12px; }
   .kv { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 12px; align-items: baseline; }
-  .kv dt { font-size: 12.5px; color: oklch(0.64 0.013 255); }
-  .kv dd { font: 12.5px/1.55 'IBM Plex Mono', monospace; color: oklch(0.86 0.012 255); overflow-wrap: anywhere; }
+  .kv dt { font-size: 12.5px; color: var(--n-65); }
+  .kv dd { font: 12.5px/1.55 'IBM Plex Mono', monospace; color: var(--n-86); overflow-wrap: anywhere; }
   .facts { display: flex; flex-direction: column; gap: 14px; }
   .fact { display: flex; flex-direction: column; gap: 4px; }
-  .fact dt { font-size: 12px; color: oklch(0.62 0.013 255); }
+  .fact dt { font-size: 12px; color: var(--n-61); }
   .fact dd { font: 12.5px/1.55 'IBM Plex Mono', monospace; overflow-wrap: anywhere; }
   .links { display: flex; flex-direction: column; gap: 8px; font: 12px 'IBM Plex Mono', monospace; }
-  .checks { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid oklch(0.28 0.012 255); }
-  .check { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; border-radius: 8px; background: oklch(0.19 0.009 255); }
+  .checks { display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid var(--n-29); }
+  .check { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px 12px; border-radius: 8px; background: var(--n-18); }
   .check-icon { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; }
-  .check-ok { background: oklch(0.3 0.06 155); color: oklch(0.86 0.12 155); }
-  .check-warn { background: oklch(0.3 0.05 75); color: oklch(0.86 0.11 80); }
+  .check-ok { background: var(--green-29); color: var(--green-86); }
+  .check-warn { background: var(--amber-30); color: var(--gold-87); }
   .check-version { flex: 0 0 120px; font-size: 13px; font-weight: 600; }
-  .check-path { flex: 1 1 auto; min-width: 0; font-size: 12px; color: oklch(0.62 0.013 255); overflow-wrap: anywhere; }
+  .check-path { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--n-61); overflow-wrap: anywhere; }
   .check-label { font-size: 12.5px; }
   .risk-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
   .risk-level { font-size: 20px; font-weight: 500; }
   .meter { flex: 1 1 160px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
   .meter span { height: 6px; border-radius: 3px; }
   .lineage { display: flex; align-items: center; gap: 0; }
-  .lnode { flex: 0 1 44%; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; border: 1px solid oklch(0.32 0.012 255); border-radius: 10px; background: oklch(0.19 0.009 255); }
-  .lnode-fork { border-color: oklch(0.48 0.08 300); }
-  .lnode-name { font-size: 12.5px; color: oklch(0.86 0.012 255); overflow-wrap: anywhere; }
-  .llink { flex: 1 1 auto; display: flex; align-items: center; min-width: 40px; color: oklch(0.72 0.12 300); }
+  .lnode { flex: 0 1 44%; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; border: 1px solid var(--n-32); border-radius: 10px; background: var(--n-18); }
+  .lnode-fork { border-color: var(--purple-48); }
+  .lnode-name { font-size: 12.5px; color: var(--n-86); overflow-wrap: anywhere; }
+  .llink { flex: 1 1 auto; display: flex; align-items: center; min-width: 40px; color: var(--purple-72); }
   .lline { flex: 1 1 auto; height: 2px; border-radius: 1px; background: currentColor; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 20px; padding-top: 18px; border-top: 1px solid oklch(0.28 0.012 255); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 20px; padding-top: 18px; border-top: 1px solid var(--n-29); }
   .stat { display: flex; flex-direction: column; gap: 2px; }
   .stat-value { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
-  .stat-fork { color: oklch(0.82 0.1 300); }
-  .stat-label { font-size: 12.5px; color: oklch(0.64 0.013 255); }
-  .component { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid oklch(0.3 0.012 255); border-radius: 8px; background: oklch(0.19 0.009 255); }
+  .stat-fork { color: var(--purple-83); }
+  .stat-label { font-size: 12.5px; color: var(--n-65); }
+  .component { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--n-29); border-radius: 8px; background: var(--n-18); }
   .component-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
   .component-links { display: flex; flex-wrap: wrap; gap: 12px; font: 11.5px 'IBM Plex Mono', monospace; }
 
   /* Assistant */
   .assistant-shell { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 340px minmax(0, 1fr); }
-  .assistant-sidebar { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 28px 24px; border-right: 1px solid oklch(0.3 0.012 255); background: oklch(0.205 0.01 255); }
+  .assistant-sidebar { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding: 28px 24px; border-right: 1px solid var(--n-29); background: var(--n-21); }
   .assistant-sidebar .page-title { margin-top: -8px; }
   .assistant-frame { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .assistant-frame iframe { width: 100%; height: 100%; border: 0; background: white; }
   .assistant-frame .empty { margin: auto; border: 0; }
-  .config-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid oklch(0.3 0.012 255); border-radius: 8px; background: oklch(0.19 0.008 255); }
+  .config-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--n-29); border-radius: 8px; background: var(--n-18); }
   .config-name { font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
 
+  .facets { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: -8px; }
+  .chip-count { margin-left: 6px; color: var(--faint); font: 500 11px 'IBM Plex Mono', monospace; }
+  .chip-on .chip-count { color: inherit; opacity: .75; }
+  .chip-clear { border-style: dashed; }
+
+  .drawer { border-top: 1px solid var(--line); }
+  .drawer-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 12px 0 2px; color: var(--text-3); font-size: 12.5px; font-weight: 500; cursor: pointer; list-style: none; }
+  .drawer-summary::-webkit-details-marker { display: none; }
+  .drawer-summary::after { content: '⌄'; color: var(--faint); font-size: 14px; line-height: 1; }
+  .drawer[open] .drawer-summary::after { content: '⌃'; }
+  .drawer-summary:hover { color: var(--text); }
+  .drawer .facts { padding-top: 12px; }
+  .hero-trust { max-width: 640px; }
+
+  .feed-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+  .feed-foot .feed-status { margin: 0; }
+
+  /* Discovery rails */
+  .rails { display: flex; flex-direction: column; gap: var(--s-6); }
+  .rail-head { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
+  .rail-track { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(248px, 1fr); gap: var(--s-3); overflow-x: auto; padding-bottom: var(--s-2); scroll-snap-type: x proximity; scrollbar-width: thin; }
+  .rail-track > * { scroll-snap-align: start; }
+  .rcard { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); color: var(--text-2); text-align: left; }
+  .rcard:hover { border-color: var(--line-3); background: var(--surface-2); }
+  .rcard-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .thumb { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: var(--r-lg); font: 600 13px 'IBM Plex Mono', monospace; letter-spacing: -.02em; }
+  .rcard-id { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+  .rcard-name { overflow: hidden; font-size: 13px; font-weight: 600; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+  .rcard-owner { overflow: hidden; font-size: 11px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+  .rcard-desc { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; min-height: 54px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+  .rcard-foot { display: flex; align-items: center; gap: var(--s-2); }
+  @media (max-width: 800px) { .rail-track { grid-auto-columns: minmax(216px, 1fr); } }
+
+  .fav-card { gap: 12px; }
+  .rcard-open { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  .fav-card .rcard-foot { gap: var(--s-2); }
+
+  /* Instance tabs */
+  .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
+  .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
+  .itab:hover { color: var(--text-2); }
+  .itab-on { color: var(--text); border-bottom-color: var(--accent); }
+  .itab-main { display: flex; align-items: center; gap: 7px; max-width: 190px; padding: 0 2px 0 0; border: 0; background: transparent; color: inherit; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .itab-x { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 2px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--n-58); }
+  .itab-x:hover { background: var(--surface-3); color: var(--text-2); }
+  /* Every open instance stays mounted; only the active one is shown, so switching
+     tabs never reloads a running session. */
+  .instance-deck { position: relative; flex: 1 1 auto; min-height: 0; }
+  .iframe-host { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+  .iframe-host iframe { width: 100%; height: 100%; border: 0; background: white; }
+  .iframe-host .empty { margin: auto; border: 0; }
+  .iframe-hidden { visibility: hidden; pointer-events: none; }
+  /* Parked off-layout rather than unmounted, so the sessions keep running. */
+  .deck-hidden { position: absolute; inset: 0; visibility: hidden; pointer-events: none; z-index: -1; }
+
   /* Dialogs */
-  .scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; background: oklch(0.1 0.008 255 / 0.8); }
-  .modal { width: min(640px, 100%); max-height: 86vh; overflow-y: auto; border: 1px solid oklch(0.38 0.02 255); border-radius: 12px; background: oklch(0.2 0.01 255); box-shadow: 0 24px 80px oklch(0.05 0.01 255 / 0.7); }
-  .modal-head { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px 16px; border-bottom: 1px solid oklch(0.3 0.012 255); }
+  .scrim { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--scrim); }
+  .modal { width: min(640px, 100%); max-height: 86vh; overflow-y: auto; border: 1px solid var(--n-38); border-radius: 12px; background: var(--n-21); box-shadow: 0 24px 80px var(--shadow-b); }
+  .modal-head { display: flex; flex-direction: column; gap: 6px; padding: 20px 24px 16px; border-bottom: 1px solid var(--n-29); }
   .modal-title { font-size: 20px; font-weight: 500; letter-spacing: -0.015em; }
   .modal-title-sm { font-size: 14px; font-weight: 600; }
   .modal-body { display: flex; flex-direction: column; gap: 14px; padding: 18px 24px; }
-  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid oklch(0.3 0.012 255); }
-  .warn-box { padding: 12px 14px; border: 1px solid oklch(0.5 0.09 72); border-radius: 8px; background: oklch(0.24 0.035 72); color: oklch(0.9 0.06 80); font-size: 12px; line-height: 1.6; }
-  .ack { display: flex; align-items: flex-start; gap: 10px; font-size: 12.5px; line-height: 1.5; color: oklch(0.9 0.012 255); }
-  .ack input { margin-top: 3px; accent-color: oklch(0.69 0.1 235); }
-  .codebox { padding: 12px 14px; border: 1px solid oklch(0.29 0.012 255); border-radius: 8px; background: oklch(0.165 0.008 255); font: 11.5px/1.8 'IBM Plex Mono', monospace; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--n-29); }
+  .warn-box { padding: 12px 14px; border: 1px solid var(--amber-50); border-radius: 8px; background: var(--amber-23); color: var(--gold-91); font-size: 12px; line-height: 1.6; }
+  .ack { display: flex; align-items: flex-start; gap: 10px; font-size: 12.5px; line-height: 1.5; color: var(--n-90); }
+  .ack input { margin-top: 3px; accent-color: var(--blue-69); }
+  .codebox { padding: 12px 14px; border: 1px solid var(--n-29); border-radius: 8px; background: var(--n-18); font: 11.5px/1.8 'IBM Plex Mono', monospace; }
   .code-row { display: flex; gap: 10px; }
-  .code-k { flex: 0 0 56px; color: oklch(0.58 0.01 255); }
+  .code-k { flex: 0 0 56px; color: var(--n-58); }
   .code-v { word-break: break-all; }
-  .notes { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: oklch(0.76 0.01 255); }
-  .toast { position: fixed; bottom: 20px; left: 50%; z-index: 60; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 16px; border: 1px solid oklch(0.36 0.012 255); border-radius: 8px; background: oklch(0.26 0.01 255); color: oklch(0.92 0.01 255); font: 12px 'IBM Plex Mono', monospace; box-shadow: 0 12px 32px oklch(0.05 0.01 255 / 0.5); }
+  .notes { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--n-76); }
+  .toast { position: fixed; bottom: 20px; left: 50%; z-index: 60; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 16px; border: 1px solid var(--n-35); border-radius: 8px; background: var(--n-25); color: var(--n-90); font: 12px 'IBM Plex Mono', monospace; box-shadow: 0 12px 32px var(--shadow-a); }
 
   /* Public product site */
   .landing { flex: 1 1 auto; min-height: 0; overflow-y: auto; background: #090a12; color: #f6f6f8; scroll-behavior: smooth; }
@@ -395,7 +558,7 @@
     .lnode { flex: 1 1 auto; }
     .llink { min-height: 28px; justify-content: center; transform: rotate(90deg); width: 28px; align-self: center; }
     .assistant-shell { display: flex; flex-direction: column; overflow-y: auto; }
-    .assistant-sidebar { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid oklch(0.3 0.012 255); }
+    .assistant-sidebar { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--n-29); }
     .assistant-frame { min-height: 620px; }
     .landing-nav { height: 64px; padding: 0 18px; }
     .landing-links { display: none; }
@@ -507,6 +670,19 @@
         <button class="{{ forksTabClass }}" onClick="{{ goForks }}" aria-current="{{ forksTabCurrent }}">Forks</button>
       </sc-if>
       <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
+      <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+        <span class="tab-sep" aria-hidden="true"></span>
+        <sc-for list="{{ instanceTabs }}" as="t" hint-placeholder-count="2">
+          <span class="{{ t.className }}">
+            <button class="itab-main" onClick="{{ t.select }}" aria-current="{{ t.current }}" title="{{ t.subtitle }}">
+              <span class="dot" style="background: {{ t.statusColor }};"></span>{{ t.title }}
+            </button>
+            <button class="itab-x" onClick="{{ t.close }}" aria-label="{{ t.closeLabel }}">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </span>
+        </sc-for>
+      </sc-if>
     </nav>
     <span class="spacer"></span>
     <sc-if value="{{ showUpdate }}" hint-placeholder-val="{{ false }}"><a class="update-link" href="{{ updateUrl }}" target="_blank" rel="noopener noreferrer">{{ updateLabel }}</a></sc-if>
@@ -517,6 +693,33 @@
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
   <main class="page" aria-label="Local Harness versions">
     <div class="page-inner">
+
+      <sc-if value="{{ hasHomeFavorites }}" hint-placeholder-val="{{ false }}">
+        <section class="rail" aria-label="Favorites">
+          <div class="rail-head">
+            <h2 class="h2">Your favorites</h2>
+            <span class="note">Saved in this browser. Run opens the session in a tab.</span>
+          </div>
+          <div class="rail-track">
+            <sc-for list="{{ homeFavorites }}" as="f" hint-placeholder-count="3">
+              <article class="rcard fav-card">
+                <button class="rcard-top rcard-open" onClick="{{ f.open }}" aria-label="{{ f.accessibleLabel }}">
+                  <span class="thumb" style="background: {{ f.thumbBg }}; color: {{ f.thumbFg }};">{{ f.thumbInitials }}</span>
+                  <span class="rcard-id">
+                    <span class="rcard-name">{{ f.name }}</span>
+                    <span class="rcard-owner mono">{{ f.owner }} · {{ f.kindLabel }}</span>
+                  </span>
+                </button>
+                <span class="rcard-foot">
+                  <button class="btn btn-sm btn-go" onClick="{{ f.run }}" disabled="{{ f.runDisabled }}">{{ f.runLabel }}</button>
+                  <span class="spacer"></span>
+                  <button class="btn btn-sm btn-ghost" onClick="{{ f.remove }}" aria-label="Remove {{ f.name }} from favorites">Remove</button>
+                </span>
+              </article>
+            </sc-for>
+          </div>
+        </section>
+      </sc-if>
 
       <div class="page-head">
         <div>
@@ -675,8 +878,51 @@
         <div class="filters">
           <button class="{{ favoritesChipClass }}" onClick="{{ toggleFavoritesOnly }}" aria-pressed="{{ favoritesOnly }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>Favorites</button>
           <label class="chip"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
+          <button class="{{ differentiatedChipClass }}" onClick="{{ toggleDifferentiated }}" aria-pressed="{{ differentiatedOnly }}" title="Hide forks that only copy the upstream description">Says what it does</button>
           <span class="filters-note mono">{{ sortExplanation }}</span>
         </div>
+
+        <div class="facets" aria-label="Filter by tag">
+          <sc-for list="{{ facetGroups }}" as="f" hint-placeholder-count="6">
+            <button class="{{ f.className }}" onClick="{{ f.toggle }}" aria-pressed="{{ f.pressed }}">{{ f.label }}<span class="chip-count">{{ f.count }}</span></button>
+          </sc-for>
+          <sc-if value="{{ hasActiveTags }}" hint-placeholder-val="{{ false }}">
+            <button class="chip chip-clear" onClick="{{ clearTags }}">Clear {{ activeTagCount }} tag filter(s)</button>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ showRails }}" hint-placeholder-val="{{ false }}">
+          <div class="rails">
+            <sc-for list="{{ rails }}" as="rail" hint-placeholder-count="2">
+              <section class="rail" aria-label="{{ rail.title }}">
+                <div class="rail-head">
+                  <h2 class="h2">{{ rail.title }}</h2>
+                  <span class="note">{{ rail.note }}</span>
+                </div>
+                <div class="rail-track">
+                  <sc-for list="{{ rail.cards }}" as="c" hint-placeholder-count="4">
+                    <button class="rcard" onClick="{{ c.select }}" aria-label="{{ c.accessibleLabel }}">
+                      <span class="rcard-top">
+                        <span class="thumb" style="background: {{ c.thumbBg }}; color: {{ c.thumbFg }};">{{ c.thumbInitials }}</span>
+                        <span class="rcard-id">
+                          <span class="rcard-name">{{ c.name }}</span>
+                          <span class="rcard-owner mono">{{ c.owner }}</span>
+                        </span>
+                      </span>
+                      <span class="rcard-desc">{{ c.description }}</span>
+                      <span class="rcard-foot">
+                        <sc-if value="{{ c.hasCapability }}" hint-placeholder-val="{{ true }}"><span class="tag">{{ c.capabilityLabel }}</span></sc-if>
+                        <span class="spacer"></span>
+                        <sc-if value="{{ c.hasGem }}" hint-placeholder-val="{{ false }}"><span class="gem">{{ c.gemLabel }}</span></sc-if>
+                        <span class="stars">{{ c.starsLabel }}</span>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </section>
+            </sc-for>
+          </div>
+        </sc-if>
 
         <sc-if value="{{ isPluginBrowser }}" hint-placeholder-val="{{ true }}">
           <div class="pgrid">
@@ -697,6 +943,7 @@
                   <sc-if value="{{ r.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ r.riskColor }};"></i>{{ r.riskText }}</span></sc-if>
                   <span class="spacer"></span>
                   <span>{{ r.activity }}</span>
+                  <span class="{{ r.favoriteClass }}" role="button" tabindex="0" onClick="{{ r.toggleFavorite }}" aria-pressed="{{ r.isFavorite }}" aria-label="{{ r.favoriteLabel }}"><svg class="fav-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg></span>
                 </span>
               </button>
             </sc-for>
@@ -720,6 +967,7 @@
                 <span class="col-upstream"><sc-if value="{{ r.compared }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ r.aheadLabel }}</span> <span class="behind">{{ r.behindLabel }}</span></sc-if><sc-if value="{{ r.notCompared }}" hint-placeholder-val="{{ true }}"><span class="not-compared">Not compared</span></sc-if></span>
                 <span class="num col-push">{{ r.pushedLabel }}</span>
                 <span class="num col-license">{{ r.licenseShort }}</span>
+<span class="{{ r.favoriteClass }}" role="button" tabindex="0" onClick="{{ r.toggleFavorite }}" aria-pressed="{{ r.isFavorite }}" aria-label="{{ r.favoriteLabel }}"><svg class="fav-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg></span>
                 <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
               </button>
             </sc-for>
@@ -730,7 +978,18 @@
           <div class="empty"><h2>{{ emptyTitle }}</h2><p>{{ emptyDescription }}</p><button class="btn" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button></div>
         </sc-if>
         <sc-if value="{{ hasStoreError }}" hint-placeholder-val="{{ false }}"><div class="store-note" role="status">{{ storeError }}</div></sc-if>
-        <div class="feed-status mono" aria-live="polite">{{ catalogFeedStatus }}</div>
+        <div class="feed-foot">
+          <div class="feed-status mono" aria-live="polite">{{ catalogFeedStatus }}</div>
+          <sc-if value="{{ showLoadMore }}" hint-placeholder-val="{{ false }}">
+            <button class="btn" onClick="{{ loadMore }}" disabled="{{ loadMoreDisabled }}">{{ loadMoreLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ showCatalogSync }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-primary" onClick="{{ syncFullCatalog }}" disabled="{{ catalogSyncDisabled }}">{{ catalogSyncLabel }}</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{ hasCatalogSyncError }}" hint-placeholder-val="{{ false }}">
+          <div class="store-note" role="status">{{ catalogSyncError }}</div>
+        </sc-if>
         <p class="footnote">Recommendations prioritize evidence, capability, maintenance, and low visibility. Ranking is not security verification.</p>
       </section>
     </div>
@@ -758,6 +1017,7 @@
                 </div>
               </div>
               <p class="hero-desc">{{ detail.description }}</p>
+              <p class="note hero-trust">{{ detailTrustLine }}</p>
               <div class="hero-meta">
                 <sc-if value="{{ hasDetailStars }}" hint-placeholder-val="{{ true }}"><span class="stars"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ detail.starsLabel }}</span></sc-if>
                 <sc-for list="{{ detailMetaItems }}" as="m" hint-placeholder-count="4"><span>{{ m }}</span></sc-for>
@@ -775,7 +1035,11 @@
                 </label>
                 <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a launch-ready Harness version on the Local tab first.</p></sc-if>
                 <button class="btn btn-go btn-lg btn-block" onClick="{{ installAndRun }}" disabled="{{ installAndRunDisabled }}">{{ installAndRunLabel }}</button>
-                <p class="note">{{ installAndRunReason }}. Forge only enables this for a single-plugin recipe whose signed package identity, version, integrity, repository, and commit match this record. It installs offline into a disposable profile and smoke-tests it in Apptainer. There is no host install fallback.</p>
+                <p class="note">{{ installAndRunReason }}.</p>
+                <sc-if value="{{ communityRunAvailable }}" hint-placeholder-val="{{ false }}">
+                  <button class="btn btn-lg btn-block" onClick="{{ communityRun }}" disabled="{{ communityRunDisabled }}">{{ communityRunLabel }}</button>
+                  <p class="note">No curator has reviewed this record. Forge can still install it at its captured commit and run it in the same sandbox.</p>
+                </sc-if>
                 <div class="divider"></div>
                 <div class="btn-pair">
                   <button class="{{ favoriteClass }}" onClick="{{ toggleFavorite }}" aria-pressed="{{ isFavorite }}"><svg class="fav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>{{ favoriteLabel }}</button>
@@ -892,10 +1156,14 @@
 
             <div class="stack">
               <section class="card">
-                <h2 class="h2">Source and provenance</h2>
-                <dl class="facts">
-                  <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="6"><div class="fact"><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
-                </dl>
+                <h2 class="h2">Source</h2>
+                <p class="prose">{{ detailTrustLine }}</p>
+                <details class="drawer">
+                  <summary class="drawer-summary">Technical details<span class="note">{{ detailRowCount }}</span></summary>
+                  <dl class="facts">
+                    <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="6"><div class="fact"><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
+                  </dl>
+                </details>
                 <div class="links">
                   <a href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a>
                   <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ false }}"><a href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
@@ -912,6 +1180,21 @@
     </div>
     </sc-if>
   </main>
+  </sc-if>
+
+  <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+  <div class="{{ instanceDeckClass }}" aria-label="Running DSH instances">
+    <sc-for list="{{ instanceTabs }}" as="t" hint-placeholder-count="1">
+      <div class="{{ t.bodyClass }}">
+        <sc-if value="{{ t.ready }}" hint-placeholder-val="{{ true }}">
+          <iframe data-instance-url="{{ t.url }}" data-instance-id="{{ t.id }}" title="{{ t.title }}"></iframe>
+        </sc-if>
+        <sc-if value="{{ t.pending }}" hint-placeholder-val="{{ false }}">
+          <div class="empty"><h2>{{ t.title }}</h2><p>{{ t.pendingLabel }}</p></div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
   </sc-if>
 
   <sc-if value="{{ showAssistant }}" hint-placeholder-val="{{ false }}">
@@ -952,10 +1235,15 @@
         <header class="modal-head">
           <span class="label">Community code · explicit approval</span>
           <h2 id="artifact-run-title" class="modal-title">Install and run {{ artifactRunArtifact.name }}?</h2>
-          <p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p>
+          <sc-if value="{{ isVerifiedRun }}" hint-placeholder-val="{{ true }}"><p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p></sc-if>
+          <sc-if value="{{ isCommunityRun }}" hint-placeholder-val="{{ false }}"><p class="note">No reviewed recipe. Pinned to the commit in this record.</p></sc-if>
         </header>
         <div class="modal-body">
-          <p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p>
+          <sc-if value="{{ isVerifiedRun }}" hint-placeholder-val="{{ true }}"><p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p></sc-if>
+          <sc-if value="{{ isCommunityRun }}" hint-placeholder-val="{{ false }}">
+            <p class="prose">This executes third-party code that <strong>nobody has reviewed</strong>. Forge downloads the source archive for the exact commit in this record, records its digest so a later change is detected, inspects the archive, disables package scripts, installs without network access, smoke-tests it in Apptainer, then clones the tested profile into a disposable cell.</p>
+            <div class="warn-box">Forge is not vouching for this code. The only assurances are that it came from the commit shown and that it runs in the sandbox. Nobody has read it.</div>
+          </sc-if>
           <div class="warn-box">Sandboxing reduces risk but does not eliminate it. Apptainer shares the host kernel, and the running web surface uses host networking for its loopback port. Forge does not mount your host DSH home or forward launcher secrets.</div>
           <label class="ack"><input type="checkbox" checked="{{ artifactRiskAcknowledged }}" onChange="{{ toggleArtifactRisk }}" /><span>I understand that this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>

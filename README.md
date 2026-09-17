@@ -29,6 +29,23 @@ Forge adds an explainable, bounded hidden-gem research queue over that full
 inventory. The V1 browser stays focused on plugins and forks. Package curation
 remains a separate signed CLI workflow.
 
+Every published record is tagged for discovery by a pipeline stage that derives
+capability, integration, runtime and maturity tags from metadata the crawler
+already collected, so it costs no extra API calls and is deterministic. The
+browser filters on those tags, and opens onto four rails computed over the whole
+catalog: hidden gems, new and novel, best in class, and recently active.
+
+The same stage records whether a record says anything about itself. Of the
+26,831 indexed forks, 25,110 share one inherited upstream description, 99.6%
+carry no topics and 96.9% have no stars; only about 2.5% carry any
+distinguishing signal, against every plugin. Those are marked rather than
+enriched further, and a "says what it does" filter hides them, so ranking and
+analysis budget is not spent on copies of one repository.
+
+Running sessions open as tabs inside the launcher rather than detached browser
+windows, so several DSH versions can run side by side, each framed from its own
+loopback port.
+
 Every runnable official or personal cell now requires the **fail-closed
 Apptainer backend**. The captured Harness source is read-only; each cell gets a
 unique writable home and workspace; launcher secrets are excluded; and the
@@ -44,7 +61,20 @@ Already-present community checkouts remain limited to the separate bounded
 capability probe on the loopback sidecar
 (`POST /api/v1/trees/<tree-id>/sandbox-test`), and that probe requires per-cell
 cgroup controls. The V1 launcher UI does not list them, and they are never
-promoted into complete cells. Public repository acquisition remains disabled.
+promoted into complete cells.
+
+Public catalog records can now be installed through the **community lane**. A
+record with a full commit SHA on a github.com repository is built into a
+single-plugin manifest pinned to that commit, signed with a key generated on
+this machine, and handed to the same signed install path a curated package
+uses. The host allowlist, size and time caps, archive inspection, networkless
+install, and Apptainer smoke test are unchanged, a sandbox failure still fails
+closed, and the lane grants no permissions. What differs is only who vouched
+for the artifact: the operator, after an explicit approval, rather than a
+curator. Nobody has reviewed the code, and the UI says so. GitHub publishes no
+digest for a source archive, so the first install records the digest it
+received and every later install of that commit must match it; that detects a
+changed artifact but cannot vouch for the first download.
 
 ## Open the UI
 

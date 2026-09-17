@@ -32,6 +32,16 @@ STORE_SCHEMA_VERSION = 2
 CATALOG_STORE_SCHEMA = "dsh-forge.catalog-store/v2"
 
 MAX_QUERY_LENGTH = 200
+MAX_TAG_FILTERS = 12
+#: Tags are stored delimited so a LIKE matches a whole tag, never a prefix.
+TAG_DELIMITER = "\x1f"
+
+
+def _like_literal(value: str) -> str:
+    """Escape a value so SQLite LIKE treats it literally."""
+
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
 MAX_QUERY_TERMS = 12
 MAX_PAGE_SIZE = 100
 DEFAULT_PAGE_SIZE = 50
@@ -186,6 +196,8 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
         compatibility = entry.get("compatibility") if isinstance(entry.get("compatibility"), dict) else {}
         license_value = entry.get("license") if isinstance(entry.get("license"), dict) else {}
         report = research.get(identity, {})
+        enrichment = entry.get("enrichment") if isinstance(entry.get("enrichment"), dict) else {}
+        tags = [str(tag) for tag in (enrichment.get("tags") or []) if isinstance(tag, str)][:64]
         rank = _integer(entry.get("seed_rank")) or _integer(curation.get("rank")) or _integer(report.get("rank"))
         yield {
             "artifact_id": identity,
@@ -202,10 +214,16 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
             "rank_value": rank if rank is not None else 9999,
             "featured": 1 if (kind == "plugin" and isinstance(rank, int) and rank <= 3) or (rank == 1) else 0,
             "risk": _text(curation.get("security_risk"), 32),
+            "tags": (TAG_DELIMITER + TAG_DELIMITER.join(tags) + TAG_DELIMITER) if tags else "",
+            "capability": _text(enrichment.get("primary_capability"), 64),
+            # Records predating enrichment are treated as differentiated rather
+            # than silently hidden by the filter.
+            "differentiated": 0 if enrichment.get("differentiated") is False else 1,
             "terms": _terms([
                 entry.get("name"), entry.get("owner"), entry.get("full_name"),
                 *(entry.get("topics") or []),
                 *(curation.get("taxonomy") or []),
+                *tags,
                 *(divergence.get("changed_paths") or []),
                 *(compatibility.get("changed_surfaces") or []),
                 package.get("name"), package.get("version"), package.get("registry"),
@@ -232,6 +250,7 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
             repository = component.get("repository") if isinstance(component.get("repository"), dict) else {}
             component_terms.extend([package.get("name"), package.get("version"), repository.get("full_name")])
         rank = _integer(entry.get("rank"))
+        taxonomy = [str(item) for item in (entry.get("taxonomy") or []) if isinstance(item, str)][:64]
         yield {
             "artifact_id": identity,
             "type": "package",
@@ -247,6 +266,11 @@ def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]
             "rank_value": rank if rank is not None else 9999,
             "featured": 1 if entry.get("featured") else 0,
             "risk": _text(risk.get("level"), 32),
+            # Curated packages are hand-written, so they carry no derived tags
+            # and are differentiated by construction.
+            "tags": (TAG_DELIMITER + TAG_DELIMITER.join(taxonomy) + TAG_DELIMITER) if taxonomy else "",
+            "capability": taxonomy[0] if taxonomy else "",
+            "differentiated": 1,
             "terms": _terms([
                 entry.get("slug"), publisher.get("name"),
                 *(entry.get("taxonomy") or []),
@@ -288,6 +312,11 @@ def _create_schema(connection: sqlite3.Connection) -> None:
             rank_value  INTEGER NOT NULL,
             featured    INTEGER NOT NULL,
             risk        TEXT NOT NULL,
+            -- Tags are stored as a delimited string so a LIKE on '\x1ftag\x1f'
+            -- matches whole tags only, never a prefix of a longer tag.
+            tags        TEXT NOT NULL,
+            capability  TEXT NOT NULL,
+            differentiated INTEGER NOT NULL,
             terms       TEXT NOT NULL,
             research    TEXT NOT NULL,
             record      TEXT NOT NULL
@@ -297,6 +326,8 @@ def _create_schema(connection: sqlite3.Connection) -> None:
         CREATE INDEX artifacts_recent ON artifacts (pushed_at DESC, artifact_id);
         CREATE INDEX artifacts_name ON artifacts (name_key, artifact_id);
         CREATE INDEX artifacts_type ON artifacts (type);
+        CREATE INDEX artifacts_differentiated ON artifacts (differentiated, type, rank_value);
+        CREATE INDEX artifacts_capability ON artifacts (capability, rank_value);
         CREATE VIRTUAL TABLE artifacts_fts USING fts5(
             name, owner, description, terms,
             content='artifacts', content_rowid='rowid',
@@ -338,13 +369,15 @@ def build(
                         """
                         INSERT OR REPLACE INTO artifacts (
                             artifact_id, type, slug, name, name_key, owner, description, language,
-                            license, stars, pushed_at, archived, rank_value, featured, risk, terms, research, record
-                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            license, stars, pushed_at, archived, rank_value, featured, risk,
+                            tags, capability, differentiated, terms, research, record
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """,
                         (
                             row["artifact_id"], row["type"], row["slug"], row["name"], row["name"].casefold(),
                             row["owner"], row["description"], row["language"], row["license"], row["stars"],
                             row["pushed_at"], row["archived"], row["rank_value"], row["featured"], row["risk"],
+                            row["tags"], row["capability"], row["differentiated"],
                             row["terms"], json.dumps(row["research"], separators=(",", ":")),
                             json.dumps(row["record"], separators=(",", ":")),
                         ),
@@ -493,6 +526,8 @@ class CatalogStore:
         licensed_only: bool = False,
         include_archived: bool = True,
         featured_only: bool = False,
+        tags: Sequence[str] = (),
+        differentiated_only: bool = False,
         sort: str = "relevance",
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str = "",
@@ -534,6 +569,14 @@ class CatalogStore:
             where.append("artifacts.archived = 0")
         if featured_only:
             where.append("artifacts.featured = 1")
+        # Every requested tag must be present, so chips narrow rather than widen.
+        for tag in [str(value).strip()[:64] for value in tags][:MAX_TAG_FILTERS]:
+            if not tag:
+                continue
+            where.append("artifacts.tags LIKE ? ESCAPE '\\'")
+            parameters.append("%" + TAG_DELIMITER + _like_literal(tag) + TAG_DELIMITER + "%")
+        if differentiated_only:
+            where.append("artifacts.differentiated = 1")
         clause = (" WHERE " + " AND ".join(where)) if where else ""
 
         if sort == "relevance" and match:
