@@ -2449,6 +2449,37 @@ class Component extends DCLogic {
     return payload;
   }
 
+  async runFavorite(record) {
+    if (!record || !record.id) return;
+    if (!this.state.sidecarConnected) return this.flash('Start the local launcher to run this');
+    const versionId = this.state.packageVersionId
+      || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    if (record.type !== 'fork' && !versionId) {
+      return this.flash('Add a launch-ready Harness version on the Local tab first');
+    }
+    if (this.state.artifactRunBusy) return;
+    this.setState({ artifactRunBusy: true });
+    try {
+      // A fork is a whole harness, so it is launched as its own version rather
+      // than installed into one.
+      const endpoint = record.type === 'fork'
+        ? '/api/v1/catalog/launch-fork'
+        : '/api/v1/catalog/install-run-community';
+      const body = record.type === 'fork'
+        ? { artifact_id: record.id, acknowledge_risk: true }
+        : { artifact_id: record.id, version_id: versionId, acknowledge_risk: true };
+      const result = await this.api(endpoint, { method: 'POST', body: JSON.stringify(body) });
+      await this.refreshStatus(true);
+      this.setState({ artifactRunBusy: false });
+      await this.addInstanceTab(result.cell);
+      this.flash('Running ' + (record.name || record.slug) + ' · not reviewed by Forge');
+    } catch (error) {
+      await this.refreshStatus(true);
+      this.setState({ artifactRunBusy: false });
+      this.flash(error.message);
+    }
+  }
+
   async syncFullCatalog() {
     if (this.state.catalogSyncBusy) return;
     this.setState({ catalogSyncBusy: true, catalogSyncError: '' });
@@ -3018,6 +3049,15 @@ class Component extends DCLogic {
       aheadLabel: a.divergence ? '+' + a.divergence.ahead_by : '',
       behindLabel: a.divergence ? '/ −' + a.divergence.behind_by : '',
       pushedLabel: catalogDate(a.pushed_at),
+      isFavorite: s.favoriteArtifacts.some(item => item.id === a.id),
+      favoriteClass: (s.favoriteArtifacts.some(item => item.id === a.id) ? 'btn btn-sm btn-icon fav fav-on' : 'btn btn-sm btn-icon fav')
+        + (s.favoritePopId === a.id ? ' fav-pop' : ''),
+      favoriteLabel: s.favoriteArtifacts.some(item => item.id === a.id) ? 'Remove from favorites' : 'Save to favorites',
+      toggleFavorite: event => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (event && event.preventDefault) event.preventDefault();
+        this.toggleFavorite(a);
+      },
       licenseShort: a.licenseOk ? a.licenseLabel : '—',
       select: () => this.selectCatalogArtifact(a)
     }));
@@ -3149,6 +3189,38 @@ class Component extends DCLogic {
       showLanding: s.view === 'landing',
       showAppShell: s.view !== 'landing',
       showLaunch: s.view === 'launch',
+      hasHomeFavorites: s.favoriteArtifacts.length > 0,
+      homeFavorites: s.favoriteArtifacts.slice(0, 12).map(item => {
+        const record = CATALOG.find(entry => entry.id === item.id)
+          || s.storeArtifacts.find(entry => entry.id === item.id)
+          || mapCatalogRecord({
+            artifact_id: item.id, artifact_type: item.type, full_name: item.slug,
+            name: item.name, owner: item.owner, description: item.description,
+            repository_url: item.url, head_sha: item.head_sha, language: item.language,
+            license: { spdx: item.licenseOk ? item.licenseLabel : '' },
+            github_stars: item.github_stars, pushed_at: item.pushed_at,
+            topics: item.topics || [], package: item.package || null
+          });
+        return {
+          ...record,
+          tags: (record.descriptiveTags || []).slice(0, 2),
+          thumbBg: (record.thumb || {}).bg || 'var(--surface-3)',
+          thumbFg: (record.thumb || {}).fg || 'var(--text-2)',
+          thumbInitials: (record.thumb || {}).initials || '??',
+          kindLabel: record.type === 'fork' ? 'Fork · harness' : 'Plugin',
+          runLabel: s.artifactRunBusy ? 'Starting…' : 'Run',
+          runDisabled: !s.sidecarConnected || !!s.artifactRunBusy,
+          run: event => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.runFavorite(record);
+          },
+          open: () => this.selectCatalogArtifact(record),
+          remove: event => {
+            if (event && event.stopPropagation) event.stopPropagation();
+            this.toggleFavorite(record);
+          }
+        };
+      }),
       showInstance: s.view === 'instance',
       instanceDeckClass: s.view === 'instance' ? 'instance-deck' : 'instance-deck deck-hidden',
       hasInstanceTabs: s.instanceTabs.length > 0,

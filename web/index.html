@@ -413,6 +413,10 @@
   .rcard-foot { display: flex; align-items: center; gap: var(--s-2); }
   @media (max-width: 800px) { .rail-track { grid-auto-columns: minmax(216px, 1fr); } }
 
+  .fav-card { gap: 12px; }
+  .rcard-open { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  .fav-card .rcard-foot { gap: var(--s-2); }
+
   /* Instance tabs */
   .tab-sep { align-self: center; width: 1px; height: 18px; background: var(--line-2); }
   .itab { display: flex; align-items: center; border-bottom: 2px solid transparent; color: var(--n-65); }
@@ -690,6 +694,33 @@
   <main class="page" aria-label="Local Harness versions">
     <div class="page-inner">
 
+      <sc-if value="{{ hasHomeFavorites }}" hint-placeholder-val="{{ false }}">
+        <section class="rail" aria-label="Favorites">
+          <div class="rail-head">
+            <h2 class="h2">Your favorites</h2>
+            <span class="note">Saved in this browser. Run opens the session in a tab.</span>
+          </div>
+          <div class="rail-track">
+            <sc-for list="{{ homeFavorites }}" as="f" hint-placeholder-count="3">
+              <article class="rcard fav-card">
+                <button class="rcard-top rcard-open" onClick="{{ f.open }}" aria-label="{{ f.accessibleLabel }}">
+                  <span class="thumb" style="background: {{ f.thumbBg }}; color: {{ f.thumbFg }};">{{ f.thumbInitials }}</span>
+                  <span class="rcard-id">
+                    <span class="rcard-name">{{ f.name }}</span>
+                    <span class="rcard-owner mono">{{ f.owner }} · {{ f.kindLabel }}</span>
+                  </span>
+                </button>
+                <span class="rcard-foot">
+                  <button class="btn btn-sm btn-go" onClick="{{ f.run }}" disabled="{{ f.runDisabled }}">{{ f.runLabel }}</button>
+                  <span class="spacer"></span>
+                  <button class="btn btn-sm btn-ghost" onClick="{{ f.remove }}" aria-label="Remove {{ f.name }} from favorites">Remove</button>
+                </span>
+              </article>
+            </sc-for>
+          </div>
+        </section>
+      </sc-if>
+
       <div class="page-head">
         <div>
           <h1 class="page-title">Local versions</h1>
@@ -912,6 +943,7 @@
                   <sc-if value="{{ r.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ r.riskColor }};"></i>{{ r.riskText }}</span></sc-if>
                   <span class="spacer"></span>
                   <span>{{ r.activity }}</span>
+                  <span class="{{ r.favoriteClass }}" role="button" tabindex="0" onClick="{{ r.toggleFavorite }}" aria-pressed="{{ r.isFavorite }}" aria-label="{{ r.favoriteLabel }}"><svg class="fav-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg></span>
                 </span>
               </button>
             </sc-for>
@@ -935,6 +967,7 @@
                 <span class="col-upstream"><sc-if value="{{ r.compared }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ r.aheadLabel }}</span> <span class="behind">{{ r.behindLabel }}</span></sc-if><sc-if value="{{ r.notCompared }}" hint-placeholder-val="{{ true }}"><span class="not-compared">Not compared</span></sc-if></span>
                 <span class="num col-push">{{ r.pushedLabel }}</span>
                 <span class="num col-license">{{ r.licenseShort }}</span>
+<span class="{{ r.favoriteClass }}" role="button" tabindex="0" onClick="{{ r.toggleFavorite }}" aria-pressed="{{ r.isFavorite }}" aria-label="{{ r.favoriteLabel }}"><svg class="fav-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg></span>
                 <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
               </button>
             </sc-for>

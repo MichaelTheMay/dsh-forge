@@ -1442,3 +1442,84 @@ test('the community lane is withheld from records that cannot be pinned', () => 
   assert.equal(withDetail({ head_sha: '', repository_url: 'https://github.com/Owner/repo' }), false,
     'a record with no captured commit is not offered');
 });
+
+test('a record can be favourited from a card without opening it', () => {
+  const c = instance();
+  c.setState({ favoriteArtifacts: [] });
+  c.renderVals().goPlugins();
+  const [card] = c.renderVals().results;
+  assert.equal(card.isFavorite, false);
+  let opened = 0;
+  c.selectCatalogArtifact = () => { opened += 1; };
+  let stopped = false, prevented = false;
+  card.toggleFavorite({ stopPropagation: () => { stopped = true; }, preventDefault: () => { prevented = true; } });
+  assert(stopped && prevented, 'the click must not also open the record');
+  assert.equal(opened, 0);
+  assert.equal(c.state.favoriteArtifacts.length, 1);
+  assert.equal(c.renderVals().results[0].isFavorite, true);
+});
+
+test('favourites appear on the home page and can be run or removed there', async () => {
+  const c = instance();
+  c.setState({ favoriteArtifacts: [] });
+  c.renderVals().goPlugins();
+  const [card] = c.renderVals().results;
+  card.toggleFavorite({ stopPropagation() {}, preventDefault() {} });
+  c.renderVals().goLaunch();
+
+  let values = c.renderVals();
+  assert.equal(values.hasHomeFavorites, true);
+  assert.equal(values.homeFavorites.length, 1);
+  const [entry] = values.homeFavorites;
+  assert.equal(entry.kindLabel, 'Plugin');
+  assert(entry.thumbInitials && entry.thumbInitials.length <= 2);
+  // No sidecar, so running is offered but disabled rather than failing obscurely.
+  assert.equal(entry.runDisabled, true);
+
+  entry.remove({ stopPropagation() {} });
+  assert.equal(c.renderVals().hasHomeFavorites, false);
+});
+
+test('running a favourite routes plugins and forks to their own lanes', async () => {
+  const c = instance();
+  const saved = {
+    id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
+    primary_tree: { id: 'tree_123456789abc', version: '0.1.2' }
+  };
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [saved], configurations: [], package_installations: [],
+    trusted_package_recipes: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true }
+  });
+  const calls = [];
+  c.api = async (url, options) => {
+    if (url.endsWith('/open-url')) return { url: 'http://127.0.0.1:3500/session' };
+    calls.push({ url, body: JSON.parse(options.body) });
+    return { cell: { id: 'cell_ran' } };
+  };
+  c.refreshStatus = async () => {};
+
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  await c.runFavorite(plugin);
+  assert.equal(calls.at(-1).url, '/api/v1/catalog/install-run-community');
+  assert.equal(calls.at(-1).body.version_id, saved.id, 'a plugin installs into a chosen version');
+
+  const fork = CATALOG.find(item => item.type === 'fork');
+  await c.runFavorite(fork);
+  assert.equal(calls.at(-1).url, '/api/v1/catalog/launch-fork');
+  assert(!('version_id' in calls.at(-1).body), 'a fork is its own harness, not installed into one');
+  assert.equal(calls.at(-1).body.acknowledge_risk, true);
+
+  // Both land in an instance tab rather than leaving the reader to find the cell.
+  assert.equal(c.state.activeInstanceId, 'cell_ran');
+  assert.match(c.lastMessage, /not reviewed by Forge/);
+});
+
+test('running a favourite without a sidecar explains itself instead of failing', async () => {
+  const c = instance();
+  let called = false;
+  c.api = async () => { called = true; return {}; };
+  await c.runFavorite(CATALOG.find(item => item.type === 'plugin'));
+  assert.equal(called, false, 'no request is attempted without a local launcher');
+  assert.match(c.lastMessage, /Start the local launcher/);
+});

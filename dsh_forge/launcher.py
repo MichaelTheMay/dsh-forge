@@ -26,6 +26,7 @@ from typing import Any, Iterable, Mapping
 
 from .catalog_store import CatalogStore, CatalogStoreError, build, verify_snapshot
 from .community import CommunityError, prepare_install as prepare_community_install
+from .forks import ForkError, prepare_fork
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .packages import PackageError
@@ -2043,6 +2044,75 @@ class Launcher:
             "pin": prepared["pin"],
             "installation": installation,
             "configuration": configuration,
+            "cell": cell,
+        }
+
+    def launch_fork(
+        self,
+        *,
+        artifact_id: str,
+        acknowledge_risk: bool,
+    ) -> dict[str, Any]:
+        """Acquire a catalog fork at its pinned commit and launch it as a version.
+
+        A fork is a whole Harness, so it becomes its own local version rather
+        than being installed into one. Nothing is executed during preparation.
+        A fork that only publishes source needs a build before it can run, and
+        building runs the fork's own scripts, so that case is reported rather
+        than done here.
+        """
+
+        if acknowledge_risk is not True:
+            raise LauncherError("Explicit community-code risk acknowledgment is required")
+        artifact = self.catalog_artifact(artifact_id)
+        if str(artifact.get("artifact_type") or "") != "fork":
+            raise LauncherError("This record is not a Harness fork")
+        commit = str(artifact.get("head_sha") or "")
+        if not commit:
+            raise LauncherError("This fork has no captured commit, so it cannot be pinned for launch")
+        destination = self.state_root / "fork-trees" / _tree_id(Path(str(artifact.get("full_name") or artifact_id)))
+        try:
+            prepared = prepare_fork(
+                artifact,
+                destination,
+                known_pin=self._community_pin(artifact_id, commit),
+            )
+        except ForkError as error:
+            raise LauncherError(str(error)) from error
+
+        if not prepared["launchable"]:
+            # Reported, never attempted silently: producing the entrypoint means
+            # running this fork's own install and build scripts.
+            raise LauncherError(prepared["reason"])
+
+        self._record_community_pin(artifact_id, commit, prepared["pin"])
+        saved = self.add_scan_roots([prepared["path"]])
+        tree = next(
+            (
+                item for item in self.status()["trees"]
+                if str(item.get("path") or "").startswith(str(destination))
+            ),
+            None,
+        )
+        if tree is None or not tree.get("id"):
+            raise LauncherError("The prepared fork tree was not detected as a Harness version")
+        cell = self.launch({
+            "tree_id": tree["id"],
+            "surface": "web",
+            "profile": "tui-min",
+            "port": "auto",
+            "open_browser": False,
+            "home_mode": "fresh",
+            "workspace": "managed",
+            "network": "host",
+            "resources": {"gpu": "none"},
+        })
+        return {
+            "artifact_id": artifact_id,
+            "lane": "community-unverified",
+            "tree": tree,
+            "prepared": {key: prepared[key] for key in ("path", "commit", "entrypoint", "pin", "layout", "claims")},
+            "saved_versions": saved.get("saved_versions", []),
             "cell": cell,
         }
 

@@ -382,6 +382,18 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     HTTPStatus.CREATED,
                 )
                 return
+            if path == "/api/v1/catalog/launch-fork":
+                artifact_id = body.get("artifact_id")
+                if not isinstance(artifact_id, str):
+                    raise LauncherError("artifact_id must be a string")
+                self._json(
+                    self.server.launcher.launch_fork(
+                        artifact_id=artifact_id,
+                        acknowledge_risk=body.get("acknowledge_risk") is True,
+                    ),
+                    HTTPStatus.CREATED,
+                )
+                return
             if path == "/api/v1/catalog/sync":
                 self._json(self.server.sync_catalog())
                 return
