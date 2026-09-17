@@ -394,6 +394,9 @@
   .drawer .facts { padding-top: 12px; }
   .hero-trust { max-width: 640px; }
 
+  .feed-foot { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+  .feed-foot .feed-status { margin: 0; }
+
   /* Discovery rails */
   .rails { display: flex; flex-direction: column; gap: var(--s-6); }
   .rail-head { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
@@ -942,7 +945,18 @@
           <div class="empty"><h2>{{ emptyTitle }}</h2><p>{{ emptyDescription }}</p><button class="btn" onClick="{{ resetCatalogFilters }}">{{ emptyActionLabel }}</button></div>
         </sc-if>
         <sc-if value="{{ hasStoreError }}" hint-placeholder-val="{{ false }}"><div class="store-note" role="status">{{ storeError }}</div></sc-if>
-        <div class="feed-status mono" aria-live="polite">{{ catalogFeedStatus }}</div>
+        <div class="feed-foot">
+          <div class="feed-status mono" aria-live="polite">{{ catalogFeedStatus }}</div>
+          <sc-if value="{{ showLoadMore }}" hint-placeholder-val="{{ false }}">
+            <button class="btn" onClick="{{ loadMore }}" disabled="{{ loadMoreDisabled }}">{{ loadMoreLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ showCatalogSync }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-primary" onClick="{{ syncFullCatalog }}" disabled="{{ catalogSyncDisabled }}">{{ catalogSyncLabel }}</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{ hasCatalogSyncError }}" hint-placeholder-val="{{ false }}">
+          <div class="store-note" role="status">{{ catalogSyncError }}</div>
+        </sc-if>
         <p class="footnote">Recommendations prioritize evidence, capability, maintenance, and low visibility. Ranking is not security verification.</p>
       </section>
     </div>

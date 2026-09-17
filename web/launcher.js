@@ -1810,6 +1810,8 @@ class Component extends DCLogic {
       artifactRunLane: 'verified',
       configurationBusy: false,
       catalogStore: { available: false },
+      catalogSyncBusy: false,
+      catalogSyncError: '',
       storeArtifacts: [],
       storeTotal: 0,
       storeCursor: '',
@@ -2445,6 +2447,22 @@ class Component extends DCLogic {
     try { payload = await response.json(); } catch {}
     if (!response.ok) throw new Error(payload.error || ('Launcher request failed (' + response.status + ')'));
     return payload;
+  }
+
+  async syncFullCatalog() {
+    if (this.state.catalogSyncBusy) return;
+    this.setState({ catalogSyncBusy: true, catalogSyncError: '' });
+    try {
+      const result = await this.api('/api/v1/catalog/sync', { method: 'POST', body: '{}' });
+      await this.refreshStatus(true);
+      this.setState({ catalogSyncBusy: false, rails: [], railsType: '' });
+      this.scheduleCatalogRefresh();
+      this.loadRails(this.state.catalogType);
+      this.flash('Loaded ' + Number(result.artifact_count || 0).toLocaleString('en-US') + ' indexed records');
+    } catch (error) {
+      this.setState({ catalogSyncBusy: false, catalogSyncError: error.message });
+      this.flash(error.message);
+    }
   }
 
   usingCatalogStore(state = this.state) {
@@ -3310,9 +3328,29 @@ class Component extends DCLogic {
           this.refreshCatalog({ append: true });
         }
       },
+      // "End of results" over the 17-record embedded snapshot read as "this is
+      // the whole catalog". Say which corpus this is instead.
       catalogFeedStatus: s.favoritesOnly
         ? 'Favorites are saved in this browser only'
-        : (catalogPending ? 'Loading results…' : (s.storeCursor ? 'Scroll for more' : 'End of results')),
+        : (catalogPending
+          ? 'Loading results…'
+          : (storeActive
+            ? 'Showing ' + results.length.toLocaleString('en-US') + ' of '
+              + Number(s.storeTotal || results.length).toLocaleString('en-US')
+              + (s.storeCursor ? '' : ' · end of results')
+            : 'Offline snapshot · ' + results.length.toLocaleString('en-US')
+              + ' bundled record(s), not the full index')),
+      showLoadMore: storeActive && !!s.storeCursor && !s.favoritesOnly,
+      loadMoreLabel: s.storeLoading ? 'Loading…' : 'Load more',
+      loadMoreDisabled: !!s.storeLoading,
+      loadMore: () => this.refreshCatalog({ append: true }),
+      // Offered whenever the browser is not already serving the imported corpus.
+      showCatalogSync: !!s.sidecarConnected && !storeActive && !s.favoritesOnly,
+      catalogSyncLabel: s.catalogSyncBusy ? 'Loading the full index…' : 'Load the full catalog',
+      catalogSyncDisabled: !!s.catalogSyncBusy,
+      catalogSyncError: s.catalogSyncError,
+      hasCatalogSyncError: !!s.catalogSyncError,
+      syncFullCatalog: () => this.syncFullCatalog(),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
           ? 'Explainable hidden-gem priority · metadata only, not a security verdict'

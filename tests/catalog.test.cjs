@@ -700,8 +700,10 @@ test('without an imported store the browser still reads the embedded snapshot', 
   let values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
   assert.equal(values.catalogSourceLabel, 'Embedded snapshot');
-  assert.equal(values.catalogFeedStatus, 'End of results');
   assert(values.results.length > 0);
+  // The bundled snapshot must never present itself as the whole index.
+  assert.match(values.catalogFeedStatus, /not the full index/);
+  assert.doesNotMatch(values.catalogFeedStatus, /end of results/i);
 
   // A connected sidecar with nothing imported keeps using the embedded corpus.
   c.api = async () => ({ artifacts: [], total: 0 });
@@ -709,6 +711,37 @@ test('without an imported store the browser still reads the embedded snapshot', 
   values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
   assert.match(values.catalogSourceLabel, /no store imported/);
+  // and it offers the way out rather than leaving the reader stuck.
+  assert.equal(values.showCatalogSync, true);
+  assert.equal(values.showLoadMore, false);
+});
+
+test('loading the full catalog is offered, reported, and surfaces its own failure', async () => {
+  const c = instance();
+  c.renderVals().goPlugins();
+  connectedStore(c, { available: false, reason: 'No catalog store is imported yet' });
+  assert.equal(c.renderVals().showCatalogSync, true, 'the offline browser offers a way to load the index');
+
+  let posted;
+  c.api = async (url, options) => {
+    if (url === '/api/v1/catalog/sync') { posted = { url, method: options.method }; return { artifact_count: 37355 }; }
+    return { artifacts: [], total: 0 };
+  };
+  c.refreshStatus = async () => {};
+  await c.renderVals().syncFullCatalog();
+  assert.deepEqual(posted, { url: '/api/v1/catalog/sync', method: 'POST' });
+  assert.match(c.lastMessage, /37,355/, 'the real count is reported back');
+
+  // A failed sync must be visible in the UI, not only on the server's stderr.
+  const failing = instance();
+  failing.renderVals().goPlugins();
+  connectedStore(failing, { available: false, reason: 'No catalog store is imported yet' });
+  failing.api = async () => { throw new Error('Could not load the published catalog: offline'); };
+  failing.refreshStatus = async () => {};
+  await failing.renderVals().syncFullCatalog();
+  const values = failing.renderVals();
+  assert.equal(values.hasCatalogSyncError, true);
+  assert.match(values.catalogSyncError, /Could not load the published catalog/);
 });
 
 test('an imported store replaces the embedded inventory and maps records identically', async () => {
@@ -735,7 +768,11 @@ test('an imported store replaces the embedded inventory and maps records identic
   assert.equal(values.results[0].commitUrl, embedded.commitUrl);
   // The count reports the corpus size, not just the page.
   assert.match(values.resultCount, /1 of 23,890 forks/);
-  assert.equal(values.catalogFeedStatus, 'Scroll for more');
+  // The footer states the corpus size rather than implying the page is all of it.
+  assert.equal(values.catalogFeedStatus, 'Showing 1 of 23,890');
+  // Paging must not depend on a scroll event reaching the right element.
+  assert.equal(values.showLoadMore, true);
+  assert.equal(values.showCatalogSync, false, 'no sync prompt once the store is serving');
   assert(requests.at(-1).startsWith('/api/v1/catalog/search?'));
 });
 

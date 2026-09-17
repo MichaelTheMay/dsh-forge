@@ -110,11 +110,24 @@ def existing_launcher(port: int) -> bool:
 class LauncherHTTPServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, address, handler, launcher: Launcher, session_token: str | None = None):
+    def __init__(self, address, handler, launcher: Launcher, session_token: str | None = None,
+                 sync_catalog=None):
         self.launcher = launcher
         self.session_token = session_token or secrets.token_urlsafe(32)
+        self._sync_catalog = sync_catalog
         super().__init__(address, handler)
         self.launcher.protected_ports.add(self.server_address[1])
+
+    def sync_catalog(self) -> dict:
+        """Fetch and import the published catalog on request.
+
+        The UI needs this because otherwise the only way to get the full corpus
+        is a CLI flag chosen before startup, and a browser showing the embedded
+        snapshot cannot tell the difference.
+        """
+        if self._sync_catalog is None:
+            raise LauncherError("This launcher was not started with catalog syncing available")
+        return self._sync_catalog()
 
 
 class LauncherUIHandler(SimpleHTTPRequestHandler):
@@ -239,6 +252,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                         featured_only=flag("featured"),
                         licensed_only=flag("licensed"),
                         include_archived=flag("archived", True),
+                        tags=[
+                            value for value in
+                            (query.get("tags", [""])[0] or "").split(",")
+                            if value.strip()
+                        ],
+                        differentiated_only=flag("differentiated"),
                     ))
                 except ValueError as error:
                     self._json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
@@ -362,6 +381,9 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     ),
                     HTTPStatus.CREATED,
                 )
+                return
+            if path == "/api/v1/catalog/sync":
+                self._json(self.server.sync_catalog())
                 return
             if path == "/api/v1/catalog/install-run":
                 artifact_id = body.get("artifact_id")
@@ -533,12 +555,31 @@ def main():
         except (MarketplaceError, LauncherError, OSError) as error:
             print(f"Plugin catalog refresh failed; keeping the last good local catalog: {error}", file=sys.stderr, flush=True)
 
+    def sync_catalog_now():
+        """Same fetch-and-import as --sync-catalog, but surfaced to the caller.
+
+        Startup refresh deliberately swallows failures to keep the last good
+        local catalog. A user-initiated sync must report them instead, or the
+        browser has no way to explain why it is still showing the snapshot.
+        """
+        try:
+            imported = launcher.import_catalog(fetch_catalog_feed(args.catalog_feed_url))
+        except (FeedError, OSError) as error:
+            raise LauncherError(f"Could not load the published catalog: {error}") from error
+        return {
+            "artifact_count": imported.get("artifact_count", 0),
+            "counts": imported.get("counts", {}),
+            "snapshot_id": imported.get("snapshot_id", ""),
+        }
+
     refresh = refresh_catalog if args.sync_catalog else (refresh_plugins if args.sync_plugins else None)
     if refresh and not packaged():
         refresh()
     handler = partial(LauncherUIHandler, directory=str(WEB_ROOT))
     try:
-        server = LauncherHTTPServer(("127.0.0.1", args.port), handler, launcher)
+        server = LauncherHTTPServer(
+            ("127.0.0.1", args.port), handler, launcher, sync_catalog=sync_catalog_now
+        )
     except OSError as error:
         parser.exit(1, f"Could not bind loopback port {args.port}: {error}. Try --port {args.port + 1}.\n")
     print(f"DSH Forge launcher: http://127.0.0.1:{args.port}/#launch", flush=True)
