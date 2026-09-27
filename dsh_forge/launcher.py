@@ -27,6 +27,7 @@ from typing import Any, Iterable, Mapping
 from .catalog_store import CatalogStore, CatalogStoreError, build, verify_snapshot
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
+from .forks import ForkInstallError, ForkInstaller, detect_build, normalize_remote
 from .packages import PackageError
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
@@ -37,6 +38,8 @@ CELL_REGISTRY_EVENT_LIMIT = 64
 VERSION_REGISTRY_SCHEMA_VERSION = 1
 PACKAGE_INSTALL_REGISTRY_SCHEMA_VERSION = 1
 DEFAULT_VERSIONS_DIRECTORY = "dsh-versions"
+FORK_BUILD_WALL_SECONDS = int(os.environ.get("DSH_FORGE_FORK_BUILD_TIMEOUT", "3600"))
+HOST_TRUST = {"personal", "readonly"}
 PROFILE_SCAN_LIMIT = 500
 DEFAULT_VERSION_LAUNCH = {
     "surface": "web",
@@ -400,6 +403,7 @@ class Launcher:
         )
         home_candidates.append(Path(configured_home).expanduser() if configured_home else Path.home() / ".dsh")
         self._dsh_homes = self._dedupe_paths(home_candidates)
+        self.fork_installer = ForkInstaller(self.versions_directory / "forks", self.state_root)
         self.scan()
 
     def _load_roots(self) -> dict[str, dict[str, Any]]:
@@ -695,6 +699,9 @@ class Launcher:
     def _tree_record(self, root: Path, executable: Path, package: dict[str, Any], kind: str) -> dict[str, Any]:
         git, remote = _git_metadata(root)
         trust = _trust_for(root, remote)
+        community = self._community_install(root, git, remote) if trust == "foreign" else None
+        if community:
+            trust = "community"
         node = shutil.which("node") if executable.suffix in {".js", ".ts"} else None
         launchability = "ready"
         if executable.suffix == ".ts":
@@ -725,11 +732,39 @@ class Launcher:
             "launchability": launchability,
             "evidence": ["recognized CLI artifact", "package metadata" if package else "PATH executable"],
         }
+        if community:
+            record["community"] = {
+                "install_id": community["id"],
+                "artifact_id": community["artifact_id"],
+                "full_name": community["full_name"],
+                "commit": community["commit"],
+                "state": community.get("state"),
+            }
         if trust == "foreign":
             previous = self._sandbox_results.get(self._sandbox_key(record))
             if previous:
                 record["sandbox_test"] = self._sandbox_summary(previous)
                 record["launchability"] = "sandbox-tested" if previous.get("status") == "passed" else "sandbox-test-failed"
+        return record
+
+    def _community_install(
+        self, root: Path, git: dict[str, Any] | None, remote: str | None
+    ) -> dict[str, Any] | None:
+        """Recognize a checkout Forge installed from the catalog at a pinned commit."""
+        installer = getattr(self, "fork_installer", None)
+        if installer is None or not git:
+            return None
+        try:
+            record = installer.for_path(root)
+        except ForkInstallError:
+            return None
+        if not record or record.get("state") in {"failed", "removed"}:
+            return None
+        sha = str(git.get("sha") or "")
+        if not sha or not str(record.get("commit") or "").startswith(sha):
+            return None
+        if normalize_remote(remote) != normalize_remote(record.get("repository_url")):
+            return None
         return record
 
     @staticmethod
@@ -1095,6 +1130,7 @@ class Launcher:
             "dsh_homes": [_display_path(path) for path in self._dsh_homes],
             "saved_versions": self._public_saved_versions(),
             "package_installations": list(self._package_installations.values())[-25:],
+            "fork_installations": self._fork_installations(),
             "trusted_package_recipes": self.trusted_package_recipes(),
             "configurations": self.configurations(),
             "versions_directory": {
@@ -1253,13 +1289,17 @@ class Launcher:
             tree["launchability"] = "sandbox-tested" if result.get("status") == "passed" else "sandbox-test-failed"
             return dict(result)
 
-    def _tree(self, tree_id: str) -> dict[str, Any]:
+    def _tree(self, tree_id: str, *, allow_community: bool = False) -> dict[str, Any]:
         with self._lock:
             tree = self._trees.get(tree_id)
         if not tree:
             raise LauncherError("Select a detected DSH tree")
         if tree["trust"] == "foreign":
             raise LauncherError("Foreign trees may be capability-tested but are not promoted for complete cell execution")
+        if tree["trust"] == "community" and not allow_community:
+            raise LauncherError(
+                "Community forks run only in Apptainer cells launched with an explicit risk acknowledgement"
+            )
         if tree["launchability"] != "ready":
             raise LauncherError(f"Tree is not launchable: {tree['launchability']}")
         return tree
@@ -1278,7 +1318,7 @@ class Launcher:
             candidate = next(
                 (
                     tree for tree in self._trees.values()
-                    if tree.get("trust") != "foreign" and tree.get("launchability") == "ready"
+                    if tree.get("trust") in HOST_TRUST and tree.get("launchability") == "ready"
                 ),
                 None,
             )
@@ -1947,8 +1987,167 @@ class Launcher:
             profile=profile,
         )
 
+    # ------------------------------------------------------------ community forks
+    def _fork_installations(self) -> list[dict[str, Any]]:
+        try:
+            records = self.fork_installer.public_records()
+        except ForkInstallError:
+            return []
+        trees_by_path = {tree.get("real_path"): tree for tree in self._trees.values()}
+        public = []
+        for record in records[-50:]:
+            if record.get("state") == "removed":
+                continue
+            tree = trees_by_path.get(str(Path(str(record.get("path") or "")).resolve()))
+            public.append({
+                **{key: value for key, value in record.items() if key != "log_path"},
+                "path": _display_path(Path(str(record.get("path") or ""))),
+                "tree_id": tree["id"] if tree else None,
+                "launchability": tree.get("launchability") if tree else None,
+            })
+        return public
+
+    def _catalog_record(self, artifact_id: str) -> dict[str, Any]:
+        """Find a catalog record in the imported store, then the bundled seed."""
+        if not isinstance(artifact_id, str) or not re.fullmatch(r"[A-Za-z0-9:_.-]{1,160}", artifact_id):
+            raise LauncherError("Choose a catalog fork")
+        try:
+            record = self.catalog_store.get(artifact_id)
+        except CatalogStoreError:
+            record = None
+        if record is None:
+            seed = Path(__file__).resolve().parents[1] / "data" / "public-repos.seed.json"
+            payload = _read_json(seed)
+            record = next(
+                (
+                    entry for entry in [*(payload.get("entries") or []), *(payload.get("supplemental_entries") or [])]
+                    if isinstance(entry, dict) and entry.get("artifact_id") == artifact_id
+                ),
+                None,
+            )
+        if record is None:
+            raise LauncherError("Unknown catalog fork; sync the catalog and try again")
+        return dict(record)
+
+    def _fork_install_ready(self) -> None:
+        if os.name == "nt":
+            raise LauncherError("Fork installation requires the Linux Apptainer sandbox")
+        if not self.sandbox.ready:
+            raise LauncherError(str(self.sandbox.status().get("reason") or "Apptainer isolation is required to build forks"))
+
+    def plan_fork_install(self, artifact_id: str) -> dict[str, Any]:
+        """Resolve the exact commit and actions before any download."""
+        artifact = self._catalog_record(artifact_id)
+        try:
+            plan = self.fork_installer.plan(artifact)
+        except ForkInstallError as error:
+            raise LauncherError(str(error)) from error
+        status = self.sandbox.status()
+        plan.update({
+            "destination": _display_path(Path(plan["destination"])),
+            "sandbox_ready": bool(status.get("ready")),
+            "sandbox_reason": status.get("reason"),
+            "network": "host during dependency installation and web cells",
+        })
+        return plan
+
+    def install_fork(self, artifact_id: str, commit: str, *, acknowledge_risk: bool) -> dict[str, Any]:
+        """Queue an installation of one catalog fork at the reviewed commit."""
+        if not acknowledge_risk:
+            raise LauncherError("Installing a fork builds community code; acknowledge the risk first")
+        self._fork_install_ready()
+        artifact = self._catalog_record(artifact_id)
+        try:
+            plan = self.fork_installer.plan(artifact)
+            if plan["commit"] != commit:
+                raise LauncherError("The fork moved since you reviewed it; review the new commit first")
+            record = self.fork_installer.begin(plan)
+        except ForkInstallError as error:
+            raise LauncherError(str(error)) from error
+        self.fork_installer.start(record["id"], self._run_fork_install)
+        return {key: value for key, value in record.items() if not key.startswith("real_") and key != "log_path"}
+
+    def _run_fork_install(self, install_id: str) -> None:
+        installer = self.fork_installer
+        record = installer.update(install_id, state="fetching", detail="Fetching the pinned commit")
+        destination = installer.acquire(record)
+        build = detect_build(destination)
+        installer.update(
+            install_id,
+            state="building",
+            detail="Installing dependencies and building inside Apptainer",
+            build={"manager": build["manager"], "steps": [" ".join(step) for step in build["steps"]], "note": build["reason"]},
+        )
+        log = Path(str(record["log_path"]))
+        build_root = self.state_root / "fork-builds" / install_id
+        home = build_root / "home"
+        home.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            for index, step in enumerate(build["steps"], start=1):
+                installer.update(install_id, detail=f"Step {index}/{len(build['steps'])}: {' '.join(step)}")
+                try:
+                    plan = self.sandbox.build_plan(
+                        source_root=destination, home=home, payload=step, wall_seconds=FORK_BUILD_WALL_SECONDS,
+                    )
+                except SandboxError as error:
+                    raise ForkInstallError(str(error)) from error
+                with log.open("a", encoding="utf-8") as handle:
+                    handle.write(f"$ {' '.join(step)}  (Apptainer, host network, no secrets)\n")
+                    handle.flush()
+                    try:
+                        completed = subprocess.run(
+                            plan["argv"], cwd=str(self.state_root), env=plan["environment"],
+                            stdin=subprocess.DEVNULL, stdout=handle, stderr=subprocess.STDOUT,
+                            timeout=FORK_BUILD_WALL_SECONDS + 30, check=False,
+                        )
+                    except (OSError, subprocess.TimeoutExpired) as error:
+                        raise ForkInstallError(f"Build step could not finish: {type(error).__name__}") from None
+                if completed.returncode != 0:
+                    raise ForkInstallError(
+                        f"Build step '{' '.join(step)}' exited with {completed.returncode}; see the install log"
+                    )
+        finally:
+            shutil.rmtree(build_root, ignore_errors=True)
+        with self._mutation_lock:
+            if self.versions_directory not in self._configured_scan_roots:
+                self._configured_scan_roots.append(self.versions_directory)
+            self.scan()
+            tree = next(
+                (item for item in self._trees.values() if item.get("real_path") == str(destination.resolve())),
+                None,
+            )
+        if not tree or tree.get("trust") != "community":
+            raise ForkInstallError("Build finished, but Forge did not find a DeepSeek Harness CLI in this fork")
+        if tree.get("launchability") != "ready":
+            raise ForkInstallError(f"Build finished, but the CLI is not launch-ready ({tree.get('launchability')})")
+        installer.update(install_id, state="ready", detail="Built and ready to launch in Apptainer", tree_id=tree["id"])
+
+    def remove_fork_install(self, install_id: str) -> dict[str, Any]:
+        with self._mutation_lock:
+            live = [
+                cell for cell in self._cells.values()
+                if cell.get("process") == "alive" and (self._trees.get(cell.get("treeId")) or {}).get("community", {}).get("install_id") == install_id
+            ]
+            if live:
+                raise LauncherError("Stop this fork's running sessions before removing it")
+            try:
+                self.fork_installer.remove(install_id)
+            except ForkInstallError as error:
+                raise LauncherError(str(error)) from error
+            return self.scan()
+
+    def fork_install_logs(self, install_id: str) -> list[str]:
+        try:
+            lines = self.fork_installer.log_tail(install_id)
+        except ForkInstallError as error:
+            raise LauncherError(str(error)) from error
+        host_home = str(Path.home())
+        return [line.replace(host_home, "~") for line in lines]
+
     def _normalize_spec(self, raw: dict[str, Any]) -> dict[str, Any]:
-        tree = self._tree(str(raw.get("tree_id", "")))
+        acknowledged = raw.get("acknowledge_risk") is True
+        tree = self._tree(str(raw.get("tree_id", "")), allow_community=acknowledged)
+        community = tree.get("trust") == "community"
         if not self.sandbox.ready:
             raise LauncherError(str(self.sandbox.status().get("reason") or "Apptainer cell runner is unavailable"))
         surface = str(raw.get("surface", "web"))
@@ -1990,6 +2189,13 @@ class Launcher:
             workspace_raw = "managed"
         clone_source_raw = str(raw.get("clone_source") or "~/.dsh")
         clone_source = Path(clone_source_raw).expanduser().resolve()
+        if community and home_mode == "clone":
+            try:
+                clone_source.relative_to(self.cells_root.resolve())
+            except ValueError:
+                raise LauncherError(
+                    "Community forks start with a fresh home; only their own managed sessions can be cloned"
+                ) from None
         task = str(raw.get("task") or "").strip()
         if surface == "headless" and not task:
             raise LauncherError("Enter a task for the one-shot headless surface")
@@ -2035,6 +2241,7 @@ class Launcher:
             "resources": resources,
             "network": network,
             "gpu": gpu,
+            "community": community,
         }
 
     def _home_preview(self, spec: dict[str, Any], cell_id: str = "<generated>") -> str:
@@ -2422,7 +2629,7 @@ class Launcher:
                 if re.fullmatch(r"config_[a-f0-9]{20}", str(raw.get("configuration_id") or ""))
                 else None
             ),
-            "purpose": "forge-assistant" if assistant else "user-cell",
+            "purpose": "forge-assistant" if assistant else ("community-fork" if spec.get("community") else "user-cell"),
             "created_at": int(time.time() * 1000),
             "updated_at": int(time.time() * 1000),
             "lifecycle": [],
@@ -2433,6 +2640,7 @@ class Launcher:
                 "home_mode": spec["home_mode"], "clone_source": spec["clone_source"],
                 "workspace": spec["workspace"], "resources": spec["resources"],
                 "network": spec["network"],
+                **({"acknowledge_risk": True} if spec.get("community") else {}),
             },
         }
         self._record_lifecycle(cell, "started", "fail-closed Apptainer cell process created")

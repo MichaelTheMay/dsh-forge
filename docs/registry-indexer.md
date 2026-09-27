@@ -88,3 +88,15 @@ The feed index declares byte sizes and SHA-256 digests for compressed and
 expanded JSON. Sync validates HTTPS redirects, download bounds, gzip expansion,
 both digests, and the snapshot identity before atomically replacing the local
 SQLite store. Its provenance remains `unsigned_checksum_verified`.
+
+## Thumbnail metadata
+
+Fork rows keep the owner's `owner_avatar_url` when GitHub returns an
+`avatars.githubusercontent.com` URL. When `GITHUB_TOKEN` is available,
+`scripts/index_registry.py` also runs one bounded GraphQL pass
+(`--social-previews auto|on|off`) that records `social_preview_url` only for
+repositories that uploaded a custom social preview hosted on
+`repository-images.githubusercontent.com`; GitHub's generated fallback cards
+are ignored because Forge draws its own cover art. The pass adds a
+`github-graphql/social-preview` coverage record and marks it `incomplete`
+rather than failing the build if a batch fails.

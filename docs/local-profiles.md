@@ -82,5 +82,7 @@ for the stable `dsh-forge.cli/v1` envelope, and `--dsh-home` to add a home.
 of the plugins inside it, and running one grants that code the user's own
 access. Community artifacts that are *not* already installed keep the stricter
 boundary: an exact curator-signed plugin recipe may install and run through the
-Apptainer transaction, while unsigned plugins and all V1 forks remain
-browse-only. Forge exposes no raw host command or archive shortcut.
+Apptainer transaction, unsigned plugins remain browse-only, and catalog forks
+install at a pinned commit and run only in acknowledged Apptainer cells (see
+[Community forks](community-forks.md)). Forge exposes no raw host command or
+archive shortcut.

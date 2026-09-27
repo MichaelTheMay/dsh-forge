@@ -11,6 +11,8 @@ from typing import Any, Callable, Mapping
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from .previews import safe_avatar_url
+
 
 GITHUB_API = "https://api.github.com"
 GITHUB_API_VERSION = "2026-03-10"
@@ -167,6 +169,7 @@ def _fork(
         "node_id": node_id,
         "full_name": slug,
         "owner": owner["login"],
+        **({"owner_avatar_url": avatar} if (avatar := safe_avatar_url(owner.get("avatar_url"))) else {}),
         "name": name,
         "artifact_type": "fork",
         "classifications": ["fork"],

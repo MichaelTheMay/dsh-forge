@@ -428,7 +428,7 @@ class ApptainerSandbox:
             "secrets_forwarded": False,
         }
 
-    def _verify_pinned_inputs(self, tree: Mapping[str, Any]) -> tuple[Path, Path, Path]:
+    def _verify_image(self) -> None:
         if not self.ready:
             raise SandboxError(str(self._status.get("reason") or "Apptainer sandbox is not ready"))
         image = self.config.image
@@ -436,6 +436,59 @@ class ApptainerSandbox:
             raise SandboxError("Pinned sandbox image is missing, replaced, or no longer read-only")
         if self._sha256(image) != self.image_digest:
             raise SandboxError("Pinned sandbox image changed after the capability probe")
+
+    def build_plan(
+        self,
+        *,
+        source_root: Path,
+        home: Path,
+        payload: Sequence[str],
+        wall_seconds: int,
+    ) -> dict[str, Any]:
+        """Supervise one dependency or build step of a community checkout.
+
+        The checkout is the only writable project mount, the home is
+        disposable, launcher secrets are never forwarded, and host networking
+        is enabled so the package manager can download dependencies.
+        """
+        self._verify_image()
+        if source_root.is_symlink() or not source_root.is_dir():
+            raise SandboxError("Community checkout is missing or was replaced by a symlink")
+        if not payload or payload[0] not in {"corepack", "npm"}:
+            raise SandboxError("Community builds run only the fixed package-manager commands")
+        if type(wall_seconds) is not int or not 60 <= wall_seconds <= max(60, self.config.cell_timeout_seconds):
+            raise SandboxError("Community build wall time is outside the configured sandbox limit")
+        command = self.command(
+            home=home,
+            workspace=source_root,
+            payload=list(payload),
+            network="host",
+            gpu=False,
+            container_environment={
+                "CI": "1",
+                "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+                "COREPACK_HOME": "/home/dsh/.corepack",
+                "NPM_CONFIG_UPDATE_NOTIFIER": "false",
+                "NPM_CONFIG_FUND": "false",
+                "PNPM_HOME": "/home/dsh/.pnpm",
+                "HUSKY": "0",
+            },
+        )
+        if not self.timeout_binary:
+            raise SandboxError("Cell wall-time supervisor is unavailable")
+        return {
+            "argv": [
+                self.timeout_binary, "--foreground", "--signal=TERM", "--kill-after=5",
+                str(wall_seconds), *command,
+            ],
+            "environment": dict(self._host_environment()),
+            "network": "host",
+            "image_sha256": self.image_digest,
+            "secrets_forwarded": False,
+        }
+
+    def _verify_pinned_inputs(self, tree: Mapping[str, Any]) -> tuple[Path, Path, Path]:
+        self._verify_image()
         root_candidate = Path(str(tree.get("real_path") or ""))
         executable_candidate = Path(str(tree.get("real_exe") or ""))
         if root_candidate.is_symlink() or not root_candidate.is_dir():

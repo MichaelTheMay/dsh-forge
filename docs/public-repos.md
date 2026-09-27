@@ -15,8 +15,10 @@ claiming that the current recipes are genuinely useful bundles.
 catalog is presented as the Community page. The application logic is a
 precompiled same-origin script in `web/launcher.js`; `web/support.js` consumes
 that class without evaluating the inline design export as JavaScript.
-The page supports search, sort, infinite paging, local favorites, dedicated
-artifact profiles, source links, and captured provenance. Stable primary routes
+The page supports search, sort, infinite paging, card and list layouts with
+generated thumbnails, favorites (synced when signed in on the hosted site),
+dedicated artifact profiles, source links, captured provenance, and pinned
+fork installation. Stable primary routes
 are `#plugins` and `#forks`. Artifact profiles use
 `#plugins/<encoded-artifact-id>` and `#forks/<encoded-artifact-id>`. The old
 `#public-repos` link continues to resolve to Forks. Existing
