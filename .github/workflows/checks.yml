@@ -32,7 +32,7 @@ jobs:
           python3 scripts/embed_catalog.py
           git diff --exit-code -- web/launcher.js
       - name: Test catalog behavior
-        run: node --test tests/catalog.test.cjs
+        run: node --test tests/catalog.test.cjs tests/auth.test.mjs
       - name: Test metadata safety and the launcher sidecar
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Produce the portable preview

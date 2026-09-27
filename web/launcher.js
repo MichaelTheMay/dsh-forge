@@ -1319,6 +1319,239 @@ function catalogDate(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
+// ---------------------------------------------------------------------------
+// Thumbnails. Every artifact gets deterministic cover art derived from its
+// identity, so a record renders the same everywhere without any network use.
+// A repository's own GitHub social preview and its owner's avatar are layered
+// on top only when their URLs pass a strict host allowlist.
+// ---------------------------------------------------------------------------
+const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+const AVATAR_URL = /^https:\/\/avatars\.githubusercontent\.com\/(?:u\/\d{1,12}|[A-Za-z0-9-]{1,39})(?:\?[A-Za-z0-9=&._-]{0,64})?$/;
+const PREVIEW_URL = /^https:\/\/repository-images\.githubusercontent\.com\/\d{1,12}\/[A-Za-z0-9-]{8,64}$/;
+const LANGUAGE_COLORS = {
+  TypeScript: '#3178c6', JavaScript: '#f1e05a', Python: '#3572a5', Rust: '#dea584', Go: '#00add8',
+  Java: '#b07219', Kotlin: '#a97bff', Swift: '#f05138', 'C++': '#f34b7d', C: '#8a8a8a', 'C#': '#178600',
+  Shell: '#89e051', HTML: '#e34c26', CSS: '#663399', Vue: '#41b883', Svelte: '#ff3e00', Dart: '#00b4ab',
+  Ruby: '#cc342d', PHP: '#4f5d95', Lua: '#6c6cff', Zig: '#ec915c', Nix: '#7e7eff', Elixir: '#6e4a7e'
+};
+
+function hashText(value) {
+  // FNV-1a keeps covers stable across browsers and releases.
+  let hash = 0x811c9dc5;
+  const text = String(value || '');
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+function seededRandom(seed) {
+  let state = seed >>> 0 || 1;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function round1(value) { return Math.round(value * 10) / 10; }
+
+function circlePath(x, y, r) {
+  return 'M' + round1(x - r) + ' ' + round1(y) + 'a' + r + ' ' + r + ' 0 1 0 ' + (2 * r) + ' 0a' + r + ' ' + r + ' 0 1 0 ' + (-2 * r) + ' 0';
+}
+
+function squarePath(x, y, size) {
+  const h = size / 2;
+  return 'M' + round1(x - h) + ' ' + round1(y - h) + 'h' + size + 'v' + size + 'h' + (-size) + 'z';
+}
+
+function monogram(name) {
+  let text = String(name || '').trim();
+  for (let pass = 0; pass < 3; pass++) {
+    text = text.replace(/^(?:open-|free-)?(?:deepseek-harness|deepseek|harness|dsh|cordis-plugin|plugin)(?=[-_ .]|$)[-_ .]*/i, '');
+  }
+  const words = (text || String(name || '')).split(/[-_ .]+/).filter(Boolean);
+  const letters = words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2);
+  return letters.toUpperCase();
+}
+
+function ownerAvatarUrl(artifact) {
+  const recorded = typeof artifact.owner_avatar_url === 'string' ? artifact.owner_avatar_url : '';
+  if (AVATAR_URL.test(recorded)) return recorded + (recorded.includes('?') ? '&' : '?') + 's=96';
+  const owner = String(artifact.owner || '');
+  const fromGithub = artifact.type !== 'package' && /^https:\/\/github\.com\//.test(String(artifact.repository_url || artifact.url || ''));
+  return fromGithub && GITHUB_LOGIN.test(owner) ? 'https://avatars.githubusercontent.com/' + owner + '?s=96' : '';
+}
+
+function socialPreviewUrl(artifact) {
+  const value = typeof artifact.social_preview_url === 'string' ? artifact.social_preview_url : '';
+  return PREVIEW_URL.test(value) ? value : '';
+}
+
+// A fork cover draws its lineage: the upstream trunk, the point where the fork
+// branched, and its own commits. Known divergence sets the commit counts.
+function forkMotif(random, artifact, width = 320) {
+  const right = width + 8;
+  const trunkY = 76 + Math.round(random() * 10);
+  const up = random() < 0.7;
+  const branchY = up ? 26 + Math.round(random() * 14) : 106 + Math.round(random() * 6);
+  const splitX = 58 + Math.round(random() * 70);
+  const divergence = artifact.divergence || null;
+  const ahead = divergence ? Math.max(1, Math.min(9, Number(divergence.ahead_by) || 1)) : 3 + Math.floor(random() * 3);
+  const behind = divergence ? Math.max(1, Math.min(7, Number(divergence.behind_by) || 1)) : 2 + Math.floor(random() * 3);
+  const joinX = splitX + 46;
+  const lines = ['M-8 ' + trunkY + 'H' + right,
+    'M' + splitX + ' ' + trunkY + 'C' + (splitX + 22) + ' ' + trunkY + ' ' + (joinX - 24) + ' ' + branchY + ' ' + joinX + ' ' + branchY + 'H' + right];
+  const dots = [];
+  const trunkStep = (right - splitX) / (behind + 1);
+  for (let index = 0; index < 3; index++) dots.push(circlePath(splitX - 18 - index * 30, trunkY, 3.2));
+  dots.push(circlePath(splitX, trunkY, 3.6));
+  for (let index = 1; index <= behind; index++) dots.push(circlePath(splitX + index * trunkStep, trunkY, 3.2));
+  const accent = [];
+  const branchStep = (width - 16 - joinX) / Math.max(1, ahead - 1);
+  for (let index = 0; index < ahead; index++) {
+    const x = joinX + index * branchStep;
+    accent.push(circlePath(x, branchY, index === ahead - 1 ? 5.2 : 3.8));
+  }
+  // A faint second-generation branch when the fork has children of its own.
+  if (Number(artifact.forks_count) > 0) {
+    const childX = joinX + branchStep * Math.min(ahead - 1, 1 + Math.floor(random() * 2));
+    const childY = up ? branchY - 22 : branchY - 30;
+    lines.push('M' + round1(childX) + ' ' + branchY + 'C' + round1(childX + 16) + ' ' + branchY + ' ' + round1(childX + 18) + ' ' + childY + ' ' + round1(childX + 40) + ' ' + childY + 'H' + right);
+    dots.push(circlePath(childX + 64, childY, 2.8));
+  }
+  return { lines: lines.join(''), dots: dots.join(''), accent: accent.join(''), ring: circlePath(joinX + (ahead - 1) * branchStep, branchY, 9) };
+}
+
+// A plugin cover is a small module graph: jittered nodes, a spanning set of
+// connections, and a few highlighted modules.
+function moduleMotif(random, width = 320) {
+  const columns = Math.max(7, Math.round(width / 46));
+  const rows = 4;
+  const nodes = [];
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      nodes.push({
+        x: 22 + column * ((width - 44) / (columns - 1)) + (random() - 0.5) * 18,
+        y: 20 + row * 34 + (random() - 0.5) * 14,
+        row, column
+      });
+    }
+  }
+  const lines = [];
+  const used = new Set([0]);
+  const at = (row, column) => nodes[row * columns + column];
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const node = at(row, column);
+      if (column + 1 < columns && random() < 0.55) {
+        const next = at(row, column + 1);
+        lines.push('M' + round1(node.x) + ' ' + round1(node.y) + 'L' + round1(next.x) + ' ' + round1(next.y));
+        used.add(row * columns + column); used.add(row * columns + column + 1);
+      }
+      if (row + 1 < rows && random() < 0.4) {
+        const next = at(row + 1, column);
+        const midY = round1((node.y + next.y) / 2);
+        lines.push('M' + round1(node.x) + ' ' + round1(node.y) + 'V' + midY + 'H' + round1(next.x) + 'V' + round1(next.y));
+        used.add(row * columns + column); used.add((row + 1) * columns + column);
+      }
+    }
+  }
+  const dots = [];
+  const accent = [];
+  const highlighted = new Set();
+  while (highlighted.size < 3) highlighted.add(Math.floor(random() * nodes.length));
+  nodes.forEach((node, index) => {
+    if (highlighted.has(index)) accent.push(squarePath(node.x, node.y, 11));
+    else if (used.has(index)) dots.push(circlePath(node.x, node.y, 2.8));
+  });
+  const focus = nodes[[...highlighted][0]];
+  return { lines: lines.join(''), dots: dots.join(''), accent: accent.join(''), ring: squarePath(focus.x, focus.y, 21) };
+}
+
+function svgAttr(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
+function coverSvg(motif, colors, mark, strokeWidth, width = 320) {
+  return "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " + width + " 140' preserveAspectRatio='xMidYMid slice'>" +
+    (mark ? "<text x='" + (width - 14) + "' y='132' text-anchor='end' font-family='Helvetica,Arial,sans-serif' font-weight='700' font-size='88' letter-spacing='-5' fill='#fff' fill-opacity='.08'>" + svgAttr(mark) + '</text>' : '') +
+    "<path d='" + svgAttr(motif.lines) + "' fill='none' stroke='" + colors.line + "' stroke-width='" + strokeWidth + "' stroke-linecap='round' stroke-linejoin='round'/>" +
+    "<path d='" + svgAttr(motif.ring) + "' fill='none' stroke='" + colors.ring + "' stroke-width='1.4'/>" +
+    "<path d='" + svgAttr(motif.dots) + "' fill='" + colors.dot + "'/>" +
+    "<path d='" + svgAttr(motif.accent) + "' fill='" + colors.accent + "'/>" +
+    '</svg>';
+}
+
+function svgUrl(svg) {
+  return 'url("data:image/svg+xml,' + encodeURIComponent(svg).replace(/'/g, '%27').replace(/\(/g, '%28').replace(/\)/g, '%29') + '")';
+}
+
+function artCover(artifact) {
+  const identity = artifact.id || artifact.artifact_id || artifact.slug || artifact.full_name || artifact.name;
+  const seed = hashText(identity);
+  const random = seededRandom(seed);
+  const hue = seed % 360;
+  const hue2 = (hue + 28 + Math.round(random() * 48)) % 360;
+  const hue3 = (hue + 312 - Math.round(random() * 30)) % 360;
+  const glowX = 12 + Math.round(random() * 40);
+  const glowY = 10 + Math.round(random() * 50);
+  const glow2X = 60 + Math.round(random() * 34);
+  const glow2Y = 40 + Math.round(random() * 50);
+  const gradient = [
+    'radial-gradient(70% 95% at ' + glowX + '% ' + glowY + '%, oklch(0.56 0.14 ' + hue + ' / .85), transparent 70%)',
+    'radial-gradient(60% 80% at ' + glow2X + '% ' + glow2Y + '%, oklch(0.5 0.15 ' + hue2 + ' / .7), transparent 72%)',
+    'linear-gradient(140deg, oklch(0.3 0.06 ' + hue3 + '), oklch(0.2 0.035 ' + hue + '))'
+  ].join(', ');
+  const bannerSeed = seededRandom(seed ^ 0x9e3779b9);
+  const motif = artifact.type === 'fork' ? forkMotif(random, artifact) : moduleMotif(random);
+  const bannerMotif = artifact.type === 'fork' ? forkMotif(bannerSeed, artifact, 820) : moduleMotif(bannerSeed, 820);
+  // SVG images use hsl(): it renders in every engine that loads a data URI.
+  const colors = {
+    line: 'hsla(' + hue + ',60%,92%,.38)',
+    dot: 'hsla(' + hue + ',55%,94%,.55)',
+    accent: 'hsl(' + hue2 + ',90%,76%)',
+    ring: 'hsla(' + hue2 + ',90%,76%,.45)'
+  };
+  const mark = monogram(artifact.name);
+  const language = typeof artifact.language === 'string' && LANGUAGE_COLORS[artifact.language] ? artifact.language : '';
+  return {
+    key: String(identity || ''),
+    art: svgUrl(coverSvg(motif, colors, mark, 1.6)),
+    thumbArt: svgUrl(coverSvg(motif, colors, '', 3.2)),
+    bannerArt: svgUrl(coverSvg(bannerMotif, colors, mark, 1.4, 820)),
+    gradient,
+    monogram: mark,
+    avatarTint: 'oklch(0.42 0.1 ' + hue + ')',
+    language,
+    languageColor: language ? LANGUAGE_COLORS[language] : 'transparent'
+  };
+}
+
+// Display-ready thumbnail fields. Everything is a CSS background layer, so an
+// image that fails to load simply reveals the generated art beneath it; no
+// inline handlers or <img> elements exist in the template.
+function withThumbnail(artifact) {
+  const cover = artCover(artifact);
+  const avatar = ownerAvatarUrl(artifact);
+  const preview = socialPreviewUrl(artifact);
+  const previewLayer = preview ? 'url("' + preview + '") center / cover no-repeat, ' : '';
+  return {
+    cover,
+    coverStyle: 'background: ' + previewLayer + cover.art + ' center / cover no-repeat, ' + cover.gradient,
+    thumbStyle: 'background: ' + cover.thumbArt + ' center / cover no-repeat, ' + cover.gradient,
+    bannerStyle: 'background: ' + previewLayer + cover.bannerArt + ' center / cover no-repeat, ' + cover.gradient,
+    avatarStyle: 'background-color: ' + cover.avatarTint + (avatar ? '; --avatar: url("' + avatar + '")' : ''),
+    avatarUrl: avatar,
+    hasAvatar: !!avatar,
+    previewUrl: preview,
+    hasPreview: !!preview
+  };
+}
+
 // One mapping serves both corpora: the embedded snapshot and the records the
 // catalog store hands back verbatim.
 function mapRepositoryArtifact(a) {
@@ -1412,7 +1645,7 @@ const REPOSITORY_CATALOG = [
 ].map(mapRepositoryArtifact);
 const PACKAGE_CATALOG = (CATALOG_SNAPSHOT.package_entries || []).map(mapPackageArtifact);
 const CATALOG = [...PACKAGE_CATALOG, ...REPOSITORY_CATALOG];
-// ponytail: anonymous V1 state; replace with account sync only when authentication ships.
+// Favorites always live in this browser; signing in on the hosted site also syncs them.
 const FAVORITES_KEY = 'dsh-forge:favorites:v1';
 
 function storedFavorites() {
@@ -1424,6 +1657,34 @@ function storedFavorites() {
       : [];
   } catch {
     return [];
+  }
+}
+
+// Remote favorites come first; anything saved only in this browser is kept too.
+function mergeFavorites(remote, local) {
+  const seen = new Set();
+  const merged = [];
+  for (const item of [...(Array.isArray(remote) ? remote : []), ...(Array.isArray(local) ? local : [])]) {
+    if (!item || typeof item.id !== 'string' || !['plugin', 'fork'].includes(item.type) || seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push(item);
+  }
+  return merged.slice(0, 200);
+}
+
+const LAYOUT_KEY = 'dsh-forge:catalog-layout:v1';
+
+function storedLayout() {
+  const fallback = { plugin: 'grid', fork: 'grid' };
+  if (typeof window === 'undefined' || !window.localStorage) return fallback;
+  try {
+    const value = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) || '{}');
+    return {
+      plugin: value.plugin === 'list' ? 'list' : 'grid',
+      fork: value.fork === 'list' ? 'list' : 'grid'
+    };
+  } catch {
+    return fallback;
   }
 }
 
@@ -1475,6 +1736,14 @@ class Component extends DCLogic {
       savedVersions: [],
       trustedPackageRecipes: [],
       packageInstallations: [],
+      forkInstallations: [],
+      forkPlan: null,
+      forkPlanBusy: false,
+      forkRiskAcknowledged: false,
+      forkInstallBusy: false,
+      forkLogLines: [],
+      communityLaunch: null,
+      communityRiskAcknowledged: false,
       configurations: [],
       profiles: [],
       profileTask: '',
@@ -1513,6 +1782,10 @@ class Component extends DCLogic {
       detailArtifact: null,
       favoriteArtifacts: storedFavorites(),
       favoritePopId: null,
+      catalogLayout: storedLayout(),
+      auth: { configured: false, sync: false, user: null },
+      favoritesSync: 'local',
+      accountMenuOpen: false,
       toast: '',
       cells: [],
       sidecarConnected: false,
@@ -1565,6 +1838,7 @@ class Component extends DCLogic {
       });
     };
     window.addEventListener('hashchange', this.hashListener);
+    if (this.isPublicWeb()) this.loadAuth();
     const statusReady = this.isPublicWeb() ? Promise.resolve() : this.refreshStatus(true);
     statusReady.then(async () => {
       if (!this.state.sidecarConnected && ['landing', 'catalog'].includes(this.state.view)) {
@@ -1586,6 +1860,7 @@ class Component extends DCLogic {
     clearInterval(this.inspectorTimer);
     if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.favoritePopTimer) clearTimeout(this.favoritePopTimer);
+    if (this.favoriteSyncTimer) clearTimeout(this.favoriteSyncTimer);
     if (this._catalogTimer) clearTimeout(this._catalogTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
@@ -1681,7 +1956,7 @@ class Component extends DCLogic {
   }
 
   confirmArtifactRun(detail) {
-    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
     if (!detail.execution || !detail.execution.eligible) {
@@ -1696,7 +1971,7 @@ class Component extends DCLogic {
 
   async installAndRunArtifact() {
     const detail = this.state.artifactRunConfirmation;
-    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
     this.setState({ artifactRunBusy: true });
     try {
@@ -1730,7 +2005,8 @@ class Component extends DCLogic {
       starsLabel: detail.starsLabel, github_stars: detail.github_stars, language: detail.language,
       licenseLabel: detail.licenseLabel, licenseOk: detail.licenseOk, pushed_at: detail.pushed_at,
       topics: detail.topics || [], base: detail.base, commitUrl: detail.commitUrl,
-      source_repository: detail.source_repository, package: detail.package || null
+      source_repository: detail.source_repository, package: detail.package || null,
+      saved_at: Date.now()
     };
     const next = exists
       ? this.state.favoriteArtifacts.filter(item => item.id !== detail.id)
@@ -1744,7 +2020,76 @@ class Component extends DCLogic {
         window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
       }
     } catch {}
+    this.scheduleFavoriteSync();
     this.flash(exists ? 'Removed from favorites' : 'Saved to favorites');
+  }
+
+  // ---------------------------------------------------------------- account
+  async loadAuth() {
+    const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+    const signin = params.get('signin');
+    if (signin && typeof window !== 'undefined' && window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      this.flash(signin === 'cancelled' ? 'Sign-in cancelled' : 'Sign-in did not complete; please try again');
+    }
+    try {
+      const auth = await this.api('/api/auth/session');
+      this.setState({ auth: { configured: !!auth.configured, sync: !!auth.sync, user: auth.user || null } });
+      if (auth.user && auth.sync) await this.pullFavorites();
+    } catch {
+      this.setState({ auth: { configured: false, sync: false, user: null } });
+    }
+  }
+
+  signIn() {
+    if (typeof window === 'undefined') return;
+    const route = /^#[A-Za-z0-9/_:%.-]{0,200}$/.test(window.location.hash) ? window.location.hash : '#plugins';
+    window.location.assign('/api/auth/login?return=' + encodeURIComponent(route));
+  }
+
+  async signOut() {
+    try {
+      await this.api('/api/auth/session', { method: 'POST', body: JSON.stringify({ action: 'logout' }) });
+    } catch {}
+    this.setState({ auth: { ...this.state.auth, user: null }, favoritesSync: 'local', accountMenuOpen: false });
+    this.flash('Signed out · favorites stay in this browser');
+  }
+
+  persistFavorites(favorites) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    } catch {}
+  }
+
+  async pullFavorites() {
+    this.setState({ favoritesSync: 'syncing' });
+    try {
+      const remote = await this.api('/api/favorites');
+      const merged = mergeFavorites(remote.favorites || [], this.state.favoriteArtifacts);
+      this.setState({ favoriteArtifacts: merged });
+      this.persistFavorites(merged);
+      if (merged.length !== (remote.favorites || []).length) await this.pushFavorites();
+      else this.setState({ favoritesSync: 'synced' });
+    } catch {
+      this.setState({ favoritesSync: 'error' });
+    }
+  }
+
+  async pushFavorites() {
+    if (!(this.state.auth.user && this.state.auth.sync)) return;
+    this.setState({ favoritesSync: 'syncing' });
+    try {
+      await this.api('/api/favorites', { method: 'PUT', body: JSON.stringify({ favorites: this.state.favoriteArtifacts }) });
+      this.setState({ favoritesSync: 'synced' });
+    } catch {
+      this.setState({ favoritesSync: 'error' });
+    }
+  }
+
+  scheduleFavoriteSync() {
+    if (!(this.state.auth.user && this.state.auth.sync)) return;
+    if (this.favoriteSyncTimer) clearTimeout(this.favoriteSyncTimer);
+    this.favoriteSyncTimer = setTimeout(() => { this.favoriteSyncTimer = null; this.pushFavorites(); }, 400);
   }
 
   async copyRepositoryRef(detail) {
@@ -1783,7 +2128,7 @@ class Component extends DCLogic {
   }
 
   async installPackage(detail) {
-    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
     if (!this.state.trustedPackageRecipes.some(item => item.slug === detail.slug && item.configured)) {
@@ -1806,7 +2151,7 @@ class Component extends DCLogic {
   }
 
   async saveCatalogConfiguration(detail) {
-    const versionId = this.state.packageVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
     const recipeConfigured = !!detail.catalogPackage && this.state.trustedPackageRecipes.some(
@@ -1923,7 +2268,7 @@ class Component extends DCLogic {
   }
 
   async startAssistant() {
-    const versionId = this.state.assistantVersionId || (this.state.savedVersions.find(item => item.state === 'ready') || {}).id;
+    const versionId = this.state.assistantVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
     if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
@@ -1940,6 +2285,90 @@ class Component extends DCLogic {
     } finally {
       this.setState({ assistantBusy: false });
     }
+  }
+
+  // Plugins, packages, and the assistant only ever run on official or personal Harness versions.
+  defaultHostVersionId() {
+    const version = this.state.savedVersions.find(item =>
+      item.state === 'ready' && !(item.primary_tree && item.primary_tree.trust === 'community'));
+    return version ? version.id : undefined;
+  }
+
+  forkInstallation(artifactId) {
+    return [...this.state.forkInstallations].reverse().find(item => item.artifact_id === artifactId) || null;
+  }
+
+  async reviewForkInstall(detail) {
+    if (!this.state.sidecarConnected) return this.flash('Open the desktop launcher to install forks');
+    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    this.setState({ forkPlanBusy: true });
+    try {
+      const plan = await this.api('/api/v1/forks/plan', { method: 'POST', body: JSON.stringify({ artifact_id: detail.id }) });
+      this.setState({ forkPlan: plan, forkRiskAcknowledged: false });
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ forkPlanBusy: false });
+    }
+  }
+
+  async installFork() {
+    const plan = this.state.forkPlan;
+    if (!plan || !this.state.forkRiskAcknowledged || this.state.forkInstallBusy) return;
+    this.setState({ forkInstallBusy: true });
+    try {
+      await this.api('/api/v1/forks/install', {
+        method: 'POST',
+        body: JSON.stringify({ artifact_id: plan.artifact_id, commit: plan.commit, acknowledge_risk: true })
+      });
+      this.setState({ forkPlan: null, forkRiskAcknowledged: false, forkLogLines: [] });
+      await this.refreshStatus(true);
+      this.flash('Installing ' + plan.full_name + ' at ' + plan.commit.slice(0, 7));
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ forkInstallBusy: false });
+    }
+  }
+
+  async refreshForkLog(installation) {
+    if (!installation || !this.state.sidecarConnected) return;
+    try {
+      const payload = await this.api('/api/v1/forks/' + encodeURIComponent(installation.id) + '/logs');
+      this.setState({ forkLogLines: (payload.lines || []).slice(-14) });
+    } catch {}
+  }
+
+  async removeForkInstall(installation) {
+    if (!installation) return;
+    try {
+      this.applyStatus(await this.api('/api/v1/forks/remove', { method: 'POST', body: JSON.stringify({ id: installation.id }) }));
+      this.flash('Fork checkout removed');
+    } catch (error) {
+      this.flash(error.message);
+    }
+  }
+
+  confirmCommunityLaunch(version) {
+    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    this.setState({ communityLaunch: version, communityRiskAcknowledged: false });
+  }
+
+  async launchCommunity() {
+    const version = this.state.communityLaunch;
+    if (!version || !this.state.communityRiskAcknowledged) return;
+    this.setState({ communityLaunch: null, communityRiskAcknowledged: false });
+    if (typeof window !== 'undefined' && this.state.view !== 'launch') window.location.hash = 'launch';
+    await this.quickLaunch(version, { acknowledgeRisk: true });
+  }
+
+  setCatalogLayout(layout) {
+    const type = this.state.catalogType === 'fork' ? 'fork' : 'plugin';
+    const next = { ...this.state.catalogLayout, [type]: layout === 'list' ? 'list' : 'grid' };
+    this.setState({ catalogLayout: next });
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(next));
+    } catch {}
   }
 
   flash(msg) {
@@ -2071,6 +2500,7 @@ class Component extends DCLogic {
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
+      forkInstallations: Array.isArray(status.fork_installations) ? status.fork_installations : [],
       configurations: Array.isArray(status.configurations) ? status.configurations : [],
       profiles: Array.isArray(status.profiles) ? status.profiles : [],
       application: status.application || this.state.application,
@@ -2078,6 +2508,8 @@ class Component extends DCLogic {
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
     });
+    const openFork = this.state.detailOpen && this.state.catalogType === 'fork' ? this.forkInstallation(this.state.artifactId) : null;
+    if (openFork && ['queued', 'fetching', 'building', 'failed'].includes(openFork.state)) this.refreshForkLog(openFork);
     // An imported corpus replaces the embedded inventory for artifact types it
     // contains. Missing types keep their small offline snapshot.
     if (this.usingCatalogStore() && !this.state.storeArtifacts.length && !this.state.storeLoading) {
@@ -2182,7 +2614,7 @@ class Component extends DCLogic {
     return h > 0 ? h + 'h ' + pad(m) + 'm ' + pad(s % 60) + 's' : m + 'm ' + pad(s % 60) + 's';
   }
 
-  async quickLaunch(version) {
+  async quickLaunch(version, { acknowledgeRisk = false } = {}) {
     if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
     if (!version.treeId) return this.flash('That version is not available on this machine');
     const launch = version.launchSettings || {
@@ -2200,7 +2632,8 @@ class Component extends DCLogic {
         home_mode: 'fresh',
         workspace: 'managed',
         network: 'host',
-        resources: { gpu: launch.resources && launch.resources.gpu === 'allocated' ? 'allocated' : 'none' }
+        resources: { gpu: launch.resources && launch.resources.gpu === 'allocated' ? 'allocated' : 'none' },
+        ...(acknowledgeRisk ? { acknowledge_risk: true } : {})
       }) });
       await this.refreshStatus(true);
       await this.inspectCell(cell, 'logs');
@@ -2267,6 +2700,7 @@ class Component extends DCLogic {
     // Rows are only built from launch-ready trees; the sandbox and trust still gate Launch.
     const localVersionCard = (tree, saved = null) => {
       const canLaunch = !!sandbox.ready && tree.trust !== 'foreign';
+      const community = tree.trust === 'community' ? (tree.community || {}) : null;
       const launchSettings = (saved && saved.launch) || {
         surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
         home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
@@ -2279,18 +2713,23 @@ class Component extends DCLogic {
         gitLine: tree.git ? tree.git.branch + ' @ ' + String(tree.git.sha).slice(0, 7) : tree.kind,
         treeId: tree.id,
         installPath: saved ? saved.path : tree.path,
-        originLabel: saved && saved.source === 'auto' ? 'Found automatically' : (saved ? 'Added manually' : 'Found for this session'),
+        originLabel: community
+          ? 'Community fork · ' + (community.full_name || 'catalog') + ' @ ' + String(community.commit || '').slice(0, 7)
+          : (saved && saved.source === 'auto' ? 'Found automatically' : (saved ? 'Added manually' : 'Found for this session')),
+        isCommunity: !!community,
         launchSummary: 'auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
         status,
         statusColor: canLaunch ? OK : WARN,
-        buttonLabel: canLaunch ? 'Launch' : status,
+        buttonLabel: canLaunch ? (community ? 'Launch…' : 'Launch') : status,
         disabled: !canLaunch,
         showSettings: !!saved,
         settingsOpen: !!saved && s.versionSettingsId === saved.id,
         showForget: !!saved && saved.source !== 'auto',
         openBrowser: !!launchSettings.open_browser,
         gpuMode,
-        launch: () => this.quickLaunch({ version: tree.version, treeId: tree.id, launchSettings }),
+        launch: () => community
+          ? this.confirmCommunityLaunch({ version: tree.version, treeId: tree.id, launchSettings, community })
+          : this.quickLaunch({ version: tree.version, treeId: tree.id, launchSettings }),
         toggleSettings: () => saved && this.setState({
           versionSettingsId: s.versionSettingsId === saved.id ? null : saved.id
         }),
@@ -2427,11 +2866,12 @@ class Component extends DCLogic {
     const detail = !s.detailOpen ? {}
       : ((s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
         CATALOG.find(a => a.id === s.artifactId) || s.storeArtifacts.find(a => a.id === s.artifactId) || {});
-    const packageVersions = s.savedVersions.filter(item => item.state === 'ready').map(item => ({
+    const hostVersions = s.savedVersions.filter(item => item.state === 'ready' && !(item.primary_tree && item.primary_tree.trust === 'community'));
+    const packageVersions = hostVersions.map(item => ({
       id: item.id,
       label: ((item.primary_tree || {}).version || 'Detected Harness') + ' · ' + item.path
     }));
-    const selectedPackageVersion = s.packageVersionId || ((s.savedVersions.find(item => item.state === 'ready') || {}).id || '');
+    const selectedPackageVersion = s.packageVersionId || ((hostVersions[0] || {}).id || '');
     const recipeConfigured = !!detail.catalogPackage && s.trustedPackageRecipes.some(
       item => item.slug === detail.slug && item.configured
     );
@@ -2444,8 +2884,14 @@ class Component extends DCLogic {
         ? 'Loading the local execution policy for this artifact'
         : 'Connect the local launcher to check for an exact signed sandbox recipe'
     };
+    const installLabels = {};
+    for (const item of s.forkInstallations) {
+      if (item.state === 'ready') installLabels[item.artifact_id] = 'Installed';
+      else if (['queued', 'fetching', 'building'].includes(item.state)) installLabels[item.artifact_id] = 'Installing';
+    }
     const results = filtered.map(a => ({
       ...a,
+      ...withThumbnail(a),
       featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
       accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
       tags: ((a.curation && a.curation.taxonomy) || a.topics || []).slice(0, 2),
@@ -2458,8 +2904,44 @@ class Component extends DCLogic {
       behindLabel: a.divergence ? '/ −' + a.divergence.behind_by : '',
       pushedLabel: catalogDate(a.pushed_at),
       licenseShort: a.licenseOk ? a.licenseLabel : '—',
+      initials: String(a.owner || '?').slice(0, 1).toUpperCase(),
+      versionShort: a.package && a.package.version ? a.package.version : '—',
+      installedLabel: a.type === 'fork' ? (installLabels[a.id] || '') : '',
       select: () => this.selectCatalogArtifact(a)
     }));
+    const detailThumb = withThumbnail(detail.id ? detail : { id: 'none', name: '' });
+    const forkInstall = detail.type === 'fork' && detail.id ? this.forkInstallation(detail.id) : null;
+    const forkState = forkInstall ? forkInstall.state : 'none';
+    const forkActive = ['queued', 'fetching', 'building'].includes(forkState);
+    const forkReady = forkState === 'ready' && !!forkInstall.tree_id;
+    const forkTree = forkReady ? s.trees.find(tree => tree.id === forkInstall.tree_id) : null;
+    const forkLaunchable = !!(forkTree && forkTree.trust === 'community' && forkTree.launchability === 'ready');
+    const forkCopy = !s.sidecarConnected
+      ? {
+          pill: 'Desktop only', label: 'Install in the desktop launcher', disabled: true,
+          text: 'Forks install through the local launcher: Forge fetches one pinned commit and builds and runs it only inside the Apptainer sandbox.'
+        }
+      : (forkReady
+        ? {
+            pill: 'Installed', label: forkLaunchable ? 'Launch in sandbox…' : 'Setup required', disabled: !forkLaunchable || !sandbox.ready,
+            text: 'Installed at ' + String(forkInstall.commit).slice(0, 12) + ' in ' + forkInstall.path + '. It also appears under Local as a community fork.'
+          }
+        : (forkActive
+          ? { pill: forkState === 'building' ? 'Building' : 'Fetching', label: 'Installing…', disabled: true, text: forkInstall.detail || 'Working…' }
+          : (!sandbox.ready
+            ? { pill: 'Needs isolation', label: 'Isolation setup required', disabled: true, text: sandbox.reason || 'Configure the pinned Apptainer image first.' }
+            : {
+                pill: forkState === 'failed' ? 'Failed' : 'Sandboxed',
+                label: s.forkPlanBusy ? 'Checking the commit…' : (forkState === 'failed' ? 'Review and try again…' : 'Review & install…'),
+                disabled: s.forkPlanBusy,
+                text: forkState === 'failed'
+                  ? forkInstall.detail
+                  : 'Fetch one pinned commit, build it inside Apptainer, and add it to Local. Nothing runs on your host.'
+              })));
+    const forkPlan = s.forkPlan;
+    const forkLayout = s.catalogLayout.fork === 'list' ? 'list' : 'grid';
+    const pluginLayout = s.catalogLayout.plugin === 'list' ? 'list' : 'grid';
+    const activeLayout = s.catalogType === 'fork' ? forkLayout : pluginLayout;
     const detailRows = !detail.id ? [] : (detail.catalogPackage ? [
       { k: 'Package ID', v: detail.id, color: TXT },
       { k: 'Publisher', v: detail.publisher.name + ' · ' + detail.publisher.kind, color: TXT },
@@ -2565,7 +3047,7 @@ class Component extends DCLogic {
             ? 'No favorite ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks') + ' yet'
             : 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
           description: s.favoritesOnly && !s.query.trim()
-            ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. Favorites are saved in this browser.'
+            ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. ' + (s.auth.user && s.auth.sync ? 'They sync to your account.' : 'Favorites are saved in this browser.')
             : 'Try a name, author, capability, taxonomy term, or clear the current filters.',
           action: s.favoritesOnly ? 'Show all' : 'Clear filters',
           run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false }); this.scheduleCatalogRefresh(); }
@@ -2672,9 +3154,18 @@ class Component extends DCLogic {
       toggleFavoritesOnly: () => this.setState({ favoritesOnly: !s.favoritesOnly, detailOpen: false, detailArtifact: null }),
       isForkBrowser: s.catalogType === 'fork',
       isPluginBrowser: s.catalogType !== 'fork',
+      showCardGrid: activeLayout === 'grid',
+      showPluginList: s.catalogType !== 'fork' && activeLayout === 'list',
+      showForkList: s.catalogType === 'fork' && activeLayout === 'list',
+      gridLayoutClass: activeLayout === 'grid' ? 'on' : '',
+      listLayoutClass: activeLayout === 'list' ? 'on' : '',
+      gridLayoutPressed: activeLayout === 'grid' ? 'true' : 'false',
+      listLayoutPressed: activeLayout === 'list' ? 'true' : 'false',
+      useGridLayout: () => this.setCatalogLayout('grid'),
+      useListLayout: () => this.setCatalogLayout('list'),
       browserTitle: s.catalogType === 'fork' ? 'Forks' : (s.catalogType === 'package' ? 'Packages' : 'Plugins'),
       browserLede: s.catalogType === 'fork'
-        ? 'Independent builds of ' + CATALOG_SNAPSHOT.upstream + '. Browse only for now: Forge can’t launch forks yet.'
+        ? 'Independent builds of ' + CATALOG_SNAPSHOT.upstream + '. Install any fork at a pinned commit; it builds and runs only inside the Apptainer sandbox.'
         : (s.catalogType === 'package'
           ? 'Signed plugin stacks. Each recipe must be verified locally before it can be installed.'
           : 'Extensions that load into a Harness profile. Only plugins with a matching signed recipe can be installed.'),
@@ -2699,7 +3190,7 @@ class Component extends DCLogic {
         }
       },
       catalogFeedStatus: s.favoritesOnly
-        ? 'Favorites are saved in this browser only'
+        ? (s.auth.user && s.auth.sync ? 'Favorites sync to @' + s.auth.user.login : 'Favorites are saved in this browser' + (s.auth.configured ? ' · sign in to sync them' : ''))
         : (catalogPending ? 'Loading results…' : (s.storeCursor ? 'Scroll for more' : 'End of results')),
       sortExplanation: s.catalogSort === 'recommended'
         ? (storeActive
@@ -2713,6 +3204,8 @@ class Component extends DCLogic {
       showCatalogFeed: !s.detailOpen,
       showArtifactPage: s.detailOpen,
       detail,
+      detailThumb,
+      detailInitials: String(detail.owner || '?').slice(0, 1).toUpperCase(),
       detailRows,
       detailCompatibilityText,
       detailEvidenceText,
@@ -2808,6 +3301,57 @@ class Component extends DCLogic {
       resetCatalogFilters: emptyCopy.run,
       copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
+      forkInstallPill: forkCopy.pill,
+      forkInstallPillClass: forkReady ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
+      forkInstallText: forkCopy.text,
+      forkInstallLabel: forkCopy.label,
+      forkInstallDisabled: forkCopy.disabled,
+      forkInstallAction: () => {
+        if (!detail.id) return undefined;
+        if (forkReady && forkTree) {
+          return this.confirmCommunityLaunch({
+            version: forkTree.version, treeId: forkTree.id, launchSettings: null, community: forkTree.community || {}
+          });
+        }
+        return this.reviewForkInstall(detail);
+      },
+      forkInstallActive: forkActive,
+      forkProgressStyle: 'width: ' + ({ queued: 12, fetching: 38, building: 72 }[forkState] || 0) + '%',
+      forkShowLog: (forkActive || forkState === 'failed') && s.forkLogLines.length > 0,
+      forkLogLines: s.forkLogLines.map((line, index) => ({ id: index, text: line })),
+      forkRemovable: !!forkInstall && !forkActive && ['ready', 'failed'].includes(forkState),
+      removeFork: () => this.removeForkInstall(forkInstall),
+
+      forkPlanOpen: !!forkPlan,
+      forkPlanName: forkPlan ? forkPlan.full_name : '',
+      forkPlanCommit: forkPlan ? forkPlan.commit : '',
+      forkPlanCommitSource: forkPlan
+        ? (forkPlan.commit_source === 'catalog'
+          ? 'Commit captured by the catalog'
+          : 'Current head of ' + (forkPlan.default_branch || 'the default branch') + ', resolved just now')
+        : '',
+      forkPlanDestination: forkPlan ? forkPlan.destination : '',
+      forkPlanSteps: forkPlan ? forkPlan.steps : [],
+      forkRiskAcknowledged: s.forkRiskAcknowledged,
+      toggleForkRisk: event => this.setState({ forkRiskAcknowledged: !!event.target.checked }),
+      forkInstallConfirmDisabled: !s.forkRiskAcknowledged || s.forkInstallBusy,
+      forkInstallConfirmLabel: s.forkInstallBusy ? 'Starting…' : 'Install fork',
+      cancelForkPlan: () => { if (!s.forkInstallBusy) this.setState({ forkPlan: null, forkRiskAcknowledged: false }); },
+      confirmForkInstall: () => this.installFork(),
+
+      communityLaunchOpen: !!s.communityLaunch,
+      communityLaunchName: s.communityLaunch
+        ? ((s.communityLaunch.community && s.communityLaunch.community.full_name) || s.communityLaunch.version)
+        : '',
+      communityLaunchCommit: s.communityLaunch && s.communityLaunch.community
+        ? String(s.communityLaunch.community.commit || '').slice(0, 12)
+        : '',
+      communityRiskAcknowledged: s.communityRiskAcknowledged,
+      toggleCommunityRisk: event => this.setState({ communityRiskAcknowledged: !!event.target.checked }),
+      communityLaunchDisabled: !s.communityRiskAcknowledged,
+      cancelCommunityLaunch: () => this.setState({ communityLaunch: null, communityRiskAcknowledged: false }),
+      confirmCommunityLaunch: () => this.launchCommunity(),
+
       assistantVersions: packageVersions,
       selectedAssistantVersion: s.assistantVersionId || selectedPackageVersion,
       setAssistantVersion: event => this.setState({ assistantVersionId: event.target.value }),
@@ -2851,6 +3395,23 @@ class Component extends DCLogic {
       previewNotes,
       closePreview: () => this.setState({ preview: null, previewData: null, pendingProfile: null }),
       confirmPreview: () => this.startLocalProfile(),
+
+      showAccount: !!s.auth.configured,
+      signedIn: !!s.auth.user,
+      signedOut: !!s.auth.configured && !s.auth.user,
+      accountLogin: s.auth.user ? '@' + s.auth.user.login : '',
+      accountName: s.auth.user ? s.auth.user.name : '',
+      accountAvatarStyle: s.auth.user && /^https:\/\/avatars\.githubusercontent\.com\//.test(s.auth.user.avatar_url || '')
+        ? 'background-color: oklch(0.4 0.05 255); --avatar: url("' + s.auth.user.avatar_url + '")'
+        : 'background-color: oklch(0.4 0.05 255)',
+      accountInitial: s.auth.user ? String(s.auth.user.login || '?').slice(0, 1).toUpperCase() : '',
+      accountMenuOpen: s.accountMenuOpen,
+      accountSyncLabel: !s.auth.sync
+        ? 'Favorites stay in this browser; sync is not enabled on this deployment'
+        : ({ syncing: 'Syncing favorites…', synced: 'Favorites synced to your account', error: 'Favorites could not sync; they are kept locally' }[s.favoritesSync] || 'Favorites sync to your account'),
+      toggleAccountMenu: () => this.setState({ accountMenuOpen: !s.accountMenuOpen }),
+      signIn: () => this.signIn(),
+      signOut: () => this.signOut(),
 
       toast: s.toast
     };

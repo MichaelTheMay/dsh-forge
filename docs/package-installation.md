@@ -66,8 +66,9 @@ python3 -m dsh_forge catalog install-run github:REPLACE_WITH_ARTIFACT_ID \
 
 The web and CLI routes accept only the artifact ID and saved-version ID. They
 resolve the catalog record, recipe, signature, trust root, source URL, and
-sandbox policy locally. Forks stay browse-only in V1 because installing a full
-Harness fork requires a distinct signed build recipe and compatibility boundary.
+sandbox policy locally. Forks use a separate path because a fork replaces the
+whole Harness rather than adding a plugin to it: see
+[Community forks](community-forks.md).
 
 ## Enforced transaction
 

@@ -40,11 +40,19 @@ share the host network so their loopback port is reachable; headless cells
 default to a network namespace with no network. Apptainer still shares the host
 kernel and is not described as a virtual machine.
 
-Already-present community checkouts remain limited to the separate bounded
+**Forks are installable.** From a fork's page, Forge shows the exact commit it
+will fetch, and after an explicit risk acknowledgement it fetches only that
+commit with a hardened Git invocation, installs dependencies and builds inside
+Apptainer, and adds the result under **Local** as a *community fork*. Community
+forks run only in Apptainer cells, always start from a fresh home, and each
+launch asks for acknowledgement again. They never host local profiles, plugin
+packages, or the assistant. See [Community forks](docs/community-forks.md).
+
+Checkouts Forge did not install itself remain limited to the separate bounded
 capability probe on the loopback sidecar
 (`POST /api/v1/trees/<tree-id>/sandbox-test`), and that probe requires per-cell
-cgroup controls. The V1 launcher UI does not list them, and they are never
-promoted into complete cells. Public repository acquisition remains disabled.
+cgroup controls. The launcher UI does not list them, and they are never
+promoted into complete cells.
 
 ## Open the UI
 
@@ -272,10 +280,15 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
 - Browse Plugins and Forks in a dynamically loaded card feed. Every artifact
   opens a stable, shareable profile route with authorship, provenance, activity,
   compatibility, license, and risk metadata.
-- Plugins open as a card grid and forks as a lineage table, each on its own
-  tab. Favorite an artifact locally and reopen it from either browser's
-  **Favorites** filter. Authentication, ratings, and cross-device favorites
-  remain post-V1 work.
+- Every plugin and fork has a thumbnail: deterministic cover art generated
+  from its identity (a module graph for plugins, a lineage graph for forks that
+  reflects measured divergence), layered under the repository's custom GitHub
+  social preview and its owner's avatar when those exist. Both browsers switch
+  between cards and a compact list, and remember the choice.
+- Favorite an artifact and reopen it from either browser's **Favorites**
+  filter. Favorites always stay in this browser; on the hosted site, **Sign in
+  with GitHub** also syncs them across devices. See
+  [Accounts and synced favorites](docs/accounts.md). Ratings remain post-V1.
 - A plugin page checks an exact declared Harness version list against the
   launch-ready versions on this machine. Real semver ranges and prose
   qualifiers are shown verbatim and never evaluated.
@@ -283,8 +296,11 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
   curator-signed, single-plugin recipe matches its exact npm package, integrity,
   repository, and commit. Every attempt requires a risk acknowledgment, runs
   the existing offline Apptainer transaction, and starts a disposable clone.
-  Unmatched plugins and all V1 forks remain browse-only. Forge exposes no host
-  install or raw archive shortcut.
+  Unmatched plugins remain browse-only. Forge exposes no host install or raw
+  archive shortcut.
+- A fork's **Install fork** action pins one commit, builds it in Apptainer,
+  and registers it under Local; **Launch in sandbox** starts it in a fresh
+  cell after acknowledgement.
 - The package
   composition and installation contract remains available through the CLI, but
   provisional package recipes are not promoted in the primary browser.

@@ -135,7 +135,7 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com https://repository-images.githubusercontent.com; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; frame-ancestors 'none'; base-uri 'none'")
         super().end_headers()
 
     def _loopback_host(self) -> bool:
@@ -283,6 +283,16 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        match = re.fullmatch(r"/api/v1/forks/(fork_[a-f0-9]{16})/logs", path)
+        if match:
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json({"lines": self.server.launcher.fork_install_logs(match.group(1))})
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.NOT_FOUND)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         match = re.fullmatch(r"/api/v1/cells/([^/]+)/artifacts", path)
         if match:
             if self._api_guard() and self._session_ok():
@@ -376,6 +386,30 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     ),
                     HTTPStatus.CREATED,
                 )
+                return
+            if path == "/api/v1/forks/plan":
+                artifact_id = body.get("artifact_id")
+                if not isinstance(artifact_id, str):
+                    raise LauncherError("artifact_id must be a catalog fork ID")
+                self._json(self.server.launcher.plan_fork_install(artifact_id))
+                return
+            if path == "/api/v1/forks/install":
+                artifact_id = body.get("artifact_id")
+                commit = body.get("commit")
+                if not isinstance(artifact_id, str) or not isinstance(commit, str):
+                    raise LauncherError("artifact_id and commit must be strings")
+                self._json(
+                    self.server.launcher.install_fork(
+                        artifact_id, commit, acknowledge_risk=body.get("acknowledge_risk") is True,
+                    ),
+                    HTTPStatus.ACCEPTED,
+                )
+                return
+            if path == "/api/v1/forks/remove":
+                install_id = body.get("id")
+                if not isinstance(install_id, str):
+                    raise LauncherError("id must be a fork installation ID")
+                self._json(self.server.launcher.remove_fork_install(install_id))
                 return
             if path == "/api/v1/configurations":
                 self._json(

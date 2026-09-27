@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dsh_forge.marketplace import DEFAULT_CATALOG_URL, fetch_catalog
 from dsh_forge.packages import write_json
+from dsh_forge.previews import apply_social_previews, fetch_social_previews, repository_slugs
 from dsh_forge.registry import DEFAULT_UPSTREAM, fetch_github_fork_network, merge_registry_snapshots
 
 
@@ -24,6 +25,12 @@ def main() -> int:
     parser.add_argument("--max-fork-pages", type=int, default=500)
     parser.add_argument("--output", required=True, metavar="JSON")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--social-previews",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help="Record custom GitHub social-preview images for thumbnails (auto: when GITHUB_TOKEN is set)",
+    )
     args = parser.parse_args()
 
     snapshots = []
@@ -42,6 +49,14 @@ def main() -> int:
             ),
         ))
     merged = merge_registry_snapshots(*snapshots)
+    token = os.environ.get("GITHUB_TOKEN")
+    if args.social_previews == "on" and not token:
+        parser.error("--social-previews on requires GITHUB_TOKEN")
+    if args.social_previews != "off" and token:
+        previews, preview_coverage = fetch_social_previews(repository_slugs(merged), token=token)
+        applied = apply_social_previews(merged, previews)
+        merged["coverage"] = [*merged.get("coverage", []), preview_coverage]
+        print(f"Recorded {applied:,} custom social previews", file=sys.stderr, flush=True)
     write_json(args.output, merged, force=args.force, compact=True)
     counts = {
         "plugins": len(merged["supplemental_entries"]),

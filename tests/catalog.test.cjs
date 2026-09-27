@@ -1132,3 +1132,202 @@ test('Assistant tab starts a saved Harness through its dedicated endpoint', asyn
   });
   assert.match(html, /Isolated DeepSeek Harness Forge Assistant/);
 });
+
+test('thumbnails are deterministic generated art with allowlisted GitHub layers', () => {
+  const c = instance({}, '#forks');
+  const first = c.renderVals().results;
+  const again = instance({}, '#forks').renderVals().results;
+  assert.equal(first.length, 10);
+  assert.deepEqual(first.map(item => item.coverStyle), again.map(item => item.coverStyle));
+  assert.equal(new Set(first.map(item => item.coverStyle)).size, first.length);
+  for (const item of first) {
+    assert.match(item.coverStyle, /^background: url\("data:image\/svg\+xml,/);
+    assert.match(item.thumbStyle, /data:image\/svg\+xml/);
+    assert.match(item.avatarStyle, /--avatar: url\("https:\/\/avatars\.githubusercontent\.com\/[A-Za-z0-9-]+\?s=96"\)/);
+    assert.equal(item.hasPreview, false);
+  }
+  const Thumb = (record) => {
+    const view = instance({}, '#forks');
+    view.setState({ storeArtifacts: [], favoriteArtifacts: [record], favoritesOnly: true });
+    return view.renderVals().results[0];
+  };
+  const preview = 'https://repository-images.githubusercontent.com/42/3f2a9c1e-1b2c-4d5e-8f90-a1b2c3d4e5f6';
+  const safe = Thumb({ id: 'github:42', type: 'fork', name: 'x', owner: 'octo', url: 'https://github.com/octo/x', social_preview_url: preview });
+  assert.equal(safe.hasPreview, true);
+  assert(safe.coverStyle.startsWith('background: url("' + preview + '") center / cover no-repeat, url("data:'));
+  const hostile = Thumb({
+    id: 'github:43', type: 'fork', name: 'x', owner: 'o"); background: url(https://evil.example/',
+    url: 'https://github.com/o/x', social_preview_url: 'https://evil.example/p.png', owner_avatar_url: 'https://evil.example/a.png'
+  });
+  assert.equal(hostile.hasPreview, false);
+  assert.equal(hostile.hasAvatar, false);
+  assert(!/evil\.example/.test(hostile.coverStyle + hostile.avatarStyle));
+});
+
+test('thumbnail template has no inline handlers or eagerly loaded images', () => {
+  const template = html.slice(html.indexOf('<x-dc>'), html.indexOf('</x-dc>'));
+  assert(!/<img\b/i.test(template));
+  assert(!/\sonError=/i.test(template));
+  assert(!/<path d="\{\{/.test(template));
+  assert.match(template, /class="cover" style="\{\{ r\.coverStyle \}\}"/);
+  assert.match(template, /class="banner" style="\{\{ detailThumb\.bannerStyle \}\}"/);
+  for (const policy of [vercel.headers[0].headers[0].value, rootVercel.headers[0].headers[0].value]) {
+    assert.match(policy, /img-src 'self' data: https:\/\/avatars\.githubusercontent\.com https:\/\/repository-images\.githubusercontent\.com;/);
+  }
+});
+
+test('card and list layouts are remembered per catalog type', () => {
+  stored.delete('dsh-forge:catalog-layout:v1');
+  const c = instance({}, '#forks');
+  assert.equal(c.renderVals().showCardGrid, true);
+  c.renderVals().useListLayout();
+  assert.equal(c.renderVals().showForkList, true);
+  assert.equal(c.renderVals().showCardGrid, false);
+  assert.deepEqual(JSON.parse(stored.get('dsh-forge:catalog-layout:v1')), { plugin: 'grid', fork: 'list' });
+  c.setState({ catalogType: 'plugin' });
+  assert.equal(c.renderVals().showCardGrid, true);
+  stored.delete('dsh-forge:catalog-layout:v1');
+});
+
+const FORK_ID = 'github:1333146268';
+function forkDetail(status = {}) {
+  const c = instance({}, '#forks/' + encodeURIComponent(FORK_ID));
+  c.refreshStatus = async () => {};
+  c.applyStatus({
+    trees: [], cells: [], saved_versions: [], suggested_port: 3100, coverage_gaps: [], credentials: [],
+    sandbox: { ready: true, reason: 'ready' }, ...status
+  });
+  return c;
+}
+
+test('fork pages review the pinned commit before installing', async () => {
+  const offline = instance({}, '#forks/' + encodeURIComponent(FORK_ID)).renderVals();
+  assert.equal(offline.isForkDetail, true);
+  assert.equal(offline.forkInstallLabel, 'Install in the desktop launcher');
+  assert.equal(offline.forkInstallDisabled, true);
+
+  const c = forkDetail();
+  const requests = [];
+  c.api = async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    if (url === '/api/v1/forks/plan') {
+      return {
+        artifact_id: FORK_ID, full_name: 'salathleizhang/deepseek-harness-desktop', commit: 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754',
+        commit_source: 'catalog', destination: '~/dsh-versions/forks/x', steps: ['fetch', 'build', 'register']
+      };
+    }
+    return { id: 'fork_0123456789abcdef', state: 'queued' };
+  };
+  let values = c.renderVals();
+  assert.equal(values.forkInstallLabel, 'Review & install…');
+  await values.forkInstallAction();
+  values = c.renderVals();
+  assert.equal(values.forkPlanOpen, true);
+  assert.equal(values.forkPlanCommit, 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754');
+  assert.equal(values.forkInstallConfirmDisabled, true);
+  await values.confirmForkInstall();
+  assert.equal(requests.length, 1, 'no install without acknowledgement');
+  values.toggleForkRisk({ target: { checked: true } });
+  await c.renderVals().confirmForkInstall();
+  assert.deepEqual(requests[1], {
+    url: '/api/v1/forks/install',
+    body: { artifact_id: FORK_ID, commit: 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754', acknowledge_risk: true }
+  });
+  assert.equal(c.renderVals().forkPlanOpen, false);
+});
+
+test('installed forks launch only through the sandbox acknowledgement', async () => {
+  const tree = {
+    id: 'tree_fork', version: '0.1.0-fork', path: '~/dsh-versions/forks/x', trust: 'community', launchability: 'ready',
+    community: { install_id: 'fork_0123456789abcdef', full_name: 'salathleizhang/deepseek-harness-desktop', commit: 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754' }
+  };
+  const personal = { id: 'tree_mine', version: '0.1.0', path: '~/dsh', trust: 'personal', launchability: 'ready' };
+  const c = forkDetail({
+    trees: [tree, personal],
+    saved_versions: [
+      { id: 'version_aaaaaaaaaaaa', path: tree.path, source: 'auto', state: 'ready', tree_ids: [tree.id], primary_tree: tree },
+      { id: 'version_bbbbbbbbbbbb', path: personal.path, source: 'manual', state: 'ready', tree_ids: [personal.id], primary_tree: personal }
+    ],
+    fork_installations: [{ id: 'fork_0123456789abcdef', artifact_id: FORK_ID, state: 'ready', tree_id: tree.id, commit: tree.community.commit, path: tree.path }]
+  });
+  let values = c.renderVals();
+  assert.equal(values.forkInstallLabel, 'Launch in sandbox…');
+  assert.equal(values.forkInstallPill, 'Installed');
+  assert.deepEqual(values.packageVersions.map(item => item.id), ['version_bbbbbbbbbbbb']);
+  assert.equal(c.defaultHostVersionId(), 'version_bbbbbbbbbbbb');
+
+  const local = values.versions.find(item => item.treeId === tree.id);
+  assert.equal(local.isCommunity, true);
+  assert.equal(local.buttonLabel, 'Launch…');
+  let launched;
+  c.api = async (url, options) => { launched = { url, body: JSON.parse(options.body) }; return { id: 'cell_x', port: 3200 }; };
+  c.inspectCell = async () => {};
+  local.launch();
+  values = c.renderVals();
+  assert.equal(values.communityLaunchOpen, true);
+  assert.equal(values.communityLaunchDisabled, true);
+  values.toggleCommunityRisk({ target: { checked: true } });
+  await c.renderVals().confirmCommunityLaunch();
+  assert.equal(launched.url, '/api/v1/cells');
+  assert.equal(launched.body.tree_id, tree.id);
+  assert.equal(launched.body.acknowledge_risk, true);
+  assert.equal(launched.body.home_mode, 'fresh');
+
+  const forks = instance({}, '#forks');
+  forks.setState({ forkInstallations: [{ artifact_id: FORK_ID, state: 'building' }] });
+  assert.equal(forks.renderVals().results.find(item => item.id === FORK_ID).installedLabel, 'Installing');
+});
+
+test('failed fork installs explain the failure and can be retried or removed', () => {
+  const c = forkDetail({
+    fork_installations: [{ id: 'fork_0123456789abcdef', artifact_id: FORK_ID, state: 'failed', detail: 'Build step exited with 1', path: '~/x' }]
+  });
+  const values = c.renderVals();
+  assert.equal(values.forkInstallPill, 'Failed');
+  assert.equal(values.forkInstallText, 'Build step exited with 1');
+  assert.equal(values.forkInstallLabel, 'Review and try again…');
+  assert.equal(values.forkRemovable, true);
+});
+
+test('signed-in favorites merge with this browser and sync on change', async () => {
+  const c = instance({}, '#plugins');
+  const requests = [];
+  const remote = [{ id: 'github:1', type: 'plugin', name: 'remote' }];
+  c.setState({ favoriteArtifacts: [{ id: 'github:2', type: 'fork', name: 'local' }, { id: 'github:1', type: 'plugin', name: 'stale' }] });
+  c.api = async (url, options = {}) => {
+    requests.push({ url, method: options.method || 'GET', body: options.body ? JSON.parse(options.body) : null });
+    if (url === '/api/auth/session') return { configured: true, sync: true, user: { id: 'github:9', login: 'octo', name: 'Octo', avatar_url: '' } };
+    if (url === '/api/favorites' && !options.method) return { favorites: remote, updated_at: 1 };
+    return { favorites: [], updated_at: 2 };
+  };
+  await c.loadAuth();
+  assert.deepEqual(c.state.favoriteArtifacts.map(item => [item.id, item.name]), [['github:1', 'remote'], ['github:2', 'local']]);
+  assert.deepEqual(requests.map(item => [item.url, item.method]), [
+    ['/api/auth/session', 'GET'], ['/api/favorites', 'GET'], ['/api/favorites', 'PUT']
+  ]);
+  assert.equal(c.state.favoritesSync, 'synced');
+  const values = c.renderVals();
+  assert.equal(values.signedIn, true);
+  assert.equal(values.accountLogin, '@octo');
+  assert.match(values.accountSyncLabel, /synced/);
+  c.setState({ favoritesOnly: true });
+  assert.equal(c.renderVals().catalogFeedStatus, 'Favorites sync to @octo');
+
+  c.scheduleFavoriteSync = () => { c.syncScheduled = true; };
+  c.toggleFavorite({ id: 'github:3', type: 'plugin', name: 'new' });
+  assert.equal(c.syncScheduled, true);
+  await c.signOut();
+  assert.equal(c.renderVals().signedOut, true);
+  assert.equal(c.state.favoriteArtifacts.length, 3, 'signing out keeps local favorites');
+});
+
+test('sign-in stays hidden when the deployment has no auth configured', async () => {
+  const c = instance({}, '#plugins');
+  c.api = async () => ({ configured: false, sync: false, user: null });
+  await c.loadAuth();
+  const values = c.renderVals();
+  assert.equal(values.showAccount, false);
+  c.api = async () => { throw new Error('Unknown API endpoint'); };
+  await c.loadAuth();
+  assert.equal(c.renderVals().showAccount, false);
+});
