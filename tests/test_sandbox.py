@@ -197,6 +197,12 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertNotIn("--net", apptainer_args)
         self.assertNotIn("--network", apptainer_args)
         self.assertEqual(web["argv"][-7:], ["/opt/dsh/dsh", "web", "--host", "127.0.0.1", "--port", "3210", "--no-open"])
+        older = sandbox.cell_plan(
+            tree={"real_path": str(tree), "real_exe": str(cli), "web_no_open": False},
+            home=home, workspace=workspace, surface="web", task="", port=3212,
+            profile="web", network="host", gpu=False,
+        )
+        self.assertEqual(older["argv"][-6:], ["/opt/dsh/dsh", "web", "--host", "127.0.0.1", "--port", "3212"])
 
         patched = sandbox.cell_plan(
             tree={"real_path": str(tree), "real_exe": str(cli)},

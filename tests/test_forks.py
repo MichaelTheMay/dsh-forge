@@ -296,6 +296,16 @@ class CommunityTrustTests(unittest.TestCase):
         self.assertEqual(tree["trust"], "community")
         self.assertEqual(tree["community"]["install_id"], retry["id"])
 
+    def test_web_no_open_support_is_read_from_the_tree_source(self):
+        from dsh_forge.launcher import _web_no_open_support
+        startup = self.checkout / "packages" / "bundle" / "web-app" / "src" / "startup.ts"
+        self.assertIsNone(_web_no_open_support(self.checkout))
+        startup.parent.mkdir(parents=True)
+        startup.write_text(".option('--host <host>', 'bind host')\n.option('--port <port>', 'listen port')\n", encoding="utf-8")
+        self.assertIs(_web_no_open_support(self.checkout), False)
+        startup.write_text(".option('--no-open', 'do not open a browser')\n", encoding="utf-8")
+        self.assertIs(_web_no_open_support(self.checkout), True)
+
     def test_moved_head_or_changed_remote_loses_community_trust(self):
         self.register()
         git(self.checkout, "remote", "set-url", "origin", "https://github.com/mallory/deepseek-harness")

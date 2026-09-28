@@ -554,7 +554,10 @@ class ApptainerSandbox:
         if surface == "headless":
             payload.extend(["headless", task])
         else:
-            payload.extend(["web", "--host", "127.0.0.1", "--port", str(port), "--no-open"])
+            payload.extend(["web", "--host", "127.0.0.1", "--port", str(port)])
+            # Releases that predate --no-open reject it; they never open a browser.
+            if tree.get("web_no_open") is not False:
+                payload.append("--no-open")
         for patch in patches:
             if not isinstance(patch, str) or not re.fullmatch(r"/workspace/[A-Za-z0-9_.-]{1,128}", patch):
                 raise SandboxError("Harness patches must be simple files inside the managed workspace")
