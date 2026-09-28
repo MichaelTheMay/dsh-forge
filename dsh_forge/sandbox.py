@@ -482,6 +482,8 @@ class ApptainerSandbox:
                 "NPM_CONFIG_FUND": "false",
                 "PNPM_HOME": "/home/dsh/.pnpm",
                 "HUSKY": "0",
+                # Package-manager shims installed by the first build step.
+                "PATH": "/home/dsh/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             },
         )
         if not self.timeout_binary:

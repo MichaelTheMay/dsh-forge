@@ -80,6 +80,7 @@ class BuildDetectionTests(unittest.TestCase):
         })
         self.assertEqual(build["manager"], "pnpm")
         self.assertEqual(build["steps"], [
+            ["corepack", "enable", "--install-directory", "/home/dsh/.local/bin", "pnpm"],
             ["corepack", "pnpm", "install", "--frozen-lockfile"],
             ["corepack", "pnpm", "run", "build"],
         ])
@@ -383,6 +384,7 @@ class EndToEndInstallTests(unittest.TestCase):
                 record = next(item for item in launcher.status()["fork_installations"] if item["id"] == queued["id"])
                 self.assertEqual(record["state"], "ready", record.get("detail"))
                 self.assertEqual(sandbox.steps, [
+                    ["corepack", "enable", "--install-directory", "/home/dsh/.local/bin", "pnpm"],
                     ["corepack", "pnpm", "install", "--frozen-lockfile"],
                     ["corepack", "pnpm", "run", "build"],
                 ])

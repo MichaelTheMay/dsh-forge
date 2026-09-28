@@ -49,6 +49,7 @@ MAX_CHECKOUT_BYTES = 4 * 1024 * 1024 * 1024
 MAX_CHECKOUT_FILES = 250_000
 LOG_LIMIT = 256 * 1024
 ACTIVE_STATES = {"queued", "fetching", "building"}
+SHIM_DIRECTORY = "/home/dsh/.local/bin"
 HARDENED_GIT_CONFIG = (
     "protocol.allow=never",
     "protocol.https.allow=always",
@@ -118,18 +119,25 @@ def detect_build(root: Path) -> dict[str, Any]:
         manifest = {}
     scripts = manifest.get("scripts") if isinstance(manifest.get("scripts"), dict) else {}
     has_build = isinstance(scripts.get("build"), str) and bool(scripts.get("build"))
+    # Build scripts in pnpm and yarn monorepos call the package manager by its
+    # bare name, so corepack first installs its shim into the disposable build
+    # home, which the sandbox puts first on PATH.
+    shims = ["corepack", "enable", "--install-directory", SHIM_DIRECTORY]
     if (root / "pnpm-lock.yaml").is_file():
         manager, install = "pnpm", ["corepack", "pnpm", "install", "--frozen-lockfile"]
         build = ["corepack", "pnpm", "run", "build"]
+        prepare = [[*shims, "pnpm"]]
     elif (root / "yarn.lock").is_file():
         manager, install = "yarn", ["corepack", "yarn", "install", "--immutable"]
         build = ["corepack", "yarn", "run", "build"]
+        prepare = [[*shims, "yarn"]]
     elif (root / "package-lock.json").is_file():
         manager, install = "npm", ["npm", "ci", "--no-audit", "--no-fund"]
         build = ["npm", "run", "build"]
+        prepare = []
     else:
         return {"manager": None, "steps": [], "reason": "No supported lockfile; the checkout must already contain a built CLI"}
-    steps = [install] + ([build] if has_build else [])
+    steps = [*prepare, install] + ([build] if has_build else [])
     return {"manager": manager, "steps": steps, "reason": "" if has_build else "No build script; dependencies only"}
 
 

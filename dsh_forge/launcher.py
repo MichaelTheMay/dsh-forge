@@ -2082,6 +2082,8 @@ class Launcher:
         build_root = self.state_root / "fork-builds" / install_id
         home = build_root / "home"
         home.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # corepack writes package-manager shims here (/home/dsh/.local/bin).
+        (home / ".local" / "bin").mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             for index, step in enumerate(build["steps"], start=1):
                 installer.update(install_id, detail=f"Step {index}/{len(build['steps'])}: {' '.join(step)}")

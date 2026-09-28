@@ -24,9 +24,10 @@ inside the pinned Apptainer sandbox.
    250,000 files), and only then moves it to
    `~/dsh-versions/forks/<owner>--<repo>@<commit12>`.
 4. **Build.** Forge picks fixed commands from the lockfile, never from
-   repository text: `corepack pnpm install --frozen-lockfile` then
-   `corepack pnpm run build` (pnpm), the yarn equivalents, or `npm ci` then
-   `npm run build`. Each step runs inside the pinned Apptainer image with the
+   repository text: `corepack enable pnpm` (a shim in the build home, so
+   nested `pnpm` calls in build scripts resolve), then
+   `corepack pnpm install --frozen-lockfile` and `corepack pnpm run build`;
+   the yarn equivalents; or `npm ci` then `npm run build`. Each step runs inside the pinned Apptainer image with the
    checkout as the only writable project mount, a disposable home that is
    deleted afterwards, no launcher secrets, and host networking so the package
    manager can download dependencies. Each step has a wall-time limit
