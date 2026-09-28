@@ -276,6 +276,26 @@ class CommunityTrustTests(unittest.TestCase):
         self.assertEqual(installs[0]["tree_id"], tree["id"])
         self.assertNotIn("real_path", installs[0])
 
+    def test_a_retry_is_recognized_despite_earlier_failed_attempts(self):
+        installer = ForkInstaller(self.versions / "forks", self.state)
+        plan = {
+            "artifact_id": "github:42",
+            "full_name": "octo/deepseek-harness",
+            "repository_url": "https://github.com/octo/deepseek-harness",
+            "commit": self.commit,
+            "commit_source": "catalog",
+            "destination": str(self.checkout),
+        }
+        for _ in range(2):
+            failed = installer.begin(plan)
+            installer.update(failed["id"], state="failed", detail="earlier attempt")
+        retry = installer.begin(plan)
+        installer.update(retry["id"], state="building")
+        self.assertEqual(installer.for_path(self.checkout)["id"], retry["id"])
+        tree = self.tree(self.launcher())
+        self.assertEqual(tree["trust"], "community")
+        self.assertEqual(tree["community"]["install_id"], retry["id"])
+
     def test_moved_head_or_changed_remote_loses_community_trust(self):
         self.register()
         git(self.checkout, "remote", "set-url", "origin", "https://github.com/mallory/deepseek-harness")

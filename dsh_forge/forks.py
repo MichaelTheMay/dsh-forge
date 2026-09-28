@@ -227,13 +227,17 @@ class ForkInstaller:
             return dict(record)
 
     def for_path(self, path: str | Path) -> dict[str, Any] | None:
-        """Return the ready installation that owns this exact checkout path."""
+        """Return the newest live installation that owns this exact checkout path.
+
+        Retries reuse the same checkout, so earlier failed attempts share the
+        path; they must not shadow the attempt that is building or ready.
+        """
         try:
             resolved = str(Path(path).resolve())
         except OSError:
             return None
-        for record in self.records():
-            if record.get("real_path") == resolved and record.get("state") not in {"removed"}:
+        for record in reversed(self.records()):
+            if record.get("real_path") == resolved and record.get("state") not in {"removed", "failed"}:
                 return record
         return None
 
