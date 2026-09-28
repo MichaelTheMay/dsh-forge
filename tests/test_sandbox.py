@@ -425,3 +425,26 @@ class LauncherSandboxBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SandboxTempDirectoryTests(unittest.TestCase):
+    def test_container_temp_files_use_the_disk_backed_home(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "image.sif"
+            image.write_bytes(b"sif")
+            home = root / "home"
+            workspace = root / "workspace"
+            home.mkdir()
+            workspace.mkdir()
+            sandbox = ApptainerSandbox.__new__(ApptainerSandbox)
+            sandbox.binary = "/usr/bin/apptainer"
+            sandbox.config = SandboxConfig(image=image)
+            sandbox.resource_scope = "shared-slurm"
+            argv = sandbox.command(home=home, workspace=workspace, payload=["node", "--version"])
+            self.assertIn("TMPDIR=/home/dsh/.tmp", argv)
+            self.assertTrue((home / ".tmp").is_dir())
+            (home / ".tmp").rmdir()
+            (home / ".tmp").symlink_to(root)
+            with self.assertRaises(SandboxError):
+                sandbox.command(home=home, workspace=workspace, payload=["node", "--version"])

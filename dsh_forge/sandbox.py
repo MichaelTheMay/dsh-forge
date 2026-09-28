@@ -356,8 +356,18 @@ class ApptainerSandbox:
             if validate_paths and (source.is_symlink() or not source.is_file()):
                 raise SandboxError("Additional sandbox mount must be an existing non-symlink file")
             command.extend(["--mount", self._mount(source, destination, read_only=True)])
+        # --containall gives the container a small in-memory /tmp. Tools that
+        # unpack large archives there (node-gyp stages Node's headers in
+        # os.tmpdir()) fail with ENOSPC, so temp files go to a directory in the
+        # cell's own disk-backed home instead.
+        if validate_paths:
+            temporary = resolved_home / ".tmp"
+            if temporary.is_symlink():
+                raise SandboxError("Sandbox home temp directory must not be a symlink")
+            temporary.mkdir(mode=0o700, exist_ok=True)
         environment = {
             "DSH_HOME": "/home/dsh",
+            "TMPDIR": "/home/dsh/.tmp",
             # Stop the APPTAINER_BIND propagation described by Apptainer for
             # nested invocations. The host runner environment is allowlisted too.
             "APPTAINER_BIND": "",

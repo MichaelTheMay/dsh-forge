@@ -61,8 +61,12 @@ of that fork's sessions are running.
 ## Requirements and limits
 
 - Linux with the pinned Apptainer image configured (see
-  [Apptainer cell runner](apptainer-sandbox.md)). The image needs Node 22+ with
-  `corepack` (bundled with Node 22 and 24) for pnpm or yarn forks.
+  [Apptainer cell runner](apptainer-sandbox.md)). Use the full
+  `docker://node:22-bookworm` image: it has Node 22 with `corepack` plus the
+  Python, `make`, and `g++` needed to compile native modules such as
+  `node-pty`, which has no linux-arm64 prebuild. The `-slim` image fails there.
+- A Harness fork's `node_modules` and build output take several GB. Point
+  `DSH_FORGE_VERSIONS_DIR` at project storage if your home quota is small.
 - Building a large monorepo is CPU- and memory-intensive. On DeltaAI, start the
   sidecar inside a compute allocation rather than on a login node.
 - Sandboxing reduces risk; it does not remove it. Apptainer shares the host
