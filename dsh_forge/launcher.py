@@ -322,6 +322,37 @@ def _source_candidate(root: Path) -> tuple[Path, dict[str, Any]] | None:
     return executable, package
 
 
+WEB_STARTUP_SOURCES = (
+    "packages/bundle/web-app/src/startup.ts",
+    "packages/bundle/web-app/lib/startup.js",
+    "packages/bundle/web-app/lib/index.js",
+)
+
+
+def _web_no_open_support(root: Path) -> bool | None:
+    """Whether this tree's `dsh web` accepts --no-open, from its own source text.
+
+    Older Harness releases (and forks of them) define only --host, --port, and
+    --trusted-host, and reject --no-open. Nothing is executed: the web-app
+    startup file is read as text. None means the layout was not recognized.
+    """
+    found = False
+    for relative in WEB_STARTUP_SOURCES:
+        candidate = root / relative
+        if candidate.is_symlink() or not candidate.is_file():
+            continue
+        try:
+            if candidate.stat().st_size > 4 * 1024 * 1024:
+                continue
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        found = True
+        if "--no-open" in text or "'no-open'" in text or '"no-open"' in text:
+            return True
+    return False if found else None
+
+
 def _official_remote(remote: str) -> bool:
     value = remote.strip().lower().rstrip("/")
     return bool(re.fullmatch(
@@ -731,6 +762,7 @@ class Launcher:
             "trust": trust,
             "launchability": launchability,
             "evidence": ["recognized CLI artifact", "package metadata" if package else "PATH executable"],
+            "web_no_open": _web_no_open_support(root),
         }
         if community:
             record["community"] = {
@@ -1381,7 +1413,9 @@ class Launcher:
                 raise LauncherError(f"Port {port} is occupied by an unmanaged process; DSH Forge will not stop it")
         argv = [*self._tree_argv(tree), "--profile", profile["name"]]
         if surface == "web" and not foreground:
-            argv.extend(["--host", "127.0.0.1", "--port", str(port), "--no-open"])
+            argv.extend(["--host", "127.0.0.1", "--port", str(port)])
+            if tree.get("web_no_open") is not False:
+                argv.append("--no-open")
         elif surface == "headless":
             argv.append(task)
         extra_args = raw.get("extra_args") or []
@@ -2082,6 +2116,8 @@ class Launcher:
         build_root = self.state_root / "fork-builds" / install_id
         home = build_root / "home"
         home.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # corepack writes package-manager shims here (/home/dsh/.local/bin).
+        (home / ".local" / "bin").mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
             for index, step in enumerate(build["steps"], start=1):
                 installer.update(install_id, detail=f"Step {index}/{len(build['steps'])}: {' '.join(step)}")

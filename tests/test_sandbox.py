@@ -197,6 +197,12 @@ class ApptainerPolicyTests(SandboxFixture):
         self.assertNotIn("--net", apptainer_args)
         self.assertNotIn("--network", apptainer_args)
         self.assertEqual(web["argv"][-7:], ["/opt/dsh/dsh", "web", "--host", "127.0.0.1", "--port", "3210", "--no-open"])
+        older = sandbox.cell_plan(
+            tree={"real_path": str(tree), "real_exe": str(cli), "web_no_open": False},
+            home=home, workspace=workspace, surface="web", task="", port=3212,
+            profile="web", network="host", gpu=False,
+        )
+        self.assertEqual(older["argv"][-6:], ["/opt/dsh/dsh", "web", "--host", "127.0.0.1", "--port", "3212"])
 
         patched = sandbox.cell_plan(
             tree={"real_path": str(tree), "real_exe": str(cli)},
@@ -425,3 +431,53 @@ class LauncherSandboxBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SandboxTempDirectoryTests(unittest.TestCase):
+    def test_container_temp_files_use_the_disk_backed_home(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "image.sif"
+            image.write_bytes(b"sif")
+            home = root / "home"
+            workspace = root / "workspace"
+            home.mkdir()
+            workspace.mkdir()
+            sandbox = ApptainerSandbox.__new__(ApptainerSandbox)
+            sandbox.binary = "/usr/bin/apptainer"
+            sandbox.config = SandboxConfig(image=image)
+            sandbox.resource_scope = "shared-slurm"
+            argv = sandbox.command(home=home, workspace=workspace, payload=["node", "--version"])
+            self.assertIn("TMPDIR=/home/dsh/.tmp", argv)
+            self.assertTrue((home / ".tmp").is_dir())
+            (home / ".tmp").rmdir()
+            (home / ".tmp").symlink_to(root)
+            with self.assertRaises(SandboxError):
+                sandbox.command(home=home, workspace=workspace, payload=["node", "--version"])
+
+
+class BuildPlanEnvironmentTests(unittest.TestCase):
+    def test_build_steps_find_package_manager_shims_on_path(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            image = root / "image.sif"
+            image.write_bytes(b"sif")
+            home = root / "home"
+            source = root / "source"
+            home.mkdir()
+            source.mkdir()
+            sandbox = ApptainerSandbox.__new__(ApptainerSandbox)
+            sandbox.binary = "/usr/bin/apptainer"
+            sandbox.timeout_binary = "/usr/bin/timeout"
+            sandbox.config = SandboxConfig(image=image)
+            sandbox.resource_scope = "shared-slurm"
+            sandbox.image_digest = "a" * 64
+            sandbox.runtime_home = root / "runtime"
+            sandbox.cache_root = root / "cache"
+            sandbox._verify_image = lambda: None
+            plan = sandbox.build_plan(source_root=source, home=home, payload=["corepack", "pnpm", "run", "build"], wall_seconds=600)
+            path = next(item for item in plan["argv"] if item.startswith("PATH="))
+            self.assertTrue(path.startswith("PATH=/home/dsh/.local/bin:"))
+            self.assertIn("TMPDIR=/home/dsh/.tmp", plan["argv"])
+            with self.assertRaises(SandboxError):
+                sandbox.build_plan(source_root=source, home=home, payload=["sh", "-c", "x"], wall_seconds=600)

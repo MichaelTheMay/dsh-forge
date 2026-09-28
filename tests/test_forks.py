@@ -80,6 +80,7 @@ class BuildDetectionTests(unittest.TestCase):
         })
         self.assertEqual(build["manager"], "pnpm")
         self.assertEqual(build["steps"], [
+            ["corepack", "enable", "--install-directory", "/home/dsh/.local/bin", "pnpm"],
             ["corepack", "pnpm", "install", "--frozen-lockfile"],
             ["corepack", "pnpm", "run", "build"],
         ])
@@ -275,6 +276,36 @@ class CommunityTrustTests(unittest.TestCase):
         self.assertEqual(installs[0]["tree_id"], tree["id"])
         self.assertNotIn("real_path", installs[0])
 
+    def test_a_retry_is_recognized_despite_earlier_failed_attempts(self):
+        installer = ForkInstaller(self.versions / "forks", self.state)
+        plan = {
+            "artifact_id": "github:42",
+            "full_name": "octo/deepseek-harness",
+            "repository_url": "https://github.com/octo/deepseek-harness",
+            "commit": self.commit,
+            "commit_source": "catalog",
+            "destination": str(self.checkout),
+        }
+        for _ in range(2):
+            failed = installer.begin(plan)
+            installer.update(failed["id"], state="failed", detail="earlier attempt")
+        retry = installer.begin(plan)
+        installer.update(retry["id"], state="building")
+        self.assertEqual(installer.for_path(self.checkout)["id"], retry["id"])
+        tree = self.tree(self.launcher())
+        self.assertEqual(tree["trust"], "community")
+        self.assertEqual(tree["community"]["install_id"], retry["id"])
+
+    def test_web_no_open_support_is_read_from_the_tree_source(self):
+        from dsh_forge.launcher import _web_no_open_support
+        startup = self.checkout / "packages" / "bundle" / "web-app" / "src" / "startup.ts"
+        self.assertIsNone(_web_no_open_support(self.checkout))
+        startup.parent.mkdir(parents=True)
+        startup.write_text(".option('--host <host>', 'bind host')\n.option('--port <port>', 'listen port')\n", encoding="utf-8")
+        self.assertIs(_web_no_open_support(self.checkout), False)
+        startup.write_text(".option('--no-open', 'do not open a browser')\n", encoding="utf-8")
+        self.assertIs(_web_no_open_support(self.checkout), True)
+
     def test_moved_head_or_changed_remote_loses_community_trust(self):
         self.register()
         git(self.checkout, "remote", "set-url", "origin", "https://github.com/mallory/deepseek-harness")
@@ -383,6 +414,7 @@ class EndToEndInstallTests(unittest.TestCase):
                 record = next(item for item in launcher.status()["fork_installations"] if item["id"] == queued["id"])
                 self.assertEqual(record["state"], "ready", record.get("detail"))
                 self.assertEqual(sandbox.steps, [
+                    ["corepack", "enable", "--install-directory", "/home/dsh/.local/bin", "pnpm"],
                     ["corepack", "pnpm", "install", "--frozen-lockfile"],
                     ["corepack", "pnpm", "run", "build"],
                 ])

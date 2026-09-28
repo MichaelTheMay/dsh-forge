@@ -356,8 +356,18 @@ class ApptainerSandbox:
             if validate_paths and (source.is_symlink() or not source.is_file()):
                 raise SandboxError("Additional sandbox mount must be an existing non-symlink file")
             command.extend(["--mount", self._mount(source, destination, read_only=True)])
+        # --containall gives the container a small in-memory /tmp. Tools that
+        # unpack large archives there (node-gyp stages Node's headers in
+        # os.tmpdir()) fail with ENOSPC, so temp files go to a directory in the
+        # cell's own disk-backed home instead.
+        if validate_paths:
+            temporary = resolved_home / ".tmp"
+            if temporary.is_symlink():
+                raise SandboxError("Sandbox home temp directory must not be a symlink")
+            temporary.mkdir(mode=0o700, exist_ok=True)
         environment = {
             "DSH_HOME": "/home/dsh",
+            "TMPDIR": "/home/dsh/.tmp",
             # Stop the APPTAINER_BIND propagation described by Apptainer for
             # nested invocations. The host runner environment is allowlisted too.
             "APPTAINER_BIND": "",
@@ -472,6 +482,8 @@ class ApptainerSandbox:
                 "NPM_CONFIG_FUND": "false",
                 "PNPM_HOME": "/home/dsh/.pnpm",
                 "HUSKY": "0",
+                # Package-manager shims installed by the first build step.
+                "PATH": "/home/dsh/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             },
         )
         if not self.timeout_binary:
@@ -542,7 +554,10 @@ class ApptainerSandbox:
         if surface == "headless":
             payload.extend(["headless", task])
         else:
-            payload.extend(["web", "--host", "127.0.0.1", "--port", str(port), "--no-open"])
+            payload.extend(["web", "--host", "127.0.0.1", "--port", str(port)])
+            # Releases that predate --no-open reject it; they never open a browser.
+            if tree.get("web_no_open") is not False:
+                payload.append("--no-open")
         for patch in patches:
             if not isinstance(patch, str) or not re.fullmatch(r"/workspace/[A-Za-z0-9_.-]{1,128}", patch):
                 raise SandboxError("Harness patches must be simple files inside the managed workspace")

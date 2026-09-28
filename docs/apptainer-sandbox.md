@@ -47,12 +47,19 @@ when required, inside a compute allocation rather than on a login node:
 ```bash
 mkdir -p ~/.local/share/dsh-forge/images
 apptainer pull ~/.local/share/dsh-forge/images/node-22-bookworm.sif \
-  docker://node:22-bookworm-slim
+  docker://node:22-bookworm
 chmod 400 ~/.local/share/dsh-forge/images/node-22-bookworm.sif
 sha256sum ~/.local/share/dsh-forge/images/node-22-bookworm.sif
 ```
 
-`docker://node:22-bookworm-slim` is an acquisition reference, not the launch
+Use the full `node:22-bookworm` image, not `-slim`. Installing a community
+fork compiles native modules such as `node-pty`, which publish no prebuilt
+binary for linux-arm64 (DeltaAI's GH200 nodes); that needs the Python, `make`,
+and `g++` the slim image leaves out. Sandboxed processes write temporary files
+to `~/.tmp` inside their disposable home because `--containall` gives the
+container only a small in-memory `/tmp`.
+
+`docker://node:22-bookworm` is an acquisition reference, not the launch
 pin. DSH Forge pins the bytes of the resulting local SIF. Record the printed
 digest in a trusted release/configuration record and do not replace that file
 under the same name.
