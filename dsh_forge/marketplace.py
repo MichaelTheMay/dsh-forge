@@ -14,7 +14,9 @@ DEFAULT_CATALOG_URL = (
     "https://w2112515.github.io/dsh-plugin-marketplace/"
     "plugin-marketplace/catalog-v1.json"
 )
-MAX_CATALOG_BYTES = 15_000_000
+# The upstream feed passed 15 MB in October 2026 as the marketplace grew; the
+# entry cap and digest check still bound what is accepted.
+MAX_CATALOG_BYTES = 64 * 1024 * 1024
 MAX_ENTRIES = 50_000
 
 
