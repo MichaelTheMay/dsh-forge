@@ -7,9 +7,17 @@ depends on GitHub or a marketplace being online.
 ```bash
 export GITHUB_TOKEN=REDACTED
 python3 scripts/index_registry.py --output registry-raw.json
-python3 scripts/analyze_registry.py --snapshot registry-raw.json --output registry.json
+python3 scripts/enrich_registry.py --snapshot registry-raw.json --output registry-evidence.json
+python3 scripts/analyze_registry.py --snapshot registry-evidence.json --output registry-analyzed.json
+python3 scripts/research_catalog.py --snapshot registry-analyzed.json --output hidden-gems.json --annotate registry.json
 python3 -m dsh_forge catalog import registry.json
 ```
+
+`enrich_registry.py` adds the bounded GitHub evidence that hidden-gem discovery
+measures (see [Hidden-gem research](hidden-gem-pipeline.md)); pass
+`--previous PATH_OR_URL` with an earlier registry to reuse evidence that is still
+current. Without a token it records why no evidence was gathered and the
+ranking falls back to the metadata-only policy.
 
 `GITHUB_TOKEN` is optional for small tests and recommended for a full network.
 The scheduled workflow uses its short-lived Actions token. Tokens are sent only

@@ -247,6 +247,15 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        if path == "/api/v1/catalog/discover":
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json(self.server.launcher.catalog_discover())
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.CONFLICT)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         match = re.fullmatch(r"/api/v1/catalog/artifacts/([^/]+)", path)
         if match:
             if self._api_guard() and self._session_ok():

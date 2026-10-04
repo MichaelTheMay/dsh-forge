@@ -1,30 +1,100 @@
 # Hidden-gem research and publication
 
 DSH Forge keeps discovery breadth separate from recommendation trust. Every
-validated external record remains searchable, while a reproducible metadata
-policy selects at most 250 entries for the research queue.
-Being in that queue is not a security verdict or an install authorization.
+validated external record remains searchable, while a reproducible, measured
+policy selects at most 250 entries for the research queue and the website's
+**Discover** page. Being in that queue is not a security verdict or an install
+authorization.
+
+No language model ranks or explains a pick. Every number below is computed from
+public GitHub facts, and every sentence a reader sees is generated from those
+numbers.
 
 ## Pipeline
 
 | Stage | Input | Output | Executes community code |
 | --- | --- | --- | --- |
 | Ingest | External catalog snapshot | Neutral SQLite/FTS rows | No |
+| Gather evidence | Promising repositories, one GraphQL query per 25 | Tests, CI, README size, docs, releases, commit activity, merged PRs, contributors, recent stargazers | No |
 | Analyze fork leads | Top metadata leads | Exact head/base commits, bounded changed paths, static compatibility and risk signals | No |
-| Rank | Repository, package, and source-diff metadata | Score, signals, gaps, visibility, global rank | No |
+| Rank | Evidence, repository, and source-diff metadata | Score, plain-language reasons, gaps, global rank, curated packs | No |
 | Propose | Curator-selected queue entries | Exact npm SRI pins and a draft package manifest | No |
 | Certify | Four explicit reviews plus an Ed25519 key | Signed local recipe and certification receipt | No |
 | Install | Signed recipe plus a saved DSH version | Quarantine, archive inspection, networkless sandbox test, atomic promotion | Yes, only inside Apptainer |
 
-The ranking policy is `dsh-forge.hidden-gems/v2`. It rewards positive static
-validation, an exact package version, an immutable commit, a reported license,
-specific documentation, recent maintenance, agentic-development capabilities,
-real fork-only commits, and low visibility. Risk signals and archival status subtract points. An
-unanalyzed fork is a lead, not a hidden-gem candidate; it must have an immutable
-commit and at least one fork-only commit before it can enter the recommendation queue. Every
-result includes the point-bearing signals and missing evidence. The searchable
-source record stays unchanged; Forge stores research evidence beside it so an
-upstream catalog can never award itself a Forge rank.
+## Discovery v3: the attention gap
+
+The ranking policy is `dsh-forge.hidden-gems/v3`. A hidden gem is a project
+that is **built like projects that get noticed, but hasn't been noticed yet**.
+
+1. **Evidence.** `scripts/enrich_registry.py` reads a fixed set of public facts
+   for up to 3,000 promising repositories a day within a 900-point GraphQL
+   budget: root files (tests, CI workflows, docs, examples, changelog, README
+   size), releases, total and 90-day commits, closed issues, merged pull
+   requests, mentionable users, license, and the ten most recent stargazers.
+   Evidence is reused for 14 days while a repository hasn't been pushed, so
+   coverage grows across runs. Nothing is cloned or executed. Stargazer
+   identities are reduced to two numbers before publication: endorsements
+   (stars from upstream Harness contributors or authors of plugins with 50+
+   stars) and stars in the last 30 days. If evidence would push the published
+   registry past 60 MB, the least promising records lose theirs first.
+2. **What attention a build usually earns.** A ridge regression
+   (`dsh-forge.attention-ridge/v1`) is fitted across every plugin with
+   evidence, predicting `log(1 + stars)` from creator-controlled features only:
+   tests, CI, README depth, docs, changelog, releases, license, commit volume,
+   recent commits, freshness, and age. Five-fold cross-validated Spearman
+   correlation and R² are published with every queue.
+3. **The gap.** A plugin scores `55 × built percentile + 30 × gap percentile +
+   0.75 × outside validation`, where the gap is predicted minus actual
+   attention. Outside validation (0-20 points) counts endorsements, merged pull
+   requests and closed issues, other contributors, and recent stars, which
+   mean something even at three stars.
+4. **An honest fallback.** If the model's held-out Spearman correlation is
+   below 0.15 on the day's data, it isn't trusted to say what a project
+   "should" have. The ranking switches to an equal-weight craft index
+   (`ranking: craft-index` in the queue) and no reason claims a predicted star
+   count.
+5. **Gates.** A plugin cannot be a gem if it is archived, unlicensed, above the
+   ecosystem's 95th-percentile star count (clamped to 10-50), not pushed in a
+   year, missing a description, has a README under 800 bytes, is built worse
+   than 60% of plugins, or already gets the attention its build predicts.
+6. **Forks** are judged only on what they added: commits ahead of upstream,
+   changed surfaces, recency, a description of their own, and a quarter of the
+   outside validation. A fork of a fork is excluded, because its divergence is
+   measured against upstream and is mostly its parent's work. Fork leads skip
+   copies with no commits or stars of their own.
+7. **Reasons.** Each pick carries up to four sentences generated from the
+   numbers above, for example "Built like projects that usually have ~40
+   stars; it has 3.", "Starred by Harness contributors or plugin authors
+   (@a, @b).", or "Adds 18 commits on top of DeepSeek Harness, touching CLI and
+   commands." Dates are written as a month and year so they stay true while the
+   feed is current.
+
+When fewer than 5% of plugins have evidence (for example, a run without a
+token), the queue falls back to the metadata-only `dsh-forge.hidden-gems/v2`
+policy and says so in `quality.discovery.fallback`. That policy rewards
+positive static validation, an exact package version, an immutable commit, a
+reported license, specific documentation, recent maintenance, agentic
+capabilities, fork-only commits, and low visibility.
+
+The searchable source record stays unchanged; Forge stores research evidence
+beside it so an upstream catalog can never award itself a Forge rank. The
+registry also carries each candidate's report under `discovery`, so the
+desktop store shows the same picks without the separate queue file.
+
+## Curated packs
+
+`dsh-forge.curated-packs/v1` builds themed bundles of complementary plugins
+from the same evidence: **Memory & context** (memory, code navigation, search),
+**Review & safety net** (code review, security, testing), **Agent teams**
+(orchestration, observability, memory), and **Ship faster** (code navigation,
+testing, orchestration). Each role is filled by a plugin whose *main* purpose
+it is (named for it, tagged with it, or mentioning it repeatedly), built better
+than half the ecosystem and not gated for safety reasons. Packs prefer quality
+over obscurity, use one plugin per owner, avoid reusing a plugin across packs,
+and give every member a note that says something the others don't. A pack needs
+at least three members to be published. Each plugin still installs on its own;
+a pack is a reading list, not an installer.
 
 Candidate selection applies `dsh-forge.discovery-diversity/v1` after scoring.
 Within a five-point quality window it prefers owners and capability lanes with
@@ -43,8 +113,10 @@ neutral artifact fields, not a new browser or ranker. Repeating
 
 The `Catalog research queue` GitHub Actions workflow runs daily and can also be
 started manually. It fetches the latest integrity-checked external feed,
-paginates the configured fork networks, selects at most 100 promising fork leads,
-compares exact source and fork commits, ranks the assembled corpus, and retains
+paginates the configured fork networks, gathers evidence for promising
+repositories (reusing the previous release's evidence where still valid),
+selects at most 100 promising fork leads, compares exact source and fork
+commits, ranks the assembled corpus and composes packs, and retains
 `registry.json` plus `hidden-gems.json` as 30-day workflow artifacts. A fork
 snapshot is labelled complete only after stable root and recursive child-page
 reconciliation; partial snapshots remain available with explicit reasons. The queue is metadata-only
