@@ -55,7 +55,7 @@
   .account-menu { position: absolute; top: calc(100% + 10px); right: 0; z-index: 40; display: flex; flex-direction: column; gap: 10px; width: 260px; padding: 14px; border: 1px solid oklch(0.36 0.015 255); border-radius: 10px; background: oklch(0.225 0.01 255); box-shadow: 0 18px 44px oklch(0.06 0.01 255 / .6); }
   .account-who { display: flex; flex-direction: column; gap: 2px; }
   .account-who strong { font-size: 13.5px; overflow-wrap: anywhere; }
-  .account-who span { font-size: 11.5px; color: oklch(0.64 0.013 255); }
+  .account-who > span { font-size: 11.5px; color: oklch(0.64 0.013 255); }
   .page { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .page-inner { width: min(1120px, 100%); margin: 0 auto; padding: 40px 28px 56px; display: flex; flex-direction: column; gap: 32px; }
   .page-head { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px 24px; }
@@ -278,16 +278,6 @@
   .check-version { flex: 0 0 120px; font-size: 13px; font-weight: 600; }
   .check-path { flex: 1 1 auto; min-width: 0; font-size: 12px; color: oklch(0.62 0.013 255); overflow-wrap: anywhere; }
   .check-label { font-size: 12.5px; }
-  .risk-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
-  .risk-level { font-size: 20px; font-weight: 500; }
-  .meter { flex: 1 1 160px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-  .meter span { height: 6px; border-radius: 3px; }
-  .lineage { display: flex; align-items: center; gap: 0; }
-  .lnode { flex: 0 1 44%; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px; border: 1px solid oklch(0.32 0.012 255); border-radius: 10px; background: oklch(0.19 0.009 255); }
-  .lnode-fork { border-color: oklch(0.48 0.08 300); }
-  .lnode-name { font-size: 12.5px; color: oklch(0.86 0.012 255); overflow-wrap: anywhere; }
-  .llink { flex: 1 1 auto; display: flex; align-items: center; min-width: 40px; color: oklch(0.72 0.12 300); }
-  .lline { flex: 1 1 auto; height: 2px; border-radius: 1px; background: currentColor; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 20px; padding-top: 18px; border-top: 1px solid oklch(0.28 0.012 255); }
   .stat { display: flex; flex-direction: column; gap: 2px; }
   .stat-value { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
@@ -367,10 +357,16 @@
   .stage-feed > p { margin-top: 5px; color: #777a88; font-size: 12px; }
   .stage-search { margin-top: 22px; padding: 10px 12px; border: 1px solid #2b2e39; border-radius: 7px; color: #686b79; font-size: 11px; }
   .stage-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-  .stage-card { min-width: 0; padding: 15px; border: 1px solid #292c36; border-radius: 9px; background: #12141b; }
+  .stage-card { min-width: 0; padding: 15px; border: 1px solid #292c36; border-radius: 9px; background: #12141b; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s; }
+  .stage-card:hover { border-color: #3c3f4d; }
+  .stage-card p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  .stage-waiting { margin-top: 22px; color: #777a87; font-size: 12px; }
+  .stage-reasons { margin: 12px 0 0; padding-left: 16px; color: #a3a6b2; font-size: 11.5px; line-height: 1.6; }
+  .stage-reasons li + li { margin-top: 6px; }
+  .stage-score button { padding: 0; border: 0; background: none; color: #8fd9e2; font: 500 12px 'IBM Plex Mono', monospace; cursor: pointer; }
   .stage-card strong { display: block; overflow: hidden; color: #edeef3; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
   .stage-card p { margin-top: 8px; color: #777a87; font-size: 10.5px; line-height: 1.45; }
-  .stage-card span { display: inline-block; margin-top: 14px; padding: 3px 6px; border-radius: 4px; background: #182c34; color: #7bd9e2; font: 9px 'IBM Plex Mono', monospace; }
+  .stage-card > span { display: inline-block; margin-top: 14px; padding: 3px 6px; border-radius: 4px; background: #182c34; color: #7bd9e2; font: 9px 'IBM Plex Mono', monospace; }
   .stage-detail { padding: 28px 24px; border-left: 1px solid #252732; background: #0b0d12; }
   .stage-detail small { color: #777a87; font: 10px 'IBM Plex Mono', monospace; }
   .stage-detail h3 { margin-top: 10px; font-size: 17px; }
@@ -390,7 +386,7 @@
   .landing-fact { padding: 38px 20px; text-align: center; }
   .landing-fact + .landing-fact { border-left: 1px solid #242632; }
   .landing-fact strong { display: block; font-size: 31px; font-weight: 500; letter-spacing: -.04em; }
-  .landing-fact span { display: block; margin-top: 7px; color: #777a87; font: 10px 'IBM Plex Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
+  .landing-fact .landing-fact-label { display: block; margin-top: 7px; color: #777a87; font: 10px 'IBM Plex Mono', monospace; letter-spacing: .09em; text-transform: uppercase; }
   .landing-downloads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 48px; }
   .landing-download { display: flex; flex-direction: column; min-height: 250px; padding: 26px; border: 1px solid #292c37; border-radius: 12px; background: #10121a; }
   .landing-download .platform { color: #858894; font: 10px 'IBM Plex Mono', monospace; letter-spacing: .1em; text-transform: uppercase; }
@@ -399,6 +395,67 @@
   .landing-download .landing-cta { margin-top: auto; align-self: flex-start; }
   .landing-footer { display: flex; justify-content: space-between; width: min(1180px, calc(100% - 56px)); margin: 0 auto; padding: 34px 0 46px; border-top: 1px solid #242632; color: #666976; font-size: 11px; }
 
+  /* Cards are clickable containers; the name is the keyboard target. */
+  .pcard { cursor: pointer; }
+  button.iname { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
+  .reason { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; line-height: 1.5; color: oklch(0.82 0.07 235); }
+  .reason svg { flex: 0 0 auto; margin-top: 3px; color: oklch(0.78 0.11 235); }
+  .ahead { color: oklch(0.8 0.1 300); }
+  .like { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: oklch(0.66 0.013 255); font-size: 12px; }
+  .like svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linejoin: round; }
+  .like:hover { border-color: oklch(0.36 0.02 15); color: oklch(0.82 0.1 15); }
+  .like-on, .like-on:hover { color: oklch(0.78 0.16 15); }
+  .like-on svg { fill: currentColor; }
+  .like-btn { height: 34px; padding: 0 14px; border-color: oklch(0.36 0.018 255); border-radius: 7px; background: oklch(0.235 0.01 255); color: oklch(0.86 0.012 255); font-size: 12.5px; font-weight: 500; justify-content: center; }
+  .like-btn.like-on { border-color: oklch(0.45 0.1 15); background: oklch(0.26 0.04 15); }
+  .like-count:not(:empty) { margin-left: 2px; color: oklch(0.7 0.02 15); }
+  .actions .btn-pair { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .actions { gap: 12px; }
+  .actions .divider { margin: 4px 0; }
+  .link-btn { padding: 0; border: 0; background: transparent; color: oklch(0.78 0.11 235); font-size: 13px; font-weight: 500; }
+  .link-btn:hover { color: oklch(0.86 0.11 235); text-decoration: underline; }
+
+  /* Discover */
+  .discover-head { align-items: flex-start; }
+  .how { max-width: 460px; border: 1px solid oklch(0.3 0.012 255); border-radius: 10px; background: oklch(0.205 0.01 255); font-size: 13px; }
+  .how summary { padding: 10px 14px; color: oklch(0.82 0.06 235); font-weight: 500; cursor: pointer; }
+  .how-body { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 16px; line-height: 1.6; color: oklch(0.76 0.012 255); }
+  .how-body ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .how-body b { color: oklch(0.9 0.008 255); font-weight: 600; }
+  .shelf-head { display: flex; align-items: baseline; gap: 16px; margin-top: 18px; }
+  .shelf-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .shelf-head .link-btn { margin-left: auto; }
+  .shelf-note { font-size: 13px; color: oklch(0.62 0.013 255); }
+  .skeleton { display: block; height: 260px; border-radius: 14px; background: linear-gradient(90deg, oklch(0.21 0.01 255), oklch(0.25 0.012 255), oklch(0.21 0.01 255)); background-size: 200% 100%; animation: dshshimmer 1.4s linear infinite; }
+  @keyframes dshshimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+  .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+  .pack-card { display: flex; flex-direction: column; gap: 10px; padding: 18px; border: 1px solid oklch(0.31 0.013 255); border-radius: 14px; background: linear-gradient(160deg, oklch(0.24 0.03 270), oklch(0.205 0.01 255) 60%); cursor: pointer; transition: border-color .18s, transform .18s; }
+  .pack-card:hover { border-color: oklch(0.5 0.06 270); transform: translateY(-2px); }
+  .faces { display: flex; }
+  .face { display: inline-grid; place-items: center; width: 34px; height: 34px; margin-right: -8px; border: 2px solid oklch(0.22 0.02 265); border-radius: 10px; font-size: 13px; font-weight: 600; color: oklch(0.98 0 0); background-size: cover; }
+  .pack-title { padding: 0; border: 0; background: transparent; color: oklch(0.95 0.006 255); font-size: 16px; font-weight: 600; text-align: left; }
+  .pack-summary { font-size: 13px; line-height: 1.55; color: oklch(0.76 0.012 255); }
+  .pack-roles { font-size: 12px; color: oklch(0.7 0.06 270); }
+  .pack-card .pfoot { padding-top: 10px; }
+  .pack-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; margin: 8px 0 0; padding: 0; list-style: none; counter-reset: packrole; }
+  .pack-member { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .pack-role { font-size: 13px; font-weight: 600; color: oklch(0.82 0.08 270); counter-increment: packrole; }
+  .pack-role::before { content: counter(packrole) " · "; color: oklch(0.6 0.04 270); }
+  .pack-member-body { display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; }
+  .pack-member-body .pcard { flex: 1 1 auto; }
+  .pack-why { font-size: 13px; line-height: 1.6; color: oklch(0.74 0.012 255); }
+  @media (prefers-reduced-motion: reduce) { .pack-card { transition: none; } .pack-card:hover { transform: none; } .skeleton { animation: none; } }
+
+  /* Detail */
+  .why-list, .caution-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; line-height: 1.55; color: oklch(0.84 0.01 255); }
+  .why-list li { display: flex; gap: 10px; }
+  .why-list svg { flex: 0 0 auto; margin-top: 3px; color: oklch(0.76 0.13 155); }
+  .caution-list li { position: relative; padding-left: 16px; }
+  .caution-list li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: oklch(0.78 0.13 75); }
+  details.tech { gap: 0; }
+  details.tech summary { cursor: pointer; }
+  details.tech[open] summary { margin-bottom: 16px; }
+  .logwrap summary { font-size: 12px; color: oklch(0.7 0.05 235); cursor: pointer; }
   @media (max-width: 1080px) {
     .split { grid-template-columns: minmax(0, 1fr); gap: 24px; }
     .frow { grid-template-columns: minmax(0, 1fr) 84px 140px 104px 16px; }
@@ -411,6 +468,7 @@
     .status-pill { margin-left: auto; }
     .tabs { order: 3; width: 100%; height: 44px; overflow-x: auto; }
     .page-inner, .browser, .detail { padding-left: 16px; padding-right: 16px; }
+    .how { max-width: none; width: 100%; }
     .page-inner, .browser { padding-top: 24px; }
     .vrow { flex-wrap: wrap; gap: 10px 16px; padding: 16px; }
     .vname { flex: 1 1 auto; }
@@ -427,9 +485,6 @@
     .filters-note { margin-left: 0; flex: 1 0 100%; }
     .hero-name { font-size: 24px; }
     .kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-    .lineage { flex-direction: column; align-items: stretch; }
-    .lnode { flex: 1 1 auto; }
-    .llink { min-height: 28px; justify-content: center; transform: rotate(90deg); width: 28px; align-self: center; }
     .assistant-shell { display: flex; flex-direction: column; overflow-y: auto; }
     .assistant-sidebar { flex: 0 0 auto; border-right: 0; border-bottom: 1px solid oklch(0.3 0.012 255); }
     .assistant-frame { min-height: 620px; }
@@ -485,53 +540,63 @@
         DSH Forge
       </span>
       <nav class="landing-links" aria-label="Product site sections">
-        <button class="landing-link" onClick="{{ landingProduct }}">Product</button>
-        <button class="landing-link" onClick="{{ landingSecurity }}">Security</button>
-        <button class="landing-link" onClick="{{ landingCommunity }}">Community</button>
+        <button class="landing-link" onClick="{{ landingCommunity }}">Discover</button>
+        <button class="landing-link" onClick="{{ landingSecurity }}">Safety</button>
+        <button class="landing-link" onClick="{{ landingDownloads }}">Download</button>
         <a class="landing-link" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
-      <button class="landing-cta" onClick="{{ landingDownloads }}">Get the launcher <span aria-hidden="true">→</span></button>
+      <button class="landing-cta" onClick="{{ landingDownloads }}">Get the desktop app</button>
     </header>
 
     <section class="landing-hero" id="landing-product">
       <div class="landing-hero-copy">
-        <span class="landing-eyebrow">Open ecosystem intelligence</span>
+        <span class="landing-eyebrow">For DeepSeek Harness</span>
         <h1 class="landing-title">Every plugin. <span>Every fork. One launcher.</span></h1>
-        <p class="landing-subtitle">Find overlooked extensions across DeepSeek Harness, inspect the evidence behind each recommendation, and run trusted local configurations from one focused workspace.</p>
+        <p class="landing-subtitle">Find great plugins and forks before everyone else does. Every pick shows why it was chosen, and the desktop app runs them safely on your machine.</p>
         <div class="landing-actions">
-          <button class="landing-cta" onClick="{{ landingCommunity }}">Explore the catalog <span aria-hidden="true">→</span></button>
-          <button class="landing-cta landing-cta-secondary" onClick="{{ landingOpenLauncher }}">Open launcher preview</button>
+          <button class="landing-cta" onClick="{{ landingCommunity }}">Explore hidden gems <span aria-hidden="true">→</span></button>
+          <button class="landing-cta landing-cta-secondary" onClick="{{ landingDownloads }}">Get the desktop app</button>
         </div>
-        <div class="landing-command"><b>$</b><span>python3 scripts/serve.py --desktop --sync-catalog</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy source launch command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div>
       </div>
 
-      <div class="landing-stage" aria-label="DSH Forge catalog preview">
-        <div class="stage-bar"><span class="stage-dots"><i></i><i></i><i></i></span><span class="stage-path"><svg class="landing-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 4 11-2 1 5L7 9zM7 10l11-2 1 5-11 2zM8 16l11-2 1 5-11 2z"/></svg>dsh / discovery</span><span class="stage-live"><i></i>live index</span></div>
+      <div class="landing-stage" aria-label="Today's hidden gems">
+        <div class="stage-bar"><span class="stage-dots"><i></i><i></i><i></i></span><span class="stage-path"><svg class="landing-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 4 11-2 1 5L7 9zM7 10l11-2 1 5-11 2zM8 16l11-2 1 5-11 2z"/></svg>DSH Forge / Discover</span><span class="stage-live"><i></i>updated daily</span></div>
         <div class="stage-body">
-          <aside class="stage-rail"><span class="stage-rail-label">WORKSPACE / FORGE</span><div>Local versions</div><div class="on">Discover</div><div>Saved</div><div>Assistant</div></aside>
-          <section class="stage-feed"><h2>Hidden gems</h2><p>{{ landingCatalogCount }}</p><div class="stage-search">Search by capability, author, or repository</div><div class="stage-cards"><article class="stage-card"><strong>dsh-memory</strong><p>Persistent, model-editable memory for DeepSeek Harness.</p><span>HIDDEN GEM</span></article><article class="stage-card"><strong>dsh-plugin-security-audit</strong><p>Live deployment checks for credentials, processes, and permissions.</p><span>HIDDEN GEM</span></article><article class="stage-card"><strong>oh-my-deepseek-harness</strong><p>A divergent fork with security and review capabilities.</p><span>FORK ANALYSIS</span></article><article class="stage-card"><strong>dsh-trace-collapse</strong><p>A cleaner view of tool calls, reasoning, and final output.</p><span>HIDDEN GEM</span></article></div></section>
-          <aside class="stage-detail"><small>RESEARCH EVIDENCE</small><h3>dsh-memory</h3><p>Low-visibility project with a specific capability, recent maintenance, and reported MIT licensing.</p><div class="stage-score"><span>Discovery score</span><b>94 / 100</b></div><p>Metadata only. Not a security verdict. Installation requires a matching local signed recipe.</p></aside>
+          <aside class="stage-rail"><span class="stage-rail-label">CATALOG</span><div class="on">Discover</div><div>Plugins</div><div>Forks</div><div>Saved</div></aside>
+          <section class="stage-feed"><h2>Hidden gems</h2><p>{{ landingCatalogCount }}</p>
+            <sc-if value="{{ hasLandingGems }}" hint-placeholder-val="{{ true }}">
+              <div class="stage-cards"><sc-for list="{{ landingGems }}" as="g" hint-placeholder-count="4"><button class="stage-card" onClick="{{ g.open }}"><strong>{{ g.name }}</strong><p>{{ g.description }}</p><span>{{ g.label }}</span></button></sc-for></div>
+            </sc-if>
+            <sc-if value="{{ noLandingGems }}" hint-placeholder-val="{{ false }}"><p class="stage-waiting">Loading today’s picks…</p></sc-if>
+          </section>
+          <aside class="stage-detail">
+            <sc-if value="{{ hasLandingSpotlight }}" hint-placeholder-val="{{ true }}">
+              <small>WHY IT’S A GEM</small><h3>{{ landingSpotlight.name }}</h3>
+              <ul class="stage-reasons"><sc-for list="{{ landingSpotlight.reasons }}" as="reason" hint-placeholder-count="2"><li>{{ reason }}</li></sc-for></ul>
+              <div class="stage-score"><span>{{ landingSpotlight.footnote }}</span><button onClick="{{ landingSpotlight.open }}">Open →</button></div>
+            </sc-if>
+          </aside>
         </div>
       </div>
     </section>
 
-    <div class="landing-facts" aria-label="Catalog coverage">
-      <div class="landing-fact"><strong>{{ landingPluginCount }}</strong><span>plugins indexed</span></div>
-      <div class="landing-fact"><strong>{{ landingForkCount }}</strong><span>forks indexed</span></div>
-      <div class="landing-fact"><strong>Daily</strong><span>research refresh</span></div>
+    <div class="landing-facts" aria-label="Catalog size">
+      <div class="landing-fact"><strong>{{ landingPluginCount }}</strong><span class="landing-fact-label">plugins</span></div>
+      <div class="landing-fact"><strong>{{ landingForkCount }}</strong><span class="landing-fact-label">forks</span></div>
+      <div class="landing-fact"><strong>Daily</strong><span class="landing-fact-label">new picks</span></div>
     </div>
 
     <section class="landing-section" id="landing-security">
-      <span class="landing-kicker">Evidence before execution</span><h2>Discovery is broad. Trust stays narrow.</h2><p class="landing-section-lede">Forge separates visibility from permission. Public records are metadata, ranking is explainable, and community code only runs after you review its exact commit and approve it for the sandbox.</p>
-      <div class="landing-grid"><article class="landing-card"><span class="landing-card-number">01</span><h3>Verified catalog transport</h3><p>Compressed and expanded feed digests are checked before any public result is served.</p></article><article class="landing-card"><span class="landing-card-number">02</span><h3>Explicit trust boundary</h3><p>Plugins need an exact curator-signed recipe. Forks install at one pinned commit and only after you explicitly approve community code.</p></article><article class="landing-card"><span class="landing-card-number">03</span><h3>Isolated Linux execution</h3><p>Approved code runs through pinned Apptainer cells. Windows browsing never falls back to unsafe host execution.</p></article></div>
+      <span class="landing-kicker">Safe by default</span><h2>Look at anything. Run only what you choose.</h2><p class="landing-section-lede">Browsing never downloads or runs anyone’s code. When you do install something, you see exactly which version you’re getting first.</p>
+      <div class="landing-grid"><article class="landing-card"><span class="landing-card-number">01</span><h3>Picks you can check</h3><p>Every hidden gem lists the measured reasons it was picked: tests, recent activity, who starred it. No AI guesswork.</p></article><article class="landing-card"><span class="landing-card-number">02</span><h3>Exact versions</h3><p>Installs use the specific version you reviewed. If the project changes before you install, you’re asked to review it again.</p></article><article class="landing-card"><span class="landing-card-number">03</span><h3>Isolated containers</h3><p>Forks run in an isolated container on your machine, without your personal files or the app’s API keys.</p></article></div>
     </section>
 
     <section class="landing-section" id="landing-downloads">
-      <span class="landing-kicker">Desktop launcher</span><h2>Take the catalog to your local Harness.</h2><p class="landing-section-lede">Desktop builds package the loopback sidecar and focused app window. Public binaries are released only after platform signing checks pass.</p>
-      <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>Per-user installer with Authenticode signing, Start Menu integration, and safe in-place upgrades.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Windows releases</a></article><article class="landing-download"><span class="platform">Source</span><h3>Linux and developers</h3><p>Run the public source directly with Python 3.9 or later. No frontend build or API key is required.</p><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View repository</a></article></div>
+      <span class="landing-kicker">Desktop app</span><h2>Run them on your own machine.</h2><p class="landing-section-lede">The desktop app finds the DeepSeek Harness versions on your computer, installs plugins and forks, and launches each one in its own session.</p>
+      <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>A signed installer with a Start Menu shortcut. The app tells you when an update is available.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Download for Windows</a></article><article class="landing-download"><span class="platform">Linux and macOS</span><h3>Run from source</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article></div>
     </section>
 
-    <footer class="landing-footer"><span>DSH Forge · public-source local discovery workbench</span><span>Metadata is not a security verdict.</span></footer>
+    <footer class="landing-footer"><span>DSH Forge · open source</span><span>Picks are based on public information about each project, not a review of its code.</span></footer>
   </main>
   </sc-if>
 
@@ -539,16 +604,20 @@
   <header class="app-header">
     <span class="brand">DSH Forge</span>
     <nav class="tabs" aria-label="Sections">
-      <button class="{{ launchTabClass }}" onClick="{{ goLaunch }}" aria-current="{{ launchTabCurrent }}">Local</button>
       <sc-if value="{{ catalogEnabled }}" hint-placeholder-val="{{ true }}">
+        <button class="{{ discoverTabClass }}" onClick="{{ goDiscover }}" aria-current="{{ discoverTabCurrent }}">Discover</button>
         <button class="{{ pluginsTabClass }}" onClick="{{ goPlugins }}" aria-current="{{ pluginsTabCurrent }}">Plugins</button>
         <button class="{{ forksTabClass }}" onClick="{{ goForks }}" aria-current="{{ forksTabCurrent }}">Forks</button>
       </sc-if>
-      <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
+      <sc-if value="{{ showDesktopTabs }}" hint-placeholder-val="{{ true }}">
+        <button class="{{ launchTabClass }}" onClick="{{ goLaunch }}" aria-current="{{ launchTabCurrent }}">Local</button>
+        <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
+      </sc-if>
     </nav>
     <span class="spacer"></span>
     <sc-if value="{{ showUpdate }}" hint-placeholder-val="{{ false }}"><a class="update-link" href="{{ updateUrl }}" target="_blank" rel="noopener noreferrer">{{ updateLabel }}</a></sc-if>
-    <span class="status-pill mono" title="{{ sidecarTitle }}"><span class="dot" style="background: {{ sidecarDot }};"></span>{{ sidecarLabel }}</span>
+    <sc-if value="{{ showStatusPill }}" hint-placeholder-val="{{ true }}"><span class="status-pill mono" title="{{ sidecarTitle }}"><span class="dot" style="background: {{ sidecarDot }};"></span>{{ sidecarLabel }}</span></sc-if>
+    <sc-if value="{{ isWebsite }}" hint-placeholder-val="{{ false }}"><button class="btn btn-sm" onClick="{{ getApp }}">Get the app</button></sc-if>
     <sc-if value="{{ showAccount }}" hint-placeholder-val="{{ false }}">
       <sc-if value="{{ signedOut }}" hint-placeholder-val="{{ false }}"><button class="btn btn-sm account-signin" onClick="{{ signIn }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02a9.6 9.6 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>Sign in</button></sc-if>
       <sc-if value="{{ signedIn }}" hint-placeholder-val="{{ false }}">
@@ -699,6 +768,276 @@
   <sc-if value="{{ showCatalog }}" hint-placeholder-val="{{ false }}">
   <main class="public-browser" id="community" aria-label="Plugin and fork browser">
 
+    <sc-if value="{{ showDiscover }}" hint-placeholder-val="{{ false }}">
+    <div class="page">
+      <section class="browser discover" aria-label="Discover">
+        <div class="page-head discover-head">
+          <div>
+            <h1 class="page-title">Discover</h1>
+            <p class="page-lede">Well-built plugins and forks that most people haven’t found yet. {{ discoverScope }}</p>
+          </div>
+          <details class="how">
+            <summary>How picks work</summary>
+            <div class="how-body">
+              <p>No AI guessing. Every day we measure each project the same way, then look for the gap between how well it’s built and how much attention it gets.</p>
+              <ol>
+                <li><b>How it’s built.</b> Tests, CI, docs, releases, a license, and steady recent work.</li>
+                <li><b>What that usually earns.</b> A model trained on the whole catalog predicts the stars a project built like this tends to have.</li>
+                <li><b>The gap.</b> Projects with far fewer stars than predicted rise to the top.</li>
+                <li><b>Someone else noticed.</b> Stars from Harness contributors and plugin authors, merged pull requests, and outside contributors count as real-world checks.</li>
+              </ol>
+              <p>The prediction is tested on projects it wasn’t trained on. If it doesn’t hold up that day, picks fall back to a simple equal-weight quality score instead.</p>
+              <p>Archived, unlicensed, abandoned, or barely documented projects are left out. Forks are judged only on what they changed, and a fork of a fork can’t borrow its parent’s work.</p>
+            </div>
+          </details>
+        </div>
+
+        <sc-if value="{{ discoverLoading }}" hint-placeholder-val="{{ false }}">
+          <div class="pgrid pgrid-skeleton" aria-busy="true" aria-label="Loading picks"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+        </sc-if>
+        <sc-if value="{{ hasDiscoverError }}" hint-placeholder-val="{{ false }}">
+          <div class="empty"><h2>Couldn’t load today’s picks</h2><p>{{ discoverError }}</p><button class="btn" onClick="{{ retryDiscover }}">Try again</button></div>
+        </sc-if>
+
+        <sc-if value="{{ hasDiscoverPlugins }}" hint-placeholder-val="{{ true }}">
+          <div class="shelf-head"><h2>Hidden gems today</h2><button class="link-btn" onClick="{{ browsePlugins }}">All plugins →</button></div>
+          <div class="pgrid">
+            <sc-for list="{{ discoverPlugins }}" as="g" hint-placeholder-count="6">
+              <div class="pcard" onClick="{{ g.select }}">
+                <span class="cover" style="{{ g.coverStyle }}">
+                  <span class="cover-top">
+                    <sc-if value="{{ g.cover.language }}" hint-placeholder-val="{{ false }}"><span class="cover-chip"><i style="background: {{ g.cover.languageColor }};"></i>{{ g.cover.language }}</span></sc-if>
+                    <span class="spacer"></span>
+                    <sc-if value="{{ g.featured }}" hint-placeholder-val="{{ false }}"><span class="cover-chip cover-gem">{{ g.featuredLabel }}</span></sc-if>
+                    <span class="cover-chip cover-stars"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ g.starsLabel }}</span>
+                  </span>
+                </span>
+                <span class="pcard-body">
+                  <span class="pcard-head">
+                    <span class="avatar" style="{{ g.avatarStyle }}" aria-hidden="true">{{ g.initials }}</span>
+                    <span class="pcard-title">
+                      <span class="name-row"><button class="iname" onClick="{{ g.select }}" aria-label="{{ g.accessibleLabel }}">{{ g.name }}</button></span>
+                      <span class="iowner">{{ g.owner }}</span>
+                    </span>
+                    <sc-if value="{{ g.installedLabel }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">{{ g.installedLabel }}</span></sc-if>
+                  </span>
+                  <span class="desc2">{{ g.description }}</span>
+                  <sc-if value="{{ g.showTags }}" hint-placeholder-val="{{ true }}"><span class="tags"><sc-for list="{{ g.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span></sc-if>
+                  <sc-if value="{{ g.hasTopReason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ g.topReason }}</span></sc-if>
+                  <sc-if value="{{ g.isPlugin }}" hint-placeholder-val="{{ true }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.versionLabel }}" hint-placeholder-val="{{ true }}"><span class="pkg">{{ g.versionLabel }}</span></sc-if>
+                      <sc-if value="{{ g.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ g.riskColor }};"></i>{{ g.riskText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ g.isFork }}" hint-placeholder-val="{{ false }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.aheadText }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ g.aheadText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasDiscoverPacks }}" hint-placeholder-val="{{ true }}">
+          <div class="shelf-head"><h2>Packs</h2><span class="shelf-note">Plugins that work well together, one for each job.</span></div>
+          <div class="packs">
+            <sc-for list="{{ discoverPacks }}" as="k" hint-placeholder-count="4">
+              <div class="pack-card" onClick="{{ k.open }}">
+                <span class="faces" aria-hidden="true"><sc-for list="{{ k.faces }}" as="f" hint-placeholder-count="3"><span class="face" style="{{ f.style }}">{{ f.initial }}</span></sc-for></span>
+                <button class="pack-title" onClick="{{ k.open }}">{{ k.title }}</button>
+                <span class="pack-summary">{{ k.summary }}</span>
+                <span class="pack-roles">{{ k.roles }}</span>
+                <span class="pfoot"><span>{{ k.count }}</span><span class="spacer"></span>
+                  <sc-if value="{{ k.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ k.likeClass }}" onClick="{{ k.toggleLike }}" aria-pressed="{{ k.likePressed }}" aria-label="{{ k.likeAria }}"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ k.likeLabel }}</span></button></sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasMostLiked }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>Most liked</h2><span class="shelf-note">What people here are liking. Signed-in likes count double.</span></div>
+          <div class="pgrid">
+            <sc-for list="{{ mostLiked }}" as="g" hint-placeholder-count="3">
+              <div class="pcard" onClick="{{ g.select }}">
+                <span class="cover" style="{{ g.coverStyle }}">
+                  <span class="cover-top">
+                    <sc-if value="{{ g.cover.language }}" hint-placeholder-val="{{ false }}"><span class="cover-chip"><i style="background: {{ g.cover.languageColor }};"></i>{{ g.cover.language }}</span></sc-if>
+                    <span class="spacer"></span>
+                    <sc-if value="{{ g.featured }}" hint-placeholder-val="{{ false }}"><span class="cover-chip cover-gem">{{ g.featuredLabel }}</span></sc-if>
+                    <span class="cover-chip cover-stars"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ g.starsLabel }}</span>
+                  </span>
+                </span>
+                <span class="pcard-body">
+                  <span class="pcard-head">
+                    <span class="avatar" style="{{ g.avatarStyle }}" aria-hidden="true">{{ g.initials }}</span>
+                    <span class="pcard-title">
+                      <span class="name-row"><button class="iname" onClick="{{ g.select }}" aria-label="{{ g.accessibleLabel }}">{{ g.name }}</button></span>
+                      <span class="iowner">{{ g.owner }}</span>
+                    </span>
+                    <sc-if value="{{ g.installedLabel }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">{{ g.installedLabel }}</span></sc-if>
+                  </span>
+                  <span class="desc2">{{ g.description }}</span>
+                  <sc-if value="{{ g.showTags }}" hint-placeholder-val="{{ true }}"><span class="tags"><sc-for list="{{ g.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span></sc-if>
+                  <sc-if value="{{ g.hasTopReason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ g.topReason }}</span></sc-if>
+                  <sc-if value="{{ g.isPlugin }}" hint-placeholder-val="{{ true }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.versionLabel }}" hint-placeholder-val="{{ true }}"><span class="pkg">{{ g.versionLabel }}</span></sc-if>
+                      <sc-if value="{{ g.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ g.riskColor }};"></i>{{ g.riskText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ g.isFork }}" hint-placeholder-val="{{ false }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.aheadText }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ g.aheadText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasDiscoverForks }}" hint-placeholder-val="{{ true }}">
+          <div class="shelf-head"><h2>Forks worth a look</h2><button class="link-btn" onClick="{{ browseForks }}">All forks →</button></div>
+          <div class="pgrid">
+            <sc-for list="{{ discoverForks }}" as="g" hint-placeholder-count="3">
+              <div class="pcard" onClick="{{ g.select }}">
+                <span class="cover" style="{{ g.coverStyle }}">
+                  <span class="cover-top">
+                    <sc-if value="{{ g.cover.language }}" hint-placeholder-val="{{ false }}"><span class="cover-chip"><i style="background: {{ g.cover.languageColor }};"></i>{{ g.cover.language }}</span></sc-if>
+                    <span class="spacer"></span>
+                    <sc-if value="{{ g.featured }}" hint-placeholder-val="{{ false }}"><span class="cover-chip cover-gem">{{ g.featuredLabel }}</span></sc-if>
+                    <span class="cover-chip cover-stars"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ g.starsLabel }}</span>
+                  </span>
+                </span>
+                <span class="pcard-body">
+                  <span class="pcard-head">
+                    <span class="avatar" style="{{ g.avatarStyle }}" aria-hidden="true">{{ g.initials }}</span>
+                    <span class="pcard-title">
+                      <span class="name-row"><button class="iname" onClick="{{ g.select }}" aria-label="{{ g.accessibleLabel }}">{{ g.name }}</button></span>
+                      <span class="iowner">{{ g.owner }}</span>
+                    </span>
+                    <sc-if value="{{ g.installedLabel }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">{{ g.installedLabel }}</span></sc-if>
+                  </span>
+                  <span class="desc2">{{ g.description }}</span>
+                  <sc-if value="{{ g.showTags }}" hint-placeholder-val="{{ true }}"><span class="tags"><sc-for list="{{ g.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span></sc-if>
+                  <sc-if value="{{ g.hasTopReason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ g.topReason }}</span></sc-if>
+                  <sc-if value="{{ g.isPlugin }}" hint-placeholder-val="{{ true }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.versionLabel }}" hint-placeholder-val="{{ true }}"><span class="pkg">{{ g.versionLabel }}</span></sc-if>
+                      <sc-if value="{{ g.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ g.riskColor }};"></i>{{ g.riskText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ g.isFork }}" hint-placeholder-val="{{ false }}">
+                    <span class="pfoot">
+                      <sc-if value="{{ g.aheadText }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ g.aheadText }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <span>{{ g.activity }}</span>
+                      <sc-if value="{{ g.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ g.likeClass }}" onClick="{{ g.toggleLike }}" aria-pressed="{{ g.likePressed }}" aria-label="{{ g.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ g.likeLabel }}</span></button></sc-if>
+                    </span>
+                  </sc-if>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <p class="footnote">Picks refresh every day. A pick is not a security review — check what you install.</p>
+      </section>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ showPackPage }}" hint-placeholder-val="{{ false }}">
+    <div class="page">
+      <section class="browser pack-page" aria-label="Pack">
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <button class="crumb-back" onClick="{{ backToDiscover }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Discover</button>
+        </nav>
+        <sc-if value="{{ discoverLoading }}" hint-placeholder-val="{{ false }}"><div class="pgrid pgrid-skeleton" aria-busy="true"><span class="skeleton"></span><span class="skeleton"></span></div></sc-if>
+        <sc-if value="{{ noPack }}" hint-placeholder-val="{{ false }}">
+          <div class="empty"><h2>This pack isn’t available today</h2><p>Packs are rebuilt daily from the current picks.</p><button class="btn" onClick="{{ backToDiscover }}">See today’s packs</button></div>
+        </sc-if>
+        <sc-if value="{{ hasPack }}" hint-placeholder-val="{{ true }}">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">{{ pack.title }}</h1>
+              <p class="page-lede">{{ pack.summary }}</p>
+            </div>
+            <sc-if value="{{ packShowLike }}" hint-placeholder-val="{{ false }}"><button class="{{ packLikeClass }} like-btn" onClick="{{ packToggleLike }}" aria-pressed="{{ packLikePressed }}" aria-label="{{ packLikeAria }}"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg>Like<span class="like-count">{{ packLikeLabel }}</span></button></sc-if>
+          </div>
+          <ol class="pack-members">
+            <sc-for list="{{ pack.members }}" as="m" hint-placeholder-count="3">
+              <li class="pack-member">
+                <span class="pack-role">{{ m.role }}</span>
+                <div class="pack-member-body">
+                  <p class="pack-why">{{ m.why }}</p>
+                <div class="pcard" onClick="{{ m.select }}">
+                  <span class="cover" style="{{ m.coverStyle }}">
+                    <span class="cover-top">
+                      <sc-if value="{{ m.cover.language }}" hint-placeholder-val="{{ false }}"><span class="cover-chip"><i style="background: {{ m.cover.languageColor }};"></i>{{ m.cover.language }}</span></sc-if>
+                      <span class="spacer"></span>
+                      <sc-if value="{{ m.featured }}" hint-placeholder-val="{{ false }}"><span class="cover-chip cover-gem">{{ m.featuredLabel }}</span></sc-if>
+                      <span class="cover-chip cover-stars"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg>{{ m.starsLabel }}</span>
+                    </span>
+                  </span>
+                  <span class="pcard-body">
+                    <span class="pcard-head">
+                      <span class="avatar" style="{{ m.avatarStyle }}" aria-hidden="true">{{ m.initials }}</span>
+                      <span class="pcard-title">
+                        <span class="name-row"><button class="iname" onClick="{{ m.select }}" aria-label="{{ m.accessibleLabel }}">{{ m.name }}</button></span>
+                        <span class="iowner">{{ m.owner }}</span>
+                      </span>
+                      <sc-if value="{{ m.installedLabel }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">{{ m.installedLabel }}</span></sc-if>
+                    </span>
+                    <span class="desc2">{{ m.description }}</span>
+                    <sc-if value="{{ m.showTags }}" hint-placeholder-val="{{ true }}"><span class="tags"><sc-for list="{{ m.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span></sc-if>
+                    <sc-if value="{{ m.hasTopReason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ m.topReason }}</span></sc-if>
+                    <sc-if value="{{ m.isPlugin }}" hint-placeholder-val="{{ true }}">
+                      <span class="pfoot">
+                        <sc-if value="{{ m.versionLabel }}" hint-placeholder-val="{{ true }}"><span class="pkg">{{ m.versionLabel }}</span></sc-if>
+                        <sc-if value="{{ m.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ m.riskColor }};"></i>{{ m.riskText }}</span></sc-if>
+                        <span class="spacer"></span>
+                        <span>{{ m.activity }}</span>
+                        <sc-if value="{{ m.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ m.likeClass }}" onClick="{{ m.toggleLike }}" aria-pressed="{{ m.likePressed }}" aria-label="{{ m.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ m.likeLabel }}</span></button></sc-if>
+                      </span>
+                    </sc-if>
+                    <sc-if value="{{ m.isFork }}" hint-placeholder-val="{{ false }}">
+                      <span class="pfoot">
+                        <sc-if value="{{ m.aheadText }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ m.aheadText }}</span></sc-if>
+                        <span class="spacer"></span>
+                        <span>{{ m.activity }}</span>
+                        <sc-if value="{{ m.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ m.likeClass }}" onClick="{{ m.toggleLike }}" aria-pressed="{{ m.likePressed }}" aria-label="{{ m.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ m.likeLabel }}</span></button></sc-if>
+                      </span>
+                    </sc-if>
+                  </span>
+                </div>
+                </div>
+              </li>
+            </sc-for>
+          </ol>
+          <p class="footnote">Each plugin installs on its own. Open one to see what it does and how to set it up.</p>
+        </sc-if>
+      </section>
+    </div>
+    </sc-if>
+
     <sc-if value="{{ showCatalogFeed }}" hint-placeholder-val="{{ true }}">
     <div class="page" onScroll="{{ loadMoreOnScroll }}">
       <section class="browser" aria-label="Community artifact list">
@@ -717,18 +1056,18 @@
         <div class="controls">
           <label class="search">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg>
-            <input aria-label="Search community artifacts" value="{{ query }}" onChange="{{ setQuery }}" placeholder="{{ searchPlaceholder }}" />
+            <input aria-label="Search" value="{{ query }}" onChange="{{ setQuery }}" placeholder="{{ searchPlaceholder }}" />
           </label>
           <label class="sort">Sort
-            <select aria-label="Sort community artifacts" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
-              <option value="recommended">Recommended</option><option value="stars">Most stars</option><option value="recent">Recently pushed</option><option value="name">Name A–Z</option>
+            <select aria-label="Sort" value="{{ catalogSort }}" onChange="{{ setCatalogSort }}">
+              <option value="recommended">Recommended</option><option value="stars">Most stars</option><option value="recent">Recently updated</option><option value="name">Name A–Z</option>
             </select>
           </label>
         </div>
 
         <div class="filters">
-          <button class="{{ favoritesChipClass }}" onClick="{{ toggleFavoritesOnly }}" aria-pressed="{{ favoritesOnly }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>Favorites</button>
-          <label class="chip"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> License reported</label>
+          <button class="{{ favoritesChipClass }}" onClick="{{ toggleFavoritesOnly }}" aria-pressed="{{ favoritesOnly }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>Saved</button>
+          <label class="chip"><input type="checkbox" checked="{{ knownLicenseOnly }}" onChange="{{ toggleKnownLicense }}" /> Has a license</label>
           <span class="filters-note mono">{{ sortExplanation }}</span>
           <div class="seg seg-layout" role="group" aria-label="Result layout">
             <button class="{{ gridLayoutClass }}" onClick="{{ useGridLayout }}" aria-pressed="{{ gridLayoutPressed }}" aria-label="Show as cards" title="Cards"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></button>
@@ -739,7 +1078,7 @@
         <sc-if value="{{ showCardGrid }}" hint-placeholder-val="{{ true }}">
           <div class="pgrid">
             <sc-for list="{{ results }}" as="r" hint-placeholder-count="6">
-              <button class="pcard" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">
+              <div class="pcard" onClick="{{ r.select }}">
                 <span class="cover" style="{{ r.coverStyle }}">
                   <span class="cover-top">
                     <sc-if value="{{ r.cover.language }}" hint-placeholder-val="{{ false }}"><span class="cover-chip"><i style="background: {{ r.cover.languageColor }};"></i>{{ r.cover.language }}</span></sc-if>
@@ -752,39 +1091,40 @@
                   <span class="pcard-head">
                     <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
                     <span class="pcard-title">
-                      <span class="name-row"><span class="iname">{{ r.name }}</span></span>
+                      <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
                       <span class="iowner">{{ r.owner }}</span>
                     </span>
                     <sc-if value="{{ r.installedLabel }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">{{ r.installedLabel }}</span></sc-if>
                   </span>
                   <span class="desc2">{{ r.description }}</span>
-                  <sc-if value="{{ isPluginBrowser }}" hint-placeholder-val="{{ true }}">
-                    <span class="tags"><sc-for list="{{ r.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span>
+                  <sc-if value="{{ r.showTags }}" hint-placeholder-val="{{ true }}"><span class="tags"><sc-for list="{{ r.tags }}" as="tag" hint-placeholder-count="2"><span class="tag">{{ tag }}</span></sc-for></span></sc-if>
+                  <sc-if value="{{ r.hasTopReason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.topReason }}</span></sc-if>
+                  <sc-if value="{{ r.isPlugin }}" hint-placeholder-val="{{ true }}">
                     <span class="pfoot">
-                      <span class="pkg">{{ r.versionLabel }}</span>
+                      <sc-if value="{{ r.versionLabel }}" hint-placeholder-val="{{ true }}"><span class="pkg">{{ r.versionLabel }}</span></sc-if>
                       <sc-if value="{{ r.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ r.riskColor }};"></i>{{ r.riskText }}</span></sc-if>
                       <span class="spacer"></span>
                       <span>{{ r.activity }}</span>
+                      <sc-if value="{{ r.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ r.likeClass }}" onClick="{{ r.toggleLike }}" aria-pressed="{{ r.likePressed }}" aria-label="{{ r.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ r.likeLabel }}</span></button></sc-if>
                     </span>
                   </sc-if>
-                  <sc-if value="{{ isForkBrowser }}" hint-placeholder-val="{{ false }}">
+                  <sc-if value="{{ r.isFork }}" hint-placeholder-val="{{ false }}">
                     <span class="pfoot">
-                      <sc-if value="{{ r.compared }}" hint-placeholder-val="{{ false }}"><span><span class="ahead">{{ r.aheadLabel }}</span> <span class="behind">{{ r.behindLabel }}</span></span></sc-if>
-                      <sc-if value="{{ r.notCompared }}" hint-placeholder-val="{{ true }}"><span class="not-compared">Not compared</span></sc-if>
-                      <span class="pkg">{{ r.forksLabel }} forks</span>
+                      <sc-if value="{{ r.aheadText }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ r.aheadText }}</span></sc-if>
                       <span class="spacer"></span>
-                      <span class="pkg">{{ r.licenseShort }} · {{ r.pushedLabel }}</span>
+                      <span>{{ r.activity }}</span>
+                      <sc-if value="{{ r.showLike }}" hint-placeholder-val="{{ false }}"><button class="{{ r.likeClass }}" onClick="{{ r.toggleLike }}" aria-pressed="{{ r.likePressed }}" aria-label="{{ r.likeAria }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg><span>{{ r.likeLabel }}</span></button></sc-if>
                     </span>
                   </sc-if>
                 </span>
-              </button>
+              </div>
             </sc-for>
           </div>
         </sc-if>
 
         <sc-if value="{{ showPluginList }}" hint-placeholder-val="{{ false }}">
           <div class="panel">
-            <div class="frow frow-plugin fhead" aria-hidden="true"><span class="th">Plugin</span><span class="th">Stars</span><span class="th col-forks">Version</span><span class="th col-upstream">Risk</span><span class="th col-push">Last push</span><span class="th col-license">License</span><span></span></div>
+            <div class="frow frow-plugin fhead" aria-hidden="true"><span class="th">Plugin</span><span class="th">Stars</span><span class="th col-forks">Version</span><span class="th col-upstream">Heads-up</span><span class="th col-push">Updated</span><span class="th col-license">License</span><span></span></div>
             <sc-for list="{{ results }}" as="r" hint-placeholder-count="8">
               <button class="frow frow-plugin" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">
                 <span class="who">
@@ -797,7 +1137,7 @@
                 <span class="stars">{{ r.starsLabel }}</span>
                 <span class="num col-forks">{{ r.versionShort }}</span>
                 <span class="col-upstream"><sc-if value="{{ r.riskText }}" hint-placeholder-val="{{ false }}"><span class="risk"><i style="background: {{ r.riskColor }};"></i>{{ r.riskText }}</span></sc-if></span>
-                <span class="num col-push">{{ r.pushedLabel }}</span>
+                <span class="num col-push">{{ r.updatedShort }}</span>
                 <span class="num col-license">{{ r.licenseShort }}</span>
                 <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
               </button>
@@ -807,7 +1147,7 @@
 
         <sc-if value="{{ showForkList }}" hint-placeholder-val="{{ false }}">
           <div class="panel">
-            <div class="frow fhead" aria-hidden="true"><span class="th">Fork</span><span class="th">Stars</span><span class="th col-forks">Forks</span><span class="th col-upstream">vs upstream</span><span class="th col-push">Last push</span><span class="th col-license">License</span><span></span></div>
+            <div class="frow fhead" aria-hidden="true"><span class="th">Fork</span><span class="th">Stars</span><span class="th col-forks">Forks</span><span class="th col-upstream">Changes</span><span class="th col-push">Updated</span><span class="th col-license">License</span><span></span></div>
             <sc-for list="{{ results }}" as="r" hint-placeholder-count="8">
               <button class="frow" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">
                 <span class="who">
@@ -819,8 +1159,8 @@
                 </span>
                 <span class="stars">{{ r.starsLabel }}</span>
                 <span class="num col-forks">{{ r.forksLabel }}</span>
-                <span class="col-upstream"><sc-if value="{{ r.compared }}" hint-placeholder-val="{{ false }}"><span class="ahead">{{ r.aheadLabel }}</span> <span class="behind">{{ r.behindLabel }}</span></sc-if><sc-if value="{{ r.notCompared }}" hint-placeholder-val="{{ true }}"><span class="not-compared">Not compared</span></sc-if></span>
-                <span class="num col-push">{{ r.pushedLabel }}</span>
+                <span class="col-upstream"><span class="ahead">{{ r.aheadShort }}</span></span>
+                <span class="num col-push">{{ r.updatedShort }}</span>
                 <span class="num col-license">{{ r.licenseShort }}</span>
                 <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
               </button>
@@ -833,7 +1173,8 @@
         </sc-if>
         <sc-if value="{{ hasStoreError }}" hint-placeholder-val="{{ false }}"><div class="store-note" role="status">{{ storeError }}</div></sc-if>
         <div class="feed-status mono" aria-live="polite">{{ catalogFeedStatus }}</div>
-        <p class="footnote">Recommendations prioritize evidence, capability, maintenance, and low visibility. Ranking is not security verification.</p>
+        <sc-if value="{{ forkCoverageNote }}" hint-placeholder-val="{{ false }}"><p class="footnote">{{ forkCoverageNote }}</p></sc-if>
+        <p class="footnote">“Recommended” puts well-built projects that few people have found yet first. Being listed here is not a security review — check what you install.</p>
       </section>
     </div>
     </sc-if>
@@ -844,7 +1185,6 @@
         <sc-if value="{{ hasDetail }}" hint-placeholder-val="{{ true }}">
           <nav class="crumbs" aria-label="Breadcrumb">
             <button class="{{ crumbClass }}" onClick="{{ backToCatalog }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>{{ backLabel }}</button>
-            <span aria-hidden="true">/</span><span class="mono">{{ detail.owner }}</span><span aria-hidden="true">/</span><span class="mono crumb-current">{{ detail.name }}</span>
           </nav>
 
           <div class="banner" style="{{ detailThumb.bannerStyle }}" role="img" aria-label="Cover art for {{ detail.slug }}">
@@ -856,7 +1196,7 @@
               <div class="hero-id">
                 <span class="avatar avatar-lg" style="{{ detailThumb.avatarStyle }}" aria-hidden="true">{{ detailInitials }}</span>
                 <div class="hero-titles">
-                  <span class="mono hero-owner">{{ detail.owner }}</span>
+                  <span class="hero-owner">{{ detail.owner }}</span>
                   <div class="hero-name-row"><h1 class="hero-name">{{ detail.name }}</h1><sc-if value="{{ detailFeatured }}" hint-placeholder-val="{{ false }}"><span class="{{ detailGemClass }}">Hidden gem</span></sc-if></div>
                 </div>
               </div>
@@ -868,151 +1208,158 @@
               <div class="tags"><sc-for list="{{ detailTags }}" as="topic" hint-placeholder-count="3"><span class="tag">{{ topic }}</span></sc-for></div>
             </div>
 
-            <aside class="card" aria-label="Actions">
+            <aside class="card actions" aria-label="Actions">
+              <sc-if value="{{ hasDetailGitHub }}" hint-placeholder-val="{{ true }}">
+                <a class="btn btn-go btn-lg btn-block" href="{{ detailGitHubUrl }}" target="_blank" rel="noopener noreferrer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2.2Z"/></svg>Open on GitHub</a>
+              </sc-if>
+              <div class="btn-pair">
+                <sc-if value="{{ detailShowLike }}" hint-placeholder-val="{{ false }}"><button class="{{ detailLikeClass }} like-btn" onClick="{{ detailToggleLike }}" aria-pressed="{{ detailLikePressed }}" aria-label="{{ detailLikeAria }}"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.3A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.7-7.5 10.3-7.5 10.3Z"/></svg>Like<span class="like-count">{{ detailLikeLabel }}</span></button></sc-if>
+                <button class="{{ favoriteClass }}" onClick="{{ toggleFavorite }}" aria-pressed="{{ isFavorite }}"><svg class="fav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>{{ favoriteLabel }}</button>
+              </div>
+
               <sc-if value="{{ isPluginDetail }}" hint-placeholder-val="{{ true }}">
-                <div class="card-head"><span class="label">Install and run</span><span class="{{ executionPillClass }}">{{ executionPill }}</span></div>
-                <label class="field" for="artifact-version">Harness version
-                  <select id="artifact-version" class="select" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}">
-                    <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
-                  </select>
-                </label>
-                <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a launch-ready Harness version on the Local tab first.</p></sc-if>
-                <button class="btn btn-go btn-lg btn-block" onClick="{{ installAndRun }}" disabled="{{ installAndRunDisabled }}">{{ installAndRunLabel }}</button>
-                <p class="note">{{ installAndRunReason }}. Forge only enables this for a single-plugin recipe whose signed package identity, version, integrity, repository, and commit match this record. It installs offline into a disposable profile and smoke-tests it in Apptainer. There is no host install fallback.</p>
                 <div class="divider"></div>
-                <div class="btn-pair">
-                  <button class="{{ favoriteClass }}" onClick="{{ toggleFavorite }}" aria-pressed="{{ isFavorite }}"><svg class="fav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>{{ favoriteLabel }}</button>
-                  <a class="btn" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Source<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></a>
-                </div>
-                <button class="btn btn-block" onClick="{{ saveConfiguration }}" disabled="{{ saveConfigurationDisabled }}">{{ saveConfigurationLabel }}</button>
+                <span class="label">Install</span>
+                <sc-if value="{{ pluginInstallAvailable }}" hint-placeholder-val="{{ false }}">
+                  <label class="field" for="artifact-version">Install into
+                    <select id="artifact-version" class="select" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}">
+                      <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
+                    </select>
+                  </label>
+                  <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a Harness on the Local tab first.</p></sc-if>
+                  <button class="btn btn-lg btn-block" onClick="{{ installAndRun }}" disabled="{{ installAndRunDisabled }}">{{ installAndRunLabel }}</button>
+                  <p class="note">It’s tried in a throwaway copy first and only kept if it starts cleanly.</p>
+                </sc-if>
+                <sc-if value="{{ pluginInstallUnavailable }}" hint-placeholder-val="{{ true }}">
+                  <p class="note">{{ pluginInstallNote }}</p>
+                  <sc-if value="{{ isWebsite }}" hint-placeholder-val="{{ true }}"><button class="btn btn-block" onClick="{{ getApp }}">Get the desktop app</button></sc-if>
+                </sc-if>
               </sc-if>
+
               <sc-if value="{{ isForkDetail }}" hint-placeholder-val="{{ false }}">
-                <div class="card-head"><span class="label">Install fork</span><span class="{{ forkInstallPillClass }}">{{ forkInstallPill }}</span></div>
-                <p class="prose">{{ forkInstallText }}</p>
+                <div class="divider"></div>
+                <div class="card-head"><span class="label">Try this fork</span><sc-if value="{{ forkInstallPill }}" hint-placeholder-val="{{ false }}"><span class="{{ forkInstallPillClass }}">{{ forkInstallPill }}</span></sc-if></div>
+                <p class="note">{{ forkInstallText }}</p>
                 <sc-if value="{{ forkInstallActive }}" hint-placeholder-val="{{ false }}"><div class="progress" role="progressbar" aria-label="Installation progress"><span style="{{ forkProgressStyle }}"></span></div></sc-if>
-                <sc-if value="{{ forkShowLog }}" hint-placeholder-val="{{ false }}"><div class="logbox logbox-sm" aria-live="polite"><sc-for list="{{ forkLogLines }}" as="line" hint-placeholder-count="4"><div class="log-msg">{{ line.text }}</div></sc-for></div></sc-if>
+                <sc-if value="{{ forkShowLog }}" hint-placeholder-val="{{ false }}"><details class="logwrap"><summary>Show progress details</summary><div class="logbox logbox-sm" aria-live="polite"><sc-for list="{{ forkLogLines }}" as="line" hint-placeholder-count="4"><div class="log-msg">{{ line.text }}</div></sc-for></div></details></sc-if>
                 <button class="btn btn-fork btn-lg btn-block" onClick="{{ forkInstallAction }}" disabled="{{ forkInstallDisabled }}">{{ forkInstallLabel }}</button>
-                <div class="btn-pair">
-                  <button class="{{ favoriteClass }}" onClick="{{ toggleFavorite }}" aria-pressed="{{ isFavorite }}"><svg class="fav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 4h11v16.5L12 16.8l-5.5 3.7Z"/></svg>{{ favoriteLabel }}</button>
-                  <a class="btn" href="{{ detail.url }}" target="_blank" rel="noopener noreferrer">Source<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></a>
-                </div>
-                <button class="btn btn-block" onClick="{{ copyRef }}">Copy commit link</button>
-                <sc-if value="{{ forkRemovable }}" hint-placeholder-val="{{ false }}"><button class="btn btn-block btn-ghost" onClick="{{ removeFork }}">Remove installed checkout</button></sc-if>
-                <p class="note">Installing runs the fork's dependency and build scripts inside Apptainer with network access and no launcher secrets. Viewing this page never downloads or runs code.</p>
+                <sc-if value="{{ forkRemovable }}" hint-placeholder-val="{{ false }}"><button class="btn btn-block btn-ghost" onClick="{{ removeFork }}">Uninstall</button></sc-if>
               </sc-if>
+
               <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}">
-                <div class="card-head"><span class="label">Install package</span><span class="pill">Fail closed</span></div>
-                <label class="field" for="package-version">Harness version
+                <div class="divider"></div>
+                <span class="label">Install</span>
+                <label class="field" for="package-version">Install into
                   <select id="package-version" class="select" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}">
                     <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
                   </select>
                 </label>
-                <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a launch-ready Harness version on the Local tab first.</p></sc-if>
+                <sc-if value="{{ noPackageVersions }}" hint-placeholder-val="{{ false }}"><p class="note">Add a Harness on the Local tab first.</p></sc-if>
                 <button class="btn btn-go btn-lg btn-block" onClick="{{ installPackage }}" disabled="{{ installDisabled }}">{{ installLabel }}</button>
-                <p class="note">{{ installStatus }}. Installation verifies trust, acquires exact bytes, rejects unsafe archives, uses an offline disposable profile, boots it in Apptainer, and promotes only after both smoke checks pass.</p>
-                <div class="divider"></div>
-                <div class="btn-pair">
-                  <button class="btn" onClick="{{ sharePackagePage }}">Copy package page</button>
-                  <button disabled="disabled" title="Package composition and upload are a separate boundary." class="btn">Add to package</button>
-                </div>
-                <button class="btn btn-block" onClick="{{ saveConfiguration }}" disabled="{{ saveConfigurationDisabled }}">{{ saveConfigurationLabel }}</button>
+                <p class="note">{{ installStatus }}.</p>
+                <button class="btn btn-block" onClick="{{ sharePackagePage }}">Copy link</button>
+              </sc-if>
+
+              <sc-if value="{{ showDeveloperActions }}" hint-placeholder-val="{{ false }}">
+                <button class="btn btn-block btn-ghost" onClick="{{ saveConfiguration }}" disabled="{{ saveConfigurationDisabled }}">{{ saveConfigurationLabel }}</button>
               </sc-if>
             </aside>
           </div>
 
           <div class="split">
             <div class="stack">
+              <sc-if value="{{ hasWhyGem }}" hint-placeholder-val="{{ false }}">
+                <section class="card why">
+                  <h2 class="h2">{{ whyGemTitle }}</h2>
+                  <ul class="why-list">
+                    <sc-for list="{{ whyGemReasons }}" as="reason" hint-placeholder-count="3"><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span>{{ reason }}</span></li></sc-for>
+                  </ul>
+                  <sc-if value="{{ whyGemFootnote }}" hint-placeholder-val="{{ false }}"><p class="note">{{ whyGemFootnote }}</p></sc-if>
+                </section>
+              </sc-if>
+
               <sc-if value="{{ isForkDetail }}" hint-placeholder-val="{{ false }}">
                 <section class="card">
-                  <div class="card-head"><h2 class="h2">Lineage</h2><sc-if value="{{ noDivergence }}" hint-placeholder-val="{{ true }}"><span class="note">Not compared with upstream yet</span></sc-if></div>
-                  <div class="lineage">
-                    <div class="lnode"><span class="label">Upstream</span><span class="mono lnode-name">{{ forkUpstream }}</span></div>
-                    <div class="llink" aria-hidden="true"><span class="lline"></span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></div>
-                    <div class="lnode lnode-fork"><span class="label">This fork</span><span class="mono lnode-name">{{ detail.slug }}</span><span class="note mono">{{ forkHead }}</span></div>
-                  </div>
+                  <h2 class="h2">What this fork changes</h2>
+                  <p class="note">Based on <span class="mono">{{ forkUpstream }}</span></p>
                   <sc-if value="{{ hasDivergence }}" hint-placeholder-val="{{ false }}">
                     <div class="stats">
-                      <div class="stat"><span class="stat-value stat-fork">{{ forkAhead }}</span><span class="stat-label">commits ahead</span></div>
-                      <div class="stat"><span class="stat-value">{{ forkBehind }}</span><span class="stat-label">commits behind</span></div>
+                      <div class="stat"><span class="stat-value stat-fork">{{ forkAhead }}</span><span class="stat-label">new commits</span></div>
                       <div class="stat"><span class="stat-value">{{ forkFiles }}</span><span class="stat-label">files changed</span></div>
+                      <div class="stat"><span class="stat-value">{{ forkBehind }}</span><span class="stat-label">behind the original</span></div>
                     </div>
                   </sc-if>
+                  <sc-if value="{{ noDivergence }}" hint-placeholder-val="{{ true }}"><p class="prose">We haven’t compared this fork with the original yet.</p></sc-if>
                   <sc-if value="{{ hasForkSurfaces }}" hint-placeholder-val="{{ false }}">
-                    <div class="field">Changed surfaces<div class="tags"><sc-for list="{{ forkSurfaces }}" as="surface" hint-placeholder-count="2"><span class="tag">{{ surface }}</span></sc-for></div></div>
+                    <div class="field">Areas it touches<div class="tags"><sc-for list="{{ forkSurfaces }}" as="surface" hint-placeholder-count="2"><span class="tag">{{ surface }}</span></sc-for></div></div>
                   </sc-if>
                 </section>
               </sc-if>
 
               <sc-if value="{{ isPackageDetail }}" hint-placeholder-val="{{ false }}">
                 <section class="card">
-                  <div class="card-head"><h2 class="h2">Pinned components</h2><span class="pill">Exact metadata</span></div>
+                  <h2 class="h2">What’s included</h2>
                   <sc-for list="{{ packageComponents }}" as="component" hint-placeholder-count="2">
                     <article class="component">
-                      <div class="component-head"><span>{{ component.name }}</span><span class="note mono">{{ component.registry }} · {{ component.version }}</span></div>
+                      <div class="component-head"><span>{{ component.name }}</span><span class="note">{{ component.version }}</span></div>
                       <p class="note">{{ component.role }}</p>
-                      <div class="component-links"><a href="{{ component.repositoryUrl }}" target="_blank" rel="noopener noreferrer">source @ {{ component.shortCommit }} ↗</a><a href="{{ component.packageUrl }}" target="_blank" rel="noopener noreferrer">package metadata ↗</a></div>
+                      <div class="component-links"><a href="{{ component.repositoryUrl }}" target="_blank" rel="noopener noreferrer">Source ↗</a><a href="{{ component.packageUrl }}" target="_blank" rel="noopener noreferrer">Package ↗</a></div>
                     </article>
                   </sc-for>
                 </section>
               </sc-if>
 
-              <section class="card">
-                <h2 class="h2">Compatibility</h2>
-                <sc-if value="{{ hasCompatibilityFacts }}" hint-placeholder-val="{{ false }}">
-                  <dl class="kvs">
-                    <sc-if value="{{ hasDeclaredRange }}" hint-placeholder-val="{{ false }}"><div class="kv"><dt>Declared Harness range</dt><dd>{{ detailDeclaredRange }}</dd></div></sc-if>
-                    <sc-if value="{{ hasObservedBase }}" hint-placeholder-val="{{ false }}"><div class="kv"><dt>Observed base</dt><dd>{{ detailObservedBase }}</dd></div></sc-if>
-                  </dl>
-                </sc-if>
-                <p class="prose">{{ detailCompatibilityText }}</p>
-                <sc-if value="{{ hasLocalCompatibility }}" hint-placeholder-val="{{ false }}">
-                  <div class="checks">
-                    <span class="label">On this machine</span>
-                    <sc-for list="{{ localCompatibility }}" as="v" hint-placeholder-count="1">
-                      <div class="check">
-                        <sc-if value="{{ v.listed }}" hint-placeholder-val="{{ true }}"><span class="check-icon check-ok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span></sc-if>
-                        <sc-if value="{{ v.unlisted }}" hint-placeholder-val="{{ false }}"><span class="check-icon check-warn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 6.5v7M12 17.5v.1"/></svg></span></sc-if>
-                        <span class="check-version">{{ v.version }}</span>
-                        <span class="check-path mono">{{ v.path }}</span>
-                        <span class="check-label" style="color: {{ v.color }};">{{ v.label }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                </sc-if>
-              </section>
-
-              <section class="card">
-                <div class="card-head"><h2 class="h2">Risk and evidence</h2><span class="note">Static metadata review</span></div>
-                <sc-if value="{{ hasRiskMeter }}" hint-placeholder-val="{{ false }}">
-                  <div class="risk-row">
-                    <span class="risk-level" style="color: {{ riskLevelColor }};">{{ riskLevelLabel }}</span>
-                    <div class="meter" aria-hidden="true"><sc-for list="{{ riskSegments }}" as="seg" hint-placeholder-count="5"><span style="background: {{ seg.bg }};"></span></sc-for></div>
-                    <span class="note mono">low → critical</span>
-                  </div>
-                </sc-if>
-                <sc-if value="{{ noRiskMeter }}" hint-placeholder-val="{{ true }}"><p class="note mono">{{ detailRisk }}</p></sc-if>
-                <p class="prose">{{ detailEvidenceText }}</p>
-                <p class="note">Ranking is not security verification. Viewing this page doesn't download or run any code.</p>
-              </section>
+              <sc-if value="{{ showCompatibility }}" hint-placeholder-val="{{ false }}">
+                <section class="card">
+                  <h2 class="h2">Compatibility</h2>
+                  <sc-if value="{{ hasCompatibilityFacts }}" hint-placeholder-val="{{ false }}">
+                    <dl class="kvs">
+                      <sc-if value="{{ hasDeclaredRange }}" hint-placeholder-val="{{ false }}"><div class="kv"><dt>Works with Harness</dt><dd>{{ detailDeclaredRange }}</dd></div></sc-if>
+                      <sc-if value="{{ hasObservedBase }}" hint-placeholder-val="{{ false }}"><div class="kv"><dt>Built on</dt><dd>{{ detailObservedBase }}</dd></div></sc-if>
+                    </dl>
+                  </sc-if>
+                  <sc-if value="{{ hasCompatibilitySummary }}" hint-placeholder-val="{{ false }}"><p class="prose">{{ detailCompatibilityText }}</p></sc-if>
+                  <sc-if value="{{ hasLocalCompatibility }}" hint-placeholder-val="{{ false }}">
+                    <div class="checks">
+                      <span class="label">On this computer</span>
+                      <sc-for list="{{ localCompatibility }}" as="v" hint-placeholder-count="1">
+                        <div class="check">
+                          <sc-if value="{{ v.listed }}" hint-placeholder-val="{{ true }}"><span class="check-icon check-ok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg></span></sc-if>
+                          <sc-if value="{{ v.unlisted }}" hint-placeholder-val="{{ false }}"><span class="check-icon check-warn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 6.5v7M12 17.5v.1"/></svg></span></sc-if>
+                          <span class="check-version">{{ v.version }}</span>
+                          <span class="check-path mono">{{ v.path }}</span>
+                          <span class="check-label" style="color: {{ v.color }};">{{ v.label }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </section>
+              </sc-if>
             </div>
 
             <div class="stack">
-              <section class="card">
-                <h2 class="h2">Source and provenance</h2>
+              <sc-if value="{{ hasDetailCautions }}" hint-placeholder-val="{{ true }}">
+                <section class="card cautions">
+                  <h2 class="h2">Before you install</h2>
+                  <ul class="caution-list"><sc-for list="{{ detailCautions }}" as="c" hint-placeholder-count="2"><li>{{ c }}</li></sc-for></ul>
+                </section>
+              </sc-if>
+              <details class="card tech">
+                <summary class="h2">Technical details</summary>
                 <dl class="facts">
                   <sc-for list="{{ detailRows }}" as="d" hint-placeholder-count="6"><div class="fact"><dt>{{ d.k }}</dt><dd style="color: {{ d.color }};">{{ d.v }}</dd></div></sc-for>
                 </dl>
                 <div class="links">
-                  <a href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">View captured commit ↗</a>
+                  <sc-if value="{{ detail.commitUrl }}" hint-placeholder-val="{{ true }}"><a href="{{ detail.commitUrl }}" target="_blank" rel="noopener noreferrer">The exact version we looked at ↗</a></sc-if>
                   <sc-if value="{{ hasPackageLink }}" hint-placeholder-val="{{ false }}"><a href="{{ detailPackageUrl }}" target="_blank" rel="noopener noreferrer">{{ detailPackageLabel }}</a></sc-if>
-                  <sc-if value="{{ hasDiscussionLink }}" hint-placeholder-val="{{ false }}"><a href="{{ detailDiscussionUrl }}" target="_blank" rel="noopener noreferrer">Official community discussion ↗</a></sc-if>
+                  <sc-if value="{{ hasDiscussionLink }}" hint-placeholder-val="{{ false }}"><a href="{{ detailDiscussionUrl }}" target="_blank" rel="noopener noreferrer">Community discussion ↗</a></sc-if>
                 </div>
-              </section>
+              </details>
             </div>
           </div>
         </sc-if>
         <sc-if value="{{ noDetail }}" hint-placeholder-val="{{ false }}">
-          <div class="empty"><h2>Not in the local catalog</h2><p>This item isn't present in the current local catalog.</p><button class="btn" onClick="{{ backToCatalog }}">Back to results</button></div>
+          <div class="empty"><h2>We couldn’t find that</h2><p>It may have been renamed or removed from GitHub.</p><button class="btn" onClick="{{ backToCatalog }}">Back</button></div>
         </sc-if>
       </article>
     </div>

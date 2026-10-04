@@ -8,11 +8,6 @@ const BAD = 'oklch(0.7 0.16 25)';
 const BLUE = 'oklch(0.74 0.12 235)';
 const MUTED = 'oklch(0.62 0.01 255)';
 const TXT = 'oklch(0.86 0.01 255)';
-const RISK_LEVELS = ['low', 'medium', 'medium-high', 'high', 'critical'];
-const RISK_COLORS = {
-  low: 'oklch(0.74 0.14 155)', medium: 'oklch(0.8 0.11 85)', 'medium-high': 'oklch(0.78 0.12 65)',
-  high: 'oklch(0.74 0.13 45)', critical: 'oklch(0.7 0.15 25)'
-};
 
 // Only a plain `a || b || c` list of exact versions is checked; real semver
 // ranges and prose qualifiers are shown verbatim and never evaluated.
@@ -1673,6 +1668,11 @@ function mergeFavorites(remote, local) {
 }
 
 const LAYOUT_KEY = 'dsh-forge:catalog-layout:v1';
+// Topics nearly every Harness project carries; showing them says nothing.
+const GENERIC_TOPICS = new Set([
+  'deepseek', 'deepseek-harness', 'dsh', 'dsh-plugin', 'dsh-plugins', 'harness', 'plugin', 'cordis',
+  'ai', 'llm', 'agent', 'ai-agent', 'ai-agents', 'agents', 'claude-code', 'codex', 'claude-plugin', 'codex-plugin'
+]);
 
 function storedLayout() {
   const fallback = { plugin: 'grid', fork: 'grid' };
@@ -1688,6 +1688,71 @@ function storedLayout() {
   }
 }
 
+// Plain-language helpers for the catalog: what a person reads, not what Forge stores.
+// Namespaces a view object's keys: prefix('detail', {likeLabel}) -> {detailLikeLabel}.
+const LIKEABLE = /^(?:github:\d{1,12}|pack:[a-z0-9-]{1,64})$/;
+
+function prefix(name, values) {
+  return Object.fromEntries(Object.entries(values).map(([key, value]) => [name + key[0].toUpperCase() + key.slice(1), value]));
+}
+
+function relativeTime(value, now = Date.now()) {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return '';
+  const days = Math.floor((now - time) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return days + ' days ago';
+  if (days < 60) return Math.round(days / 7) + ' weeks ago';
+  if (days < 365) return Math.round(days / 30) + ' months ago';
+  const years = Math.round(days / 365);
+  return years === 1 ? 'a year ago' : years + ' years ago';
+}
+
+function versionText(artifact) {
+  const version = artifact && artifact.package && artifact.package.version;
+  return typeof version === 'string' && version ? 'v' + version.replace(/^v/, '') : '';
+}
+
+// Only facts a user would act on; "installs from git" is true of every plugin.
+function cautionNotes(artifact) {
+  const signals = [...(artifact.risk_signals || [])].map(item => String(item).toLowerCase());
+  const notes = [];
+  if (signals.some(item => item.includes('lifecycle'))) notes.push('Runs install scripts when installed');
+  if (signals.some(item => item.includes('automation workflow'))) notes.push('Changes automation workflows');
+  if (artifact.archived) notes.push('Archived by its author');
+  return notes;
+}
+
+const VISITOR_KEY = 'dsh-forge:visitor:v1';
+const SOURCE_INSTALL_COMMAND = 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog';
+
+function storedVisitor() {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return '';
+    let value = window.localStorage.getItem(VISITOR_KEY) || '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)) {
+      const cryptoApi = typeof crypto !== 'undefined' ? crypto : null;
+      if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+        value = cryptoApi.randomUUID();
+      } else if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+        // randomUUID needs a secure context; getRandomValues does not.
+        const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        value = hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+      } else {
+        return '';
+      }
+      window.localStorage.setItem(VISITOR_KEY, value);
+    }
+    return value;
+  } catch {
+    return '';
+  }
+}
+
 function artifactRoute(artifact) {
   if (artifact.type === 'package') return artifact.pageRoute.slice(1);
   return artifact.type + 's/' + encodeURIComponent(artifact.id);
@@ -1698,6 +1763,9 @@ function catalogRoute(hash) {
   if (hash === '#forks' || hash === '#public-repos') return { view: 'catalog', type: 'fork' };
   if (hash === '#packages') return { view: 'catalog', type: 'package', packageSlug: null };
   if (hash === '#community') return { view: 'catalog', type: 'plugin' };
+  if (hash === '#discover') return { view: 'catalog', type: 'discover' };
+  const packMatch = /^#packs\/([a-z0-9][a-z0-9-]{0,63})$/.exec(hash);
+  if (packMatch) return { view: 'catalog', type: 'discover', packId: packMatch[1] };
   const packageMatch = /^#packages\/([a-z0-9][a-z0-9-]{1,63})$/.exec(hash);
   if (packageMatch) return { view: 'catalog', type: 'package', packageSlug: packageMatch[1], detailOpen: true };
   const artifactMatch = /^#(plugins|forks)\/(.+)$/.exec(hash);
@@ -1783,6 +1851,14 @@ class Component extends DCLogic {
       favoriteArtifacts: storedFavorites(),
       favoritePopId: null,
       catalogLayout: storedLayout(),
+      discover: null,
+      discoverLoading: false,
+      discoverError: '',
+      packId: initialRoute.packId || null,
+      detailFrom: null,
+      mostLiked: [],
+      likes: { enabled: false, counts: {}, liked: {} },
+      likeBusy: {},
       auth: { configured: false, sync: false, user: null },
       favoritesSync: 'local',
       accountMenuOpen: false,
@@ -1822,12 +1898,21 @@ class Component extends DCLogic {
       this.setState({
         view: route.view,
         catalogType: route.type,
+        packId: route.packId || null,
         artifactId: route.artifactId || (packageArtifact ? packageArtifact.id : this.state.artifactId),
         detailOpen: !!route.detailOpen,
-        detailArtifact: route.detailOpen ? this.state.detailArtifact : null
+        detailArtifact: route.detailOpen ? this.state.detailArtifact : null,
+        detailFrom: route.detailOpen && this._pendingFrom !== undefined ? this._pendingFrom : null
       }, () => {
+        this._pendingFrom = undefined;
+        if (typeof document !== 'undefined') {
+          const scroller = document.querySelector('.page');
+          if (scroller) scroller.scrollTop = 0;
+        }
         if (route.artifactId) {
           this.loadCatalogArtifact(route.artifactId);
+        } else if (route.type === 'discover') {
+          this.loadDiscover();
         } else if (route.view === 'catalog') {
           if (this.isPublicWeb() && !(this.state.catalogStore && this.state.catalogStore.public)) {
             this.loadPublicCatalog(route.type);
@@ -1841,9 +1926,10 @@ class Component extends DCLogic {
     if (this.isPublicWeb()) this.loadAuth();
     const statusReady = this.isPublicWeb() ? Promise.resolve() : this.refreshStatus(true);
     statusReady.then(async () => {
-      if (!this.state.sidecarConnected && ['landing', 'catalog'].includes(this.state.view)) {
+      if (!this.state.sidecarConnected && ['landing', 'catalog'].includes(this.state.view) && this.state.catalogType !== 'discover') {
         await this.loadPublicCatalog(this.state.catalogType);
       }
+      if (this.state.view === 'landing' || this.state.catalogType === 'discover') this.loadDiscover();
       if (this.state.detailOpen && this.state.artifactId) this.loadCatalogArtifact(this.state.artifactId);
       if (this.state.application && this.state.application.updates && this.state.application.updates.available) {
         this.checkForUpdate();
@@ -1862,6 +1948,7 @@ class Component extends DCLogic {
     if (this.favoritePopTimer) clearTimeout(this.favoritePopTimer);
     if (this.favoriteSyncTimer) clearTimeout(this.favoriteSyncTimer);
     if (this._catalogTimer) clearTimeout(this._catalogTimer);
+    if (this._likeTimer) clearTimeout(this._likeTimer);
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
@@ -1882,6 +1969,13 @@ class Component extends DCLogic {
     return typeof window !== 'undefined' && publicWebLocation(window.location);
   }
 
+  // From anywhere on the website: the landing page's download section.
+  showDownloads() {
+    if (typeof window === 'undefined') return;
+    if (window.history && window.history.pushState) window.history.pushState(null, '', window.location.pathname);
+    this.setState({ view: 'landing', detailOpen: false }, () => setTimeout(() => this.scrollLanding('landing-downloads'), 50));
+  }
+
   scrollLanding(id) {
     if (typeof document === 'undefined') return;
     const section = document.getElementById(id);
@@ -1890,25 +1984,27 @@ class Component extends DCLogic {
 
   async copySourceInstall() {
     try {
-      await navigator.clipboard.writeText('python3 scripts/serve.py --desktop --sync-catalog');
-      this.flash('Source launch command copied');
+      await navigator.clipboard.writeText(SOURCE_INSTALL_COMMAND);
+      this.flash('Command copied');
     } catch {
-      this.flash('Copy the source launch command manually');
+      this.flash('Select the command and copy it');
     }
   }
 
   navigate(view, type = 'package') {
-    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null });
+    this.setState({ view, catalogType: type, detailOpen: false, detailArtifact: null, detailFrom: null });
     if (typeof window !== 'undefined') {
       window.location.hash = view === 'catalog'
-        ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : 'plugins'))
+        ? (type === 'fork' ? 'forks' : (type === 'package' ? 'packages' : (type === 'discover' ? 'discover' : 'plugins')))
         : (view === 'assistant' ? 'assistant' : 'launch');
     }
   }
 
   openBrowser(type) {
     this.navigate('catalog', type);
-    if (this.isPublicWeb() && !this.state.sidecarConnected && !(this.state.catalogStore && this.state.catalogStore.public)) {
+    if (type === 'discover') {
+      this.loadDiscover();
+    } else if (this.isPublicWeb() && !this.state.sidecarConnected && !(this.state.catalogStore && this.state.catalogStore.public)) {
       this.loadPublicCatalog(type);
     } else {
       this.scheduleCatalogRefresh();
@@ -1920,14 +2016,24 @@ class Component extends DCLogic {
       CATALOG.find(item => item.id === artifact.id) ||
       this.state.storeArtifacts.find(item => item.id === artifact.id) ||
       this.state.favoriteArtifacts.find(item => item.id === artifact.id) || null;
+    // Remember Discover (or the pack) so "back" returns there rather than to a plain list.
+    const from = this.state.view === 'catalog' && this.state.catalogType === 'discover' && !this.state.detailOpen
+      ? (this.state.packId ? 'packs/' + this.state.packId : 'discover')
+      : (this.state.detailOpen ? this.state.detailFrom : null);
+    // The hash change that follows applies this origin once; history navigation has none.
+    this._pendingFrom = from;
     this.setState({
       artifactId: artifact.id,
       catalogType: artifact.type,
       detailOpen: true,
-      detailArtifact: detail
+      detailArtifact: detail,
+      detailFrom: from
     });
     if (typeof window !== 'undefined') {
-      window.location.hash = artifactRoute(artifact);
+      const route = artifactRoute(artifact);
+      // No hash change means no event to consume the origin.
+      if (window.location.hash === '#' + route) this._pendingFrom = undefined;
+      window.location.hash = route;
     }
   }
 
@@ -1943,6 +2049,7 @@ class Component extends DCLogic {
         ? '/api/catalog?id=' + encodeURIComponent(artifactId)
         : '/api/v1/catalog/artifacts/' + encodeURIComponent(artifactId));
       if (this.state.artifactId === artifactId) this.setState({ detailArtifact: mapCatalogRecord(record) });
+      this.queueLikes([artifactId]);
     } catch (error) {
       // Without the sidecar's record there is no execution policy, so the page fails closed
       // and says why instead of waiting on a load that already failed.
@@ -2034,7 +2141,20 @@ class Component extends DCLogic {
     }
     try {
       const auth = await this.api('/api/auth/session');
-      this.setState({ auth: { configured: !!auth.configured, sync: !!auth.sync, user: auth.user || null } });
+      this.setState({
+        auth: { configured: !!auth.configured, sync: !!auth.sync, user: auth.user || null },
+        likes: { ...this.state.likes, enabled: !!auth.likes }
+      });
+      if (auth.likes) {
+        const visible = [
+          ...this.state.storeArtifacts.map(item => item.id),
+          ...(this.state.discover ? [...this.state.discover.plugins, ...this.state.discover.forks].map(item => item.id) : []),
+          ...(this.state.discover ? this.state.discover.packs.map(pack => 'pack:' + pack.id) : []),
+          this.state.detailOpen ? this.state.artifactId : ''
+        ];
+        this.queueLikes(visible);
+        if (this.state.discover) this.loadMostLiked();
+      }
       if (auth.user && auth.sync) await this.pullFavorites();
     } catch {
       this.setState({ auth: { configured: false, sync: false, user: null } });
@@ -2402,8 +2522,157 @@ class Component extends DCLogic {
     return !counts || Number(counts[state.catalogType] || 0) > 0;
   }
 
+  // Gems and packs for the Discover page, from the hosted API or the local store.
+  async loadDiscover() {
+    if (this._discoverPromise) return this._discoverPromise;
+    const hosted = this.isPublicWeb() && !this.state.sidecarConnected;
+    if (!hosted && !(this.state.sidecarConnected && this.state.catalogStore && this.state.catalogStore.available)) {
+      // Disconnected preview: the embedded snapshot's own picks.
+      const plugins = CATALOG.filter(item => item.type === 'plugin' && item.featured).slice(0, 12);
+      const forks = CATALOG.filter(item => item.type === 'fork' && item.featured).slice(0, 6);
+      this.setState({ discover: { plugins, forks, packs: [], embedded: true }, discoverLoading: false });
+      return;
+    }
+    this.setState({ discoverLoading: true, discoverError: '' });
+    this._discoverPromise = (async () => {
+      try {
+        const page = await this.api(hosted ? '/api/catalog?view=discover' : '/api/v1/catalog/discover');
+        const map = record => mapCatalogRecord({ ...record, hidden_gem: record.hidden_gem || null });
+        const discover = {
+          plugins: ((page.gems && page.gems.plugins) || []).map(map),
+          forks: ((page.gems && page.gems.forks) || []).map(map),
+          packs: (page.packs || []).map(pack => ({
+            ...pack,
+            members: (pack.members || []).map(member => ({ ...member, artifact: map(member.artifact) }))
+          })),
+          policy: page.policy || ''
+        };
+        this.setState({
+          discover,
+          discoverLoading: false,
+          ...(page.catalog_store ? { catalogStore: { ...page.catalog_store, available: true, public: true } } : {})
+        });
+        this.queueLikes([
+          ...discover.plugins.map(item => item.id), ...discover.forks.map(item => item.id),
+          ...discover.packs.map(pack => 'pack:' + pack.id)
+        ]);
+        this.loadMostLiked();
+      } catch (error) {
+        this.setState({ discoverLoading: false, discoverError: error.message });
+      } finally {
+        this._discoverPromise = null;
+      }
+    })();
+    return this._discoverPromise;
+  }
+
+  // ---------------------------------------------------------------- likes
+  // "Most liked": the weighted like ranking, resolved to catalog records (website only).
+  async loadMostLiked() {
+    if (!this.state.likes.enabled || !this.isPublicWeb() || this.state.sidecarConnected || this._mostLikedPromise) return;
+    this._mostLikedPromise = (async () => {
+      try {
+        const { top } = await this.api('/api/likes?top=24');
+        const ids = (top || []).map(item => item.id).filter(id => id.startsWith('github:')).slice(0, 12);
+        if (ids.length < 3) return this.setState({ mostLiked: [] });
+        const { artifacts } = await this.api('/api/catalog?ids=' + ids.map(encodeURIComponent).join(','));
+        const order = new Map(ids.map((id, index) => [id, index]));
+        const mapped = (artifacts || []).map(record => mapCatalogRecord({ ...record, hidden_gem: record.hidden_gem || null }))
+          .sort((a, b) => order.get(a.id) - order.get(b.id)).slice(0, 6);
+        this.setState({ mostLiked: mapped.length >= 3 ? mapped : [] });
+        this.queueLikes(mapped.map(item => item.id));
+      } catch {
+        this.setState({ mostLiked: [] });
+      } finally {
+        this._mostLikedPromise = null;
+      }
+    })();
+    return this._mostLikedPromise;
+  }
+
+  queueLikes(ids) {
+    if (!this.state.likes.enabled) return;
+    this._likeQueue = new Set([...(this._likeQueue || []), ...ids.filter(Boolean)]);
+    if (this._likeTimer) clearTimeout(this._likeTimer);
+    this._likeTimer = setTimeout(() => this.refreshLikes(), 150);
+  }
+
+  async refreshLikes() {
+    const ids = [...(this._likeQueue || [])].filter(id => LIKEABLE.test(id));
+    this._likeQueue = new Set();
+    for (let index = 0; index < ids.length; index += 60) {
+      const chunk = ids.slice(index, index + 60);
+      try {
+        const page = await this.api('/api/likes?ids=' + encodeURIComponent(chunk.join(',')), {
+          headers: this.visitorHeaders()
+        });
+        // A like being written right now keeps its optimistic state; this answer may predate it.
+        const settled = chunk.filter(id => !this.state.likeBusy[id]);
+        const liked = { ...this.state.likes.liked };
+        const counts = { ...this.state.likes.counts };
+        for (const id of settled) {
+          liked[id] = (page.liked || []).includes(id);
+          if (page.counts && id in page.counts) counts[id] = page.counts[id];
+        }
+        this.setState({ likes: { ...this.state.likes, counts, liked } });
+      } catch {}
+    }
+  }
+
+  visitorHeaders() {
+    const visitor = storedVisitor();
+    return visitor ? { 'X-Forge-Visitor': visitor } : {};
+  }
+
+  async toggleLike(id) {
+    if (!this.state.likes.enabled || !LIKEABLE.test(id || '') || this.state.likeBusy[id]) return;
+    const current = this.state.likes;
+    const wasLiked = !!current.liked[id];
+    const previousCount = Number(current.counts[id] || 0);
+    const liked = !wasLiked;
+    // Optimistic: the heart responds immediately; the server count replaces it.
+    this.setState({
+      likes: { ...current, counts: { ...current.counts, [id]: Math.max(0, previousCount + (liked ? 1 : -1)) }, liked: { ...current.liked, [id]: liked } },
+      likeBusy: { ...this.state.likeBusy, [id]: true }
+    });
+    try {
+      const result = await this.api('/api/likes', {
+        method: 'POST', headers: this.visitorHeaders(), body: JSON.stringify({ id, liked })
+      });
+      const likes = this.state.likes;
+      this.setState({ likes: { ...likes, counts: { ...likes.counts, [id]: result.count }, liked: { ...likes.liked, [id]: result.liked } } });
+    } catch (error) {
+      // Undo only this item; other likes may have changed meanwhile.
+      const likes = this.state.likes;
+      this.setState({ likes: { ...likes, counts: { ...likes.counts, [id]: previousCount }, liked: { ...likes.liked, [id]: wasLiked } } });
+      this.flash(error.message);
+    } finally {
+      this.setState({ likeBusy: { ...this.state.likeBusy, [id]: false } });
+    }
+  }
+
+  likeView(id) {
+    const likes = this.state.likes;
+    const count = Number(likes.counts[id] || 0);
+    const liked = !!likes.liked[id];
+    return {
+      // Packages and other records the server can't store likes for get no heart.
+      showLike: likes.enabled && LIKEABLE.test(id || ''),
+      likeLabel: count ? count.toLocaleString('en-US') : '',
+      likeAria: (liked ? 'Unlike' : 'Like') + (count ? ' (' + count + ' likes)' : ''),
+      likeClass: 'like' + (liked ? ' like-on' : ''),
+      likePressed: liked ? 'true' : 'false',
+      toggleLike: event => {
+        if (event && event.stopPropagation) event.stopPropagation();
+        if (event && event.preventDefault) event.preventDefault();
+        this.toggleLike(id);
+      }
+    };
+  }
+
   async loadPublicCatalog(type = this.state.catalogType) {
     if (this.state.sidecarConnected || !this.isPublicWeb()) return;
+    if (type === 'discover') return this.loadDiscover();
     if (this._publicCatalogPromise) return this._publicCatalogPromise;
     const parameters = new URLSearchParams({ type, sort: 'rank', limit: '50' });
     const artifactId = this.state.detailOpen ? this.state.artifactId : '';
@@ -2427,6 +2696,7 @@ class Component extends DCLogic {
           storeError: '',
           detailArtifact: detail && this.state.artifactId === artifactId ? mapCatalogRecord(detail) : this.state.detailArtifact
         });
+        this.queueLikes([...mapped.map(item => item.id), artifactId]);
       } catch (error) {
         if (!this.state.sidecarConnected) this.setState({ storeError: error.message });
       } finally {
@@ -2472,6 +2742,7 @@ class Component extends DCLogic {
         storeCursor: page.next_cursor || '',
         storeLoading: false
       });
+      this.queueLikes(mapped.map(item => item.id));
     } catch (error) {
       if (this.catalogQueryKey() !== key) return;
       this.setState({ storeLoading: false, storeError: error.message, storeArtifacts: append ? this.state.storeArtifacts : [] });
@@ -2889,14 +3160,32 @@ class Component extends DCLogic {
       if (item.state === 'ready') installLabels[item.artifact_id] = 'Installed';
       else if (['queued', 'fetching', 'building'].includes(item.state)) installLabels[item.artifact_id] = 'Installing';
     }
-    const results = filtered.map(a => ({
+    // "Hidden gem" only means something when the list is not already the gem ranking.
+    const gemBadgeInformative = !!(queryTerms.length || s.catalogSort !== 'recommended' || s.favoritesOnly);
+    const cardView = (a, { badge = gemBadgeInformative } = {}) => ({
       ...a,
       ...withThumbnail(a),
-      featuredLabel: a.hiddenGem && a.hiddenGem.candidate ? 'Hidden gem' : (a.featured ? 'Hidden gem' : ''),
-      accessibleLabel: 'Inspect ' + a.type + ' ' + a.slug + ', ' + a.starsLabel + ' GitHub stars',
-      tags: ((a.curation && a.curation.taxonomy) || a.topics || []).slice(0, 2),
-      riskText: a.riskLabel ? a.riskLabel.replace(/^./, ch => ch.toUpperCase()) : '',
-      riskColor: RISK_COLORS[(a.curation && a.curation.security_risk) || (a.risk && a.risk.level)] || MUTED,
+      ...this.likeView(a.id),
+      featured: !!(badge && a.featured),
+      featuredLabel: 'Hidden gem',
+      accessibleLabel: 'Open ' + (a.type === 'fork' ? 'fork ' : '') + a.slug,
+      tags: ((a.curation && a.curation.taxonomy) || a.topics || [])
+        .filter(topic => !GENERIC_TOPICS.has(String(topic).toLowerCase())).slice(0, 2),
+      topReason: (a.hiddenGem && Array.isArray(a.hiddenGem.reasons) && a.hiddenGem.reasons[0]) || '',
+      hasTopReason: !!(a.hiddenGem && Array.isArray(a.hiddenGem.reasons) && a.hiddenGem.reasons[0]),
+      versionLabel: versionText(a),
+      activity: a.pushed_at ? 'Updated ' + relativeTime(a.pushed_at) : '',
+      riskText: cautionNotes(a)[0] || '',
+      riskColor: WARN,
+      isFork: a.type === 'fork',
+      isPlugin: a.type !== 'fork',
+      showTags: !(a.hiddenGem && Array.isArray(a.hiddenGem.reasons) && a.hiddenGem.reasons[0]) &&
+        ((a.curation && a.curation.taxonomy) || a.topics || []).some(topic => !GENERIC_TOPICS.has(String(topic).toLowerCase())),
+      // The fork's top reason already says how many commits it adds.
+      aheadText: a.divergence && a.divergence.ahead_by && !(a.hiddenGem && a.hiddenGem.reasons && a.hiddenGem.reasons[0])
+        ? a.divergence.ahead_by.toLocaleString('en-US') + (a.divergence.ahead_by === 1 ? ' new commit' : ' new commits') : '',
+      aheadShort: a.divergence ? '+' + Number(a.divergence.ahead_by || 0).toLocaleString('en-US') : '—',
+      updatedShort: a.pushed_at ? relativeTime(a.pushed_at) : '—',
       forksLabel: Number.isInteger(a.forks_count) ? a.forks_count.toLocaleString('en-US') : '—',
       compared: !!a.divergence,
       notCompared: !a.divergence,
@@ -2908,7 +3197,19 @@ class Component extends DCLogic {
       versionShort: a.package && a.package.version ? a.package.version : '—',
       installedLabel: a.type === 'fork' ? (installLabels[a.id] || '') : '',
       select: () => this.selectCatalogArtifact(a)
-    }));
+    });
+    // Each card leads with its most distinctive reason: a reason already shown on two
+    // earlier cards in the same shelf yields to the card's next one.
+    const distinct = cards => {
+      const used = new Map();
+      return cards.map(card => {
+        const reasons = (card.hiddenGem && Array.isArray(card.hiddenGem.reasons)) ? card.hiddenGem.reasons : [];
+        const pick = reasons.find(reason => (used.get(reason) || 0) < 2) || reasons[0] || '';
+        used.set(pick, (used.get(pick) || 0) + 1);
+        return pick ? { ...card, topReason: pick, hasTopReason: true } : card;
+      });
+    };
+    const results = distinct(filtered.map(item => cardView(item)));
     const detailThumb = withThumbnail(detail.id ? detail : { id: 'none', name: '' });
     const forkInstall = detail.type === 'fork' && detail.id ? this.forkInstallation(detail.id) : null;
     const forkState = forkInstall ? forkInstall.state : 'none';
@@ -2917,26 +3218,31 @@ class Component extends DCLogic {
     const forkTree = forkReady ? s.trees.find(tree => tree.id === forkInstall.tree_id) : null;
     const forkLaunchable = !!(forkTree && forkTree.trust === 'community' && forkTree.launchability === 'ready');
     const forkCopy = !s.sidecarConnected
-      ? {
-          pill: 'Desktop only', label: 'Install in the desktop launcher', disabled: true,
-          text: 'Forks install through the local launcher: Forge fetches one pinned commit and builds and runs it only inside the Apptainer sandbox.'
-        }
+      ? (this.isPublicWeb()
+        ? {
+            pill: '', label: 'Get the desktop app to install', disabled: false, web: true,
+            text: 'Run this fork on your own computer with the DSH Forge desktop app. It builds and runs in an isolated container.'
+          }
+        : {
+            pill: '', label: 'Start DSH Forge to install', disabled: true,
+            text: 'The DSH Forge app isn’t running. Start it, then come back to this page.'
+          })
       : (forkReady
         ? {
-            pill: 'Installed', label: forkLaunchable ? 'Launch in sandbox…' : 'Setup required', disabled: !forkLaunchable || !sandbox.ready,
-            text: 'Installed at ' + String(forkInstall.commit).slice(0, 12) + ' in ' + forkInstall.path + '. It also appears under Local as a community fork.'
+            pill: 'Installed', label: forkLaunchable ? 'Launch…' : 'Setup required', disabled: !forkLaunchable || !sandbox.ready,
+            text: 'Installed and listed under Local. It runs in an isolated container.'
           }
         : (forkActive
-          ? { pill: forkState === 'building' ? 'Building' : 'Fetching', label: 'Installing…', disabled: true, text: forkInstall.detail || 'Working…' }
+          ? { pill: forkState === 'building' ? 'Building' : 'Downloading', label: 'Installing…', disabled: true, text: forkInstall.detail || 'Working…' }
           : (!sandbox.ready
-            ? { pill: 'Needs isolation', label: 'Isolation setup required', disabled: true, text: sandbox.reason || 'Configure the pinned Apptainer image first.' }
+            ? { pill: '', label: 'Isolation setup required', disabled: true, text: 'Set up the isolated container on the Local tab before installing forks.' }
             : {
-                pill: forkState === 'failed' ? 'Failed' : 'Sandboxed',
-                label: s.forkPlanBusy ? 'Checking the commit…' : (forkState === 'failed' ? 'Review and try again…' : 'Review & install…'),
+                pill: forkState === 'failed' ? 'Failed' : '',
+                label: s.forkPlanBusy ? 'Checking…' : (forkState === 'failed' ? 'Try again…' : 'Install…'),
                 disabled: s.forkPlanBusy,
                 text: forkState === 'failed'
                   ? forkInstall.detail
-                  : 'Fetch one pinned commit, build it inside Apptainer, and add it to Local. Nothing runs on your host.'
+                  : 'Downloads this exact version, builds it in an isolated container, and adds it to Local.'
               })));
     const forkPlan = s.forkPlan;
     const forkLayout = s.catalogLayout.fork === 'list' ? 'list' : 'grid';
@@ -2993,6 +3299,9 @@ class Component extends DCLogic {
       { k: 'License', v: detail.licenseLabel + ' · reported metadata', color: detail.licenseOk ? MUTED : WARN },
       { k: 'Trust', v: detail.divergence ? 'Commit-pinned source-diff metadata · not executed or security-reviewed' : 'Metadata only · not executed', color: WARN }
     ]);
+    // Summaries that only say nothing is known are left out rather than shown as a fact.
+    const compatibilitySummary = String((detail.compatibility && detail.compatibility.summary) || '');
+    const usefulCompatibility = !!compatibilitySummary && !/\bunknown\b|not (been )?(tested|computed)/i.test(compatibilitySummary);
     const detailCompatibilityText = detail.id
       ? ((detail.compatibility && detail.compatibility.summary) || 'No fork differences or runtime compatibility tests have been computed.')
       : '';
@@ -3001,14 +3310,12 @@ class Component extends DCLogic {
       : (detail.divergence
         ? 'Forge compared the exact source and fork commits through GitHub, listed ' + detail.divergence.listed_file_count + ' changed file(s), and extracted static compatibility and risk signals. ' + (detail.divergence.files_truncated ? 'GitHub reached its 300-file response limit, so the path inventory is partial. ' : '') + 'The repository was not cloned or executed; curator and sandbox review are still required.'
         : (detail.hiddenGem
-        ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + detail.hiddenGem.signals.map(signal => signal.id).join(', ') + '. ' + (detail.hiddenGem.selection ? 'Within a ' + detail.hiddenGem.selection.score_window + '-point quality window, the queue selected its ' + detail.hiddenGem.selection.capability_lane + ' capability lane after ' + detail.hiddenGem.selection.owner_exposure_before + ' prior item(s) from this owner. ' : '') + 'The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
+        ? 'Forge discovery score ' + detail.hiddenGem.score + '/100 from ' + (detail.hiddenGem.signals || []).map(signal => signal.id).join(', ') + '. ' + (detail.hiddenGem.selection ? 'Within a ' + detail.hiddenGem.selection.score_window + '-point quality window, the queue selected its ' + detail.hiddenGem.selection.capability_lane + ' capability lane after ' + detail.hiddenGem.selection.owner_exposure_before + ' prior item(s) from this owner. ' : '') + 'The ranking uses imported metadata only; Forge has not executed or security-reviewed this entry.'
         : (detail.curation
         ? detail.curation.evidence
         : (detail.external_validation
           ? 'The external marketplace classified this entry as ' + detail.external_validation.status + (detail.external_validation.code ? ' (' + detail.external_validation.code + ')' : '') + '. Forge verified the catalog digest but has not executed or security-reviewed the plugin.'
           : 'No source analysis has been computed. Repository descriptions and GitHub metadata are shown as claims, not verification.'))));
-    const detailRiskLevel = (detail.curation && detail.curation.security_risk) || (detail.risk && detail.risk.level) || '';
-    const riskIndex = RISK_LEVELS.indexOf(detailRiskLevel);
     const declaredRange = (detail.compatibility && detail.compatibility.declared_dsh_range) || '';
     const exactVersions = exactVersionList(declaredRange);
     const localCompatibility = exactVersions ? s.savedVersions
@@ -3026,14 +3333,13 @@ class Component extends DCLogic {
     const forkCoverage = Array.isArray(s.catalogStore.coverage)
       ? s.catalogStore.coverage.find(item => item && item.source === 'github-rest/fork-network')
       : null;
-    const coverageLabel = s.catalogType === 'fork' && forkCoverage
-      ? (forkCoverage.status === 'complete'
-        ? ' · complete network verified'
-        : (Number(forkCoverage.descendant_count || 0) > 0
-          ? ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
-            + ' visible · root reports ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ' direct)'
-          : ' · incomplete network (' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US')
-            + ' of ' + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ')'))
+    // Said only when the fork list is known to be partial, in plain numbers.
+    const forkCoverageNote = s.catalogType === 'fork' && forkCoverage && forkCoverage.status !== 'complete'
+      ? (Number(forkCoverage.descendant_count || 0) > 0
+        ? 'Showing ' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US') + ' forks found so far, including forks of forks. GitHub lists '
+          + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ' direct forks of the original.'
+        : 'Showing ' + Number(forkCoverage.discovered_count || 0).toLocaleString('en-US') + ' of about '
+          + Number(forkCoverage.reported_count_after || 0).toLocaleString('en-US') + ' forks. The rest are still being added.')
       : '';
     const emptyCopy = s.catalogType === 'package'
       ? {
@@ -3044,15 +3350,49 @@ class Component extends DCLogic {
         }
       : {
           title: s.favoritesOnly && !s.query.trim()
-            ? 'No favorite ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks') + ' yet'
+            ? 'No saved ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks') + ' yet'
             : 'No matching ' + (s.catalogType === 'plugin' ? 'plugins' : 'forks'),
           description: s.favoritesOnly && !s.query.trim()
-            ? 'Open any ' + s.catalogType + ' and choose Favorite to keep it here. ' + (s.auth.user && s.auth.sync ? 'They sync to your account.' : 'Favorites are saved in this browser.')
-            : 'Try a name, author, capability, taxonomy term, or clear the current filters.',
+            ? 'Open any ' + s.catalogType + ' and choose Save to keep it here. ' + (s.auth.user && s.auth.sync ? 'They sync to your account.' : 'Saved items stay in this browser.')
+            : 'Try a different word, or clear the filters.',
           action: s.favoritesOnly ? 'Show all' : 'Clear filters',
           run: () => { this.setState({ query: '', knownLicenseOnly: false, favoritesOnly: false }); this.scheduleCatalogRefresh(); }
         };
 
+    const website = this.isPublicWeb() && !s.sidecarConnected;
+    const onDiscover = s.view === 'catalog' && (s.catalogType === 'discover' || (s.detailOpen && !!s.detailFrom));
+    const discoverData = s.discover || { plugins: [], forks: [], packs: [] };
+    const discoverPacks = (discoverData.packs || []).map(pack => ({
+      ...pack,
+      ...this.likeView('pack:' + pack.id),
+      count: pack.members.length + ' plugins',
+      faces: pack.members.slice(0, 4).map(member => ({
+        style: withThumbnail(member.artifact).avatarStyle,
+        initial: String(member.artifact.owner || '?').slice(0, 1).toUpperCase()
+      })),
+      roles: pack.members.map(member => member.role).join(' · '),
+      open: () => { if (typeof window !== 'undefined') window.location.hash = 'packs/' + pack.id; }
+    }));
+    const packSource = (discoverData.packs || []).find(pack => pack.id === s.packId);
+    const currentPack = packSource ? {
+      ...packSource,
+      members: packSource.members.map(member => ({ ...cardView(member.artifact, { badge: false }), role: member.role, why: member.why }))
+    } : null;
+    const whyReasons = detail.hiddenGem && Array.isArray(detail.hiddenGem.reasons) ? detail.hiddenGem.reasons.slice(0, 4) : [];
+    const detailCautions = detail.id && !detail.catalogPackage ? [
+      ...cautionNotes(detail),
+      ...(detail.licenseOk ? [] : ['No license reported, so reuse terms are unclear']),
+      'DSH Forge checks public information about projects, not their code'
+    ] : [];
+    const spotlightSource = discoverData.plugins[0] || null;
+    const landingSpotlight = spotlightSource ? {
+      name: spotlightSource.name,
+      reasons: ((spotlightSource.hiddenGem && spotlightSource.hiddenGem.reasons) || []).slice(0, 2),
+      footnote: spotlightSource.hiddenGem && spotlightSource.hiddenGem.built_percentile != null
+        ? 'Built better than ' + spotlightSource.hiddenGem.built_percentile + '% of plugins'
+        : 'Picked today',
+      open: () => this.selectCatalogArtifact(spotlightSource)
+    } : { name: '', reasons: [], footnote: '' };
     const livePreview = s.previewData;
     const previewLines = livePreview ? [
       { k: 'tree', v: livePreview.tree.path + '  (' + livePreview.tree.trust + ', ' + livePreview.tree.launchability + ')', color: TXT },
@@ -3078,13 +3418,12 @@ class Component extends DCLogic {
       goAssistant: () => this.navigate('assistant'),
       landingProduct: () => this.scrollLanding('landing-product'),
       landingSecurity: () => this.scrollLanding('landing-security'),
-      landingCommunity: () => this.openBrowser('plugin'),
+      landingCommunity: () => this.openBrowser('discover'),
       landingDownloads: () => this.scrollLanding('landing-downloads'),
-      landingOpenLauncher: () => this.navigate('launch'),
       landingCopyInstall: () => this.copySourceInstall(),
       landingCatalogCount: s.catalogStore && s.catalogStore.artifact_count
-        ? Number(s.catalogStore.artifact_count).toLocaleString('en-US') + ' community projects indexed'
-        : 'Continuously refreshed community index',
+        ? 'Picked today from ' + Number(s.catalogStore.artifact_count).toLocaleString('en-US') + ' plugins and forks'
+        : 'Picked daily from every public plugin and fork',
       landingPluginCount: s.catalogStore && s.catalogStore.counts
         ? Number(s.catalogStore.counts.plugin || 0).toLocaleString('en-US')
         : '10K+',
@@ -3106,12 +3445,12 @@ class Component extends DCLogic {
           : (typeof window !== 'undefined' && window.location.host ? window.location.host : '127.0.0.1:3090')))
         : 'Offline preview',
       launchTabClass: s.view === 'launch' ? 'tab tab-on' : 'tab',
-      pluginsTabClass: s.view === 'catalog' && s.catalogType !== 'fork' ? 'tab tab-on' : 'tab',
-      forksTabClass: s.view === 'catalog' && s.catalogType === 'fork' ? 'tab tab-fork tab-on' : 'tab tab-fork',
+      pluginsTabClass: s.view === 'catalog' && !onDiscover && s.catalogType !== 'fork' ? 'tab tab-on' : 'tab',
+      forksTabClass: s.view === 'catalog' && !onDiscover && s.catalogType === 'fork' ? 'tab tab-fork tab-on' : 'tab tab-fork',
       assistantTabClass: s.view === 'assistant' ? 'tab tab-on' : 'tab',
       launchTabCurrent: s.view === 'launch' ? 'page' : 'false',
-      pluginsTabCurrent: s.view === 'catalog' && s.catalogType !== 'fork' ? 'page' : 'false',
-      forksTabCurrent: s.view === 'catalog' && s.catalogType === 'fork' ? 'page' : 'false',
+      pluginsTabCurrent: s.view === 'catalog' && !onDiscover && s.catalogType !== 'fork' ? 'page' : 'false',
+      forksTabCurrent: s.view === 'catalog' && !onDiscover && s.catalogType === 'fork' ? 'page' : 'false',
       assistantTabCurrent: s.view === 'assistant' ? 'page' : 'false',
       versions: versionRows,
       versionGroups: [
@@ -3165,22 +3504,21 @@ class Component extends DCLogic {
       useListLayout: () => this.setCatalogLayout('list'),
       browserTitle: s.catalogType === 'fork' ? 'Forks' : (s.catalogType === 'package' ? 'Packages' : 'Plugins'),
       browserLede: s.catalogType === 'fork'
-        ? 'Independent builds of ' + CATALOG_SNAPSHOT.upstream + '. Install any fork at a pinned commit; it builds and runs only inside the Apptainer sandbox.'
+        ? 'Community versions of DeepSeek Harness, each with its own changes.'
         : (s.catalogType === 'package'
-          ? 'Signed plugin stacks. Each recipe must be verified locally before it can be installed.'
-          : 'Extensions that load into a Harness profile. Only plugins with a matching signed recipe can be installed.'),
+          ? 'Signed plugin stacks.'
+          : 'Extensions that add skills, tools, and workflows to DeepSeek Harness.'),
       searchPlaceholder: s.catalogType === 'fork'
-        ? 'Search forks by owner, name, or description'
-        : 'Search by name, author, capability, or taxonomy',
+        ? 'Search forks by name, author, or what they change'
+        : 'Search plugins by name, author, or what they do',
       resultCount: (storeActive && !s.favoritesOnly && s.storeTotal > results.length
         ? results.length + ' of ' + s.storeTotal.toLocaleString('en-US')
         : String(results.length)
-      ) + (s.favoritesOnly ? ' favorite ' : ' ') + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
+      ) + (s.favoritesOnly ? ' saved ' : ' ') + (s.catalogType === 'plugin' ? 'plugins' : (s.catalogType === 'fork' ? 'forks' : 'packages')),
       catalogSourceLabel: storeActive
-        ? (s.catalogStore.public ? 'Live public catalog' : 'Imported catalog store') + coverageLabel
-        : (s.sidecarConnected && s.catalogStore.available
-          ? 'Embedded snapshot · no imported ' + s.catalogType + ' records'
-          : (s.sidecarConnected ? 'Embedded snapshot · no store imported' : 'Embedded snapshot')),
+        ? (s.catalogStore.public ? 'Updated daily from GitHub' : 'From your synced catalog')
+        : (s.sidecarConnected ? 'A small sample · sync the catalog to see everything' : 'A small sample'),
+      forkCoverageNote,
       storeError: s.storeError,
       hasStoreError: !!s.storeError,
       loadMoreOnScroll: event => {
@@ -3190,18 +3528,14 @@ class Component extends DCLogic {
         }
       },
       catalogFeedStatus: s.favoritesOnly
-        ? (s.auth.user && s.auth.sync ? 'Favorites sync to @' + s.auth.user.login : 'Favorites are saved in this browser' + (s.auth.configured ? ' · sign in to sync them' : ''))
-        : (catalogPending ? 'Loading results…' : (s.storeCursor ? 'Scroll for more' : 'End of results')),
-      sortExplanation: s.catalogSort === 'recommended'
-        ? (storeActive
-          ? 'Explainable hidden-gem priority · metadata only, not a security verdict'
-          : (s.catalogType === 'plugin' ? 'Evidence-ranked · not a security verdict' : 'Captured snapshot order'))
-        : (s.catalogSort === 'stars' ? 'GitHub stars · not a quality score' : (s.catalogSort === 'recent' ? 'Most recent repository push' : 'Alphabetical by owner / repository')),
+        ? (s.auth.user && s.auth.sync ? 'Saved items sync to @' + s.auth.user.login : 'Saved in this browser' + (s.auth.configured ? ' · sign in to keep them on every device' : ''))
+        : (catalogPending ? 'Loading…' : (s.storeCursor ? 'Scroll for more' : '')),
+      sortExplanation: s.catalogSort === 'recommended' ? 'Hidden gems first' : '',
       results,
       noResults: results.length === 0 && !catalogPending,
       hasDetail: !!detail.id,
       noDetail: !detail.id,
-      showCatalogFeed: !s.detailOpen,
+      showCatalogFeed: !s.detailOpen && s.catalogType !== 'discover',
       showArtifactPage: s.detailOpen,
       detail,
       detailThumb,
@@ -3209,47 +3543,49 @@ class Component extends DCLogic {
       detailRows,
       detailCompatibilityText,
       detailEvidenceText,
-      detailRisk: detail.catalogPackage
-        ? detail.risk.level + ' risk · package candidate B' + String(detail.rank).padStart(2, '0')
-        : (detail.hiddenGem
-          ? detail.hiddenGem.confidence + ' · ' + detail.hiddenGem.gaps.length + ' evidence gap(s)'
-          : (detail.curation ? detail.curation.security_risk + ' risk · static-review priority P' + String(detail.curation.rank).padStart(2, '0') : 'Unassessed')),
       isPackageDetail: !!detail.catalogPackage,
       isPluginDetail: detail.type === 'plugin',
       isForkDetail: detail.type === 'fork',
-      favoriteLabel: isFavorite ? 'Favorited' : 'Favorite',
+      favoriteLabel: isFavorite ? 'Saved' : 'Save',
       isFavorite,
       favoriteClass: 'btn fav' + (isFavorite ? ' fav-on' : '') + (isFavorite && s.favoritePopId === detail.id ? ' fav-pop' : ''),
       toggleFavorite: () => detail.id ? this.toggleFavorite(detail) : undefined,
-      backToCatalog: () => this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin'),
-      backLabel: detail.type === 'fork' ? 'Forks' : (detail.catalogPackage ? 'Packages' : 'Plugins'),
+      backToCatalog: () => {
+        if (s.detailFrom && typeof window !== 'undefined') window.location.hash = s.detailFrom;
+        else this.navigate('catalog', detail.type === 'fork' ? 'fork' : 'plugin');
+      },
+      backLabel: s.detailFrom
+        ? (s.detailFrom.startsWith('packs/')
+          ? (((s.discover && s.discover.packs) || []).find(pack => 'packs/' + pack.id === s.detailFrom) || { title: 'Pack' }).title
+          : 'Discover')
+        : (detail.type === 'fork' ? 'Forks' : (detail.catalogPackage ? 'Packages' : 'Plugins')),
       crumbClass: detail.type === 'fork' ? 'crumb-back crumb-fork' : 'crumb-back',
       detailTileClass: detail.type === 'fork' ? 'tile tile-lg tile-fork' : 'tile tile-lg',
       detailIconBox: detail.type !== 'fork',
       detailGemClass: detail.type === 'fork' ? 'gem gem-fork' : 'gem',
       detailFeatured: !!detail.featured,
       hasDetailStars: !!detail.id && !detail.catalogPackage,
-      detailMetaItems: [
+      detailMetaItems: detail.catalogPackage ? [detail.versionLabel, detail.licenseLabel, detail.activity].filter(Boolean) : [
         detail.type === 'fork'
-          ? (Number.isInteger(detail.forks_count) ? detail.forks_count.toLocaleString('en-US') + (detail.forks_count === 1 ? ' fork' : ' forks') : '')
-          : detail.versionLabel,
-        detail.licenseLabel, detail.language, detail.activity
+          ? (Number.isInteger(detail.forks_count) && detail.forks_count ? detail.forks_count.toLocaleString('en-US') + (detail.forks_count === 1 ? ' fork' : ' forks') : '')
+          : versionText(detail),
+        detail.licenseOk ? detail.licenseLabel : '',
+        detail.language && detail.language !== 'Not reported' ? detail.language : '',
+        detail.pushed_at ? 'Updated ' + relativeTime(detail.pushed_at) : ''
       ].filter(Boolean),
-      detailTags: ((detail.curation && detail.curation.taxonomy) || detail.topics || []).slice(0, 8),
+      detailTags: ((detail.curation && detail.curation.taxonomy) || detail.topics || [])
+        .filter(topic => !GENERIC_TOPICS.has(String(topic).toLowerCase())).slice(0, 8),
       hasDeclaredRange: !!declaredRange,
       detailDeclaredRange: declaredRange,
       detailObservedBase: (detail.compatibility && detail.compatibility.observed_base) || '',
       hasObservedBase: !!(detail.compatibility && detail.compatibility.observed_base),
       hasCompatibilityFacts: !!(declaredRange || (detail.compatibility && detail.compatibility.observed_base)),
+      hasCompatibilitySummary: usefulCompatibility,
+      // Forks already show their base under "What this fork changes".
+      showCompatibility: !!(declaredRange || localCompatibility.length ||
+        (detail.type !== 'fork' && (usefulCompatibility || (detail.compatibility && detail.compatibility.observed_base)))),
       localCompatibility,
       hasLocalCompatibility: localCompatibility.length > 0,
-      hasRiskMeter: riskIndex >= 0,
-      noRiskMeter: riskIndex < 0,
-      riskLevelLabel: detailRiskLevel.replace(/^./, ch => ch.toUpperCase()),
-      riskLevelColor: RISK_COLORS[detailRiskLevel] || MUTED,
-      riskSegments: RISK_LEVELS.map((level, index) => ({
-        id: level, bg: index <= riskIndex ? RISK_COLORS[detailRiskLevel] : 'oklch(0.28 0.012 255)'
-      })),
       forkUpstream: detail.source_repository || detail.parent_repository || 'Upstream not reported',
       forkHead: (detail.default_branch || 'default branch') + ' @ ' + (detail.head_sha ? detail.head_sha.slice(0, 7) : 'not captured'),
       hasDivergence: !!divergence,
@@ -3308,6 +3644,7 @@ class Component extends DCLogic {
       forkInstallDisabled: forkCopy.disabled,
       forkInstallAction: () => {
         if (!detail.id) return undefined;
+        if (!s.sidecarConnected) return this.showDownloads();
         if (forkReady && forkTree) {
           return this.confirmCommunityLaunch({
             version: forkTree.version, treeId: forkTree.id, launchSettings: null, community: forkTree.community || {}
@@ -3412,6 +3749,75 @@ class Component extends DCLogic {
       toggleAccountMenu: () => this.setState({ accountMenuOpen: !s.accountMenuOpen }),
       signIn: () => this.signIn(),
       signOut: () => this.signOut(),
+
+      // ---- website shell: desktop-only tabs and status are hidden on the hosted site
+      showDesktopTabs: !website,
+      showStatusPill: !website,
+      isWebsite: website,
+      getApp: () => this.showDownloads(),
+      goDiscover: () => this.openBrowser('discover'),
+      discoverTabClass: onDiscover ? 'tab tab-on' : 'tab',
+      discoverTabCurrent: onDiscover ? 'page' : 'false',
+
+      // ---- Discover
+      showDiscover: s.view === 'catalog' && s.catalogType === 'discover' && !s.packId && !s.detailOpen,
+      showPackPage: s.view === 'catalog' && s.catalogType === 'discover' && !!s.packId && !s.detailOpen,
+      discoverLoading: !s.discover && !s.discoverError,
+      discoverReady: !!s.discover,
+      hasDiscoverError: !!s.discoverError && !s.discover,
+      discoverError: s.discoverError,
+      retryDiscover: () => this.loadDiscover(),
+      discoverPlugins: distinct(discoverData.plugins.map(item => cardView(item, { badge: false }))),
+      hasDiscoverPlugins: discoverData.plugins.length > 0,
+      discoverForks: distinct(discoverData.forks.map(item => cardView(item, { badge: false }))),
+      hasDiscoverForks: discoverData.forks.length > 0,
+      mostLiked: distinct(s.mostLiked.map(item => cardView(item, { badge: false }))),
+      hasMostLiked: s.mostLiked.length >= 3,
+      discoverPacks: discoverPacks,
+      hasDiscoverPacks: discoverPacks.length > 0,
+      discoverScope: s.catalogStore && s.catalogStore.artifact_count
+        ? 'Picked today from ' + Number(s.catalogStore.artifact_count).toLocaleString('en-US') + ' plugins and forks.'
+        : 'Picked daily from every public plugin and fork.',
+      browsePlugins: () => this.openBrowser('plugin'),
+      browseForks: () => this.openBrowser('fork'),
+      pack: currentPack || { title: '', summary: '', members: [] },
+      hasPack: !!currentPack,
+      ...prefix('pack', this.likeView(currentPack ? 'pack:' + currentPack.id : '')),
+      noPack: !currentPack && !!s.discover,
+      backToDiscover: () => this.openBrowser('discover'),
+
+      // ---- detail page, in plain language
+      detailGitHubUrl: detail.catalogPackage ? '' : (detail.url || ''),
+      hasDetailGitHub: !detail.catalogPackage && !!detail.url,
+      ...prefix('detail', this.likeView(detail.id)),
+      hasWhyGem: whyReasons.length > 0,
+      whyGemReasons: whyReasons,
+      whyGemTitle: detail.hiddenGem && detail.hiddenGem.candidate ? 'Why it’s a hidden gem' : 'What we measured',
+      whyGemFootnote: detail.hiddenGem && detail.hiddenGem.built_percentile != null
+        ? 'Built better than ' + detail.hiddenGem.built_percentile + '% of plugins we measured.'
+        : '',
+      detailCautions,
+      hasDetailCautions: detailCautions.length > 0,
+      pluginInstallAvailable: !!(s.sidecarConnected && artifactExecution.eligible),
+      pluginInstallUnavailable: !(s.sidecarConnected && artifactExecution.eligible),
+      pluginInstallNote: !s.sidecarConnected
+        ? 'Install it into your Harness with the DSH Forge desktop app, or follow the setup steps on GitHub.'
+        : (artifactExecution.eligible ? '' : 'One-click install isn’t available for this plugin yet. Its GitHub page has setup steps.'),
+      showDeveloperActions: s.sidecarConnected,
+
+      // ---- landing page: real gems instead of a mock-up
+      landingGems: discoverData.plugins.slice(0, 4).map(item => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        label: 'Hidden gem',
+        open: () => this.selectCatalogArtifact(item)
+      })),
+      hasLandingGems: discoverData.plugins.length > 0,
+      noLandingGems: discoverData.plugins.length === 0,
+      landingSourceCommand: SOURCE_INSTALL_COMMAND,
+      landingSpotlight: landingSpotlight,
+      hasLandingSpotlight: !!landingSpotlight.name,
 
       toast: s.toast
     };
