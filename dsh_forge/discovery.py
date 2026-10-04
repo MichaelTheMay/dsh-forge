@@ -65,12 +65,15 @@ MAX_PUSH_AGE_DAYS = 365
 MAX_PLUGIN_GEMS = 160
 MAX_FORK_GEMS = 40
 MIN_EVIDENCE_COVERAGE = 0.05
+PACK_MIN_STRENGTH = 4
 MIN_MODEL_SPEARMAN = 0.15  # below this, held-out predictions are too weak to explain picks
 
 PLUGIN_FEATURES = (
     "tests", "ci", "readme", "docs", "changelog", "releases",
     "license", "commits", "recent_commits", "fresh", "age",
 )
+# Age must stay last: the craft index drops it (it buys exposure, not quality).
+assert PLUGIN_FEATURES[-1] == "age"
 
 PACK_THEMES = (
     {
@@ -165,15 +168,29 @@ def primary_capabilities(record: Mapping[str, Any]) -> list[str]:
     name = re_words(str(record.get("name") or ""))
     topics = " ".join(re_words(str(item)) for item in record.get("topics") or [] if isinstance(item, str))
     description = str(record.get("description") or "").casefold()
+    return [capability for capability, _ in capability_strengths(record)]
+
+
+def capability_strengths(record: Mapping[str, Any]) -> list[tuple[str, int]]:
+    """(capability, strength) pairs, strongest first.
+
+    Strength: 4 if the name says it, 2 per matching topic, 1 per description
+    mention (capped at 3). Anything below 2 is incidental.
+    """
+    name = re_words(str(record.get("name") or ""))
+    topic_words = [re_words(str(item)) for item in record.get("topics") or [] if isinstance(item, str)]
+    description = str(record.get("description") or "").casefold()
     found = []
     for capability, terms in PRIMARY_TERMS.items():
         in_name = any(_mentions(name, term) for term in terms)
-        in_topics = any(_mentions(topics, term) for term in terms)
-        mentions = sum(len(re.findall(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", description)) for term in terms)
-        if in_name or in_topics or mentions >= 2:
-            found.append((-(4 * in_name + 2 * in_topics + min(mentions, 3)), capability))
-    # Strongest first: what the plugin is named for outranks a topic or a mention.
-    return [capability for _, capability in sorted(found)]
+        topic_hits = sum(1 for topic in topic_words if any(_mentions(topic, term) for term in terms))
+        # One alternation, longest term first, so "web search" is one mention, not two.
+        pattern = r"(?<![a-z0-9])(?:" + "|".join(re.escape(term) for term in sorted(terms, key=len, reverse=True)) + r")(?![a-z0-9])"
+        mentions = len(re.findall(pattern, description))
+        strength = 4 * in_name + 2 * min(topic_hits, 3) + min(mentions, 3)
+        if in_name or topic_hits or mentions >= 2:
+            found.append((-strength, capability))
+    return [(capability, -negative) for negative, capability in sorted(found)]
 
 
 def re_words(value: str) -> str:
@@ -512,16 +529,17 @@ def score_records(
     reliable = model is not None and isinstance(cv, (int, float)) and cv >= MIN_MODEL_SPEARMAN
     validation = {**validation, "ranking": "attention-model" if reliable else "craft-index"}
     if population:
+        # "How well built" is an equal-weight craft index over creator-controlled
+        # practices, so more tests, docs, or releases can only help. Age is left
+        # out: it buys exposure, not quality. The model is used only to say what
+        # attention a project like this usually gets.
+        built = percentiles(craft_index([item[2][:-1] for item in population]))
         if reliable:
             predictions: list[float | None] = [model.predict(item[2]) for item in population]
-            built = percentiles(predictions)  # type: ignore[arg-type]
             gaps = [prediction - item[3] for prediction, item in zip(predictions, population)]  # type: ignore[operator]
         else:
-            # The model can't predict attention from build quality on this data, so claiming
-            # "projects like this usually have N stars" would be invented. Fall back to an
-            # equal-weight craft index and its gap to the star ranking.
-            craft = craft_index([item[2] for item in population])
-            built = percentiles(craft)
+            # The model can't predict attention on this data, so no reason may claim
+            # "projects like this usually have N stars"; compare ranks instead.
             star_rank = percentiles([item[3] for item in population])
             gaps = [quality - attention for quality, attention in zip(built, star_rank)]
             predictions = [None] * len(population)
@@ -531,7 +549,7 @@ def score_records(
             prediction = predictions[index]
             predicted_stars = max(0.0, math.expm1(prediction)) if prediction is not None else None
             validation_points = outside_validation(record, evidence)
-            score = 55 * built[index] + 30 * gap_rank[index] + validation_points * 0.75
+            score = 45 * built[index] + 40 * gap_rank[index] + validation_points * 0.75
             blocked = _gate(record, evidence, observed_at, ceiling)
             if _int(evidence.get("readme_bytes")) < MIN_README_BYTES:
                 blocked.append("README too short")
@@ -661,7 +679,11 @@ def compose_packs(
         if blocked or (report.get("built_percentile") or 0) < 50:
             continue
         quality = (report.get("built_percentile") or 0) + report.get("outside_validation", 0) + 2 * math.log1p(_stars(record))
-        pool.append((record, report, quality, primary_capabilities(record)))
+        # A pack role needs a plugin that is clearly about it: named for it, or
+        # tagged and described that way. One stray topic ("web-search") is not enough.
+        strong = [capability for capability, strength in capability_strengths(record) if strength >= PACK_MIN_STRENGTH]
+        if strong:
+            pool.append((record, report, quality, strong))
     pool.sort(key=lambda item: (-item[2], str(item[0].get("artifact_id"))))
     used: Counter[str] = Counter()
     packs = []
@@ -673,16 +695,14 @@ def compose_packs(
         for slot in theme["slots"]:
             options = [
                 item for item in pool
-                if slot in item[3]
-                and str(item[0]["artifact_id"]) not in chosen
+                if item[3][0] == slot  # the plugin's main purpose, not a side feature
+                and not used[str(item[0]["artifact_id"])]  # each plugin appears in one pack
                 and _owner(item[0]) not in owners
             ]
             if not options:
                 continue
             # Prefer plugins whose main purpose is this slot, then unused ones, then quality.
-            record, report, quality, _caps = min(
-                options, key=lambda item: (item[3][0] != slot, used[str(item[0]["artifact_id"])], -item[2]),
-            )
+            record, report, quality, _caps = min(options, key=lambda item: (-item[2], str(item[0]["artifact_id"])))
             identity = str(record["artifact_id"])
             chosen.add(identity)
             owners.add(_owner(record))

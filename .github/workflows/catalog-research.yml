@@ -30,6 +30,7 @@ jobs:
           --snapshot dist/registry-raw.json
           --previous https://github.com/${{ github.repository }}/releases/download/catalog-latest/registry.json.gz
           --output dist/registry-evidence.json
+          --deadline-seconds 1200
       - name: Analyze a bounded set of promising forks at immutable commits
         env:
           GITHUB_TOKEN: ${{ github.token }}

@@ -237,6 +237,30 @@ class PackTests(unittest.TestCase):
         self.assertEqual(memory[0]["role"], "Memory")
         self.assertEqual(memory[0]["name"], "dsh-memory-store")
 
+    def test_a_stray_topic_does_not_win_a_pack_role_and_no_plugin_repeats(self):
+        records = population()
+        records += [
+            plugin(70, quality=0.99, stars=2, name="dsh-subscription-bridge", owner="o70",
+                   description="Use another subscription with quotas and web search", topics=["web-search"]),
+            plugin(71, quality=0.9, stars=2, name="dsh-memory-store", owner="o71", topics=["memory"]),
+            plugin(72, quality=0.9, stars=2, name="dsh-repo-map", owner="o72", topics=["codebase", "code-index"]),
+            plugin(73, quality=0.9, stars=2, name="dsh-search-index", owner="o73", topics=["search"]),
+            plugin(74, quality=0.9, stars=2, name="dsh-code-review", owner="o74", topics=["review"]),
+            plugin(75, quality=0.9, stars=2, name="dsh-test-runner", owner="o75", topics=["testing"]),
+            plugin(76, quality=0.9, stars=2, name="dsh-agent-orchestration", owner="o76", topics=["orchestration"]),
+        ]
+        packs = discovery.discovery_queue(snapshot(records))["packs"]
+        members = [member["artifact_id"] for pack in packs for member in pack["members"]]
+        self.assertNotIn("github:70", members)
+        self.assertEqual(len(members), len(set(members)))
+
+    def test_good_practice_can_only_raise_the_build_score(self):
+        records = population()
+        bare = plugin(80, quality=0.7, stars=0, has_tests=False, ci_workflows=0)
+        tested = plugin(81, quality=0.7, stars=0, has_tests=True, ci_workflows=2)
+        reports, _ = discovery.score_records(records + [bare, tested], NOW)
+        self.assertGreater(reports["github:81"]["built_percentile"], reports["github:80"]["built_percentile"])
+
     def test_loose_mentions_do_not_make_a_primary_capability(self):
         once = plugin(50, quality=0.9, stars=1, name="dsh-formatter", description="Formats code. Keeps context small.")
         self.assertNotIn("memory", discovery.primary_capabilities(once))

@@ -38,32 +38,40 @@ that is **built like projects that get noticed, but hasn't been noticed yet**.
    (stars from upstream Harness contributors or authors of plugins with 50+
    stars) and stars in the last 30 days. If evidence would push the published
    registry past 60 MB, the least promising records lose theirs first.
-2. **What attention a build usually earns.** A ridge regression
+2. **How well it's built.** An equal-weight craft index over the same
+   creator-controlled practices (tests, CI, README depth, docs, changelog,
+   releases, license, commit volume, recent commits, freshness), so a good
+   practice can only raise it. Age is excluded: it buys exposure, not quality.
+3. **What attention a build usually earns.** A ridge regression
    (`dsh-forge.attention-ridge/v1`) is fitted across every plugin with
    evidence, predicting `log(1 + stars)` from creator-controlled features only:
    tests, CI, README depth, docs, changelog, releases, license, commit volume,
-   recent commits, freshness, and age. Five-fold cross-validated Spearman
-   correlation and R² are published with every queue.
-3. **The gap.** A plugin scores `55 × built percentile + 30 × gap percentile +
+   recent commits, freshness, and age (here age is a control: young projects
+   haven't had time to be noticed). Five-fold cross-validated Spearman
+   correlation and R² are published with every queue. The model only sets
+   expectations; its coefficients are never read as a quality score, because
+   they absorb exposure effects (on the first real run, commit volume and age
+   carried most of the weight).
+4. **The gap.** A plugin scores `45 × craft percentile + 40 × gap percentile +
    0.75 × outside validation`, where the gap is predicted minus actual
    attention. Outside validation (0-20 points) counts endorsements, merged pull
    requests and closed issues, other contributors, and recent stars, which
    mean something even at three stars.
-4. **An honest fallback.** If the model's held-out Spearman correlation is
+5. **An honest fallback.** If the model's held-out Spearman correlation is
    below 0.15 on the day's data, it isn't trusted to say what a project
-   "should" have. The ranking switches to an equal-weight craft index
+   "should" have. The gap becomes craft rank minus star rank
    (`ranking: craft-index` in the queue) and no reason claims a predicted star
    count.
-5. **Gates.** A plugin cannot be a gem if it is archived, unlicensed, above the
+6. **Gates.** A plugin cannot be a gem if it is archived, unlicensed, above the
    ecosystem's 95th-percentile star count (clamped to 10-50), not pushed in a
    year, missing a description, has a README under 800 bytes, is built worse
    than 60% of plugins, or already gets the attention its build predicts.
-6. **Forks** are judged only on what they added: commits ahead of upstream,
+7. **Forks** are judged only on what they added: commits ahead of upstream,
    changed surfaces, recency, a description of their own, and a quarter of the
    outside validation. A fork of a fork is excluded, because its divergence is
    measured against upstream and is mostly its parent's work. Fork leads skip
    copies with no commits or stars of their own.
-7. **Reasons.** Each pick carries up to four sentences generated from the
+8. **Reasons.** Each pick carries up to four sentences generated from the
    numbers above, for example "Built like projects that usually have ~40
    stars; it has 3.", "Starred by Harness contributors or plugin authors
    (@a, @b).", or "Adds 18 commits on top of DeepSeek Harness, touching CLI and
@@ -89,9 +97,11 @@ from the same evidence: **Memory & context** (memory, code navigation, search),
 **Review & safety net** (code review, security, testing), **Agent teams**
 (orchestration, observability, memory), and **Ship faster** (code navigation,
 testing, orchestration). Each role is filled by a plugin whose *main* purpose
-it is (named for it, tagged with it, or mentioning it repeatedly), built better
-than half the ecosystem and not gated for safety reasons. Packs prefer quality
-over obscurity, use one plugin per owner, avoid reusing a plugin across packs,
+it is, with a match strength of at least 4: named for it, or tagged with it
+twice, or tagged and described that way (one stray topic such as `web-search`
+is not enough). Members are built better than half the ecosystem and not gated
+for safety reasons. Packs prefer quality over obscurity, use one plugin per
+owner, never reuse a plugin across packs,
 and give every member a note that says something the others don't. A pack needs
 at least three members to be published. Each plugin still installs on its own;
 a pack is a reading list, not an installer.
