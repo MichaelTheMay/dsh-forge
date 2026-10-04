@@ -24,7 +24,9 @@ jobs:
         run: python3 scripts/index_registry.py --output dist/registry-raw.json
       - name: Gather bounded GitHub evidence for promising repositories
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          # An optional read-only token gets a larger GraphQL budget and every field;
+          # the Actions token works too, with fields it may not read left out.
+          GITHUB_TOKEN: ${{ secrets.FORGE_EVIDENCE_TOKEN || github.token }}
         run: >-
           python3 scripts/enrich_registry.py
           --snapshot dist/registry-raw.json

@@ -184,7 +184,7 @@ class FetchTests(unittest.TestCase):
             slugs, token="t", observed_at=NOW, opener=opener, batch_size=4, pause=lambda _: None,
         )
         self.assertEqual(sorted(evidence), ["owner0/repo0", "owner2/repo2", "owner3/repo3"])
-        self.assertEqual(coverage["failures"], ["owner1/repo1: OSError"])
+        self.assertEqual(coverage["failures"], ["owner1/repo1: OSError: timeout"])
 
     def test_a_graphql_timeout_is_a_failure_and_a_secondary_rate_limit_stops_the_run(self):
         from urllib.error import HTTPError
@@ -214,6 +214,65 @@ class FetchTests(unittest.TestCase):
         )
         self.assertEqual(len(calls), 1)
         self.assertEqual(coverage["stopped"], "GitHub rate limit reached")
+
+    def test_a_field_the_token_may_not_read_is_dropped_instead_of_failing_every_repository(self):
+        queries = []
+
+        def opener(request, timeout):
+            query = json.loads(request.data)["query"]
+            queries.append(query)
+            count = query.count(": repository(")
+            if "followers" in query:
+                # The Actions token is refused a user field; GitHub nulls every repository.
+                return FakeResponse({
+                    "data": {f"r{index}": None for index in range(count)},
+                    "errors": [{"type": "FORBIDDEN", "message": "Resource not accessible by integration",
+                                "path": [f"r{index}", "owner", "followers"]} for index in range(count)],
+                })
+            data = {f"r{index}": node() for index in range(count)}
+            for value in data.values():
+                value["owner"] = {"login": "octo", "__typename": "User"}
+            return FakeResponse({"data": data})
+
+        slugs = [f"owner{index}/repo{index}" for index in range(6)]
+        evidence, coverage = fetch_evidence(
+            slugs, token="t", observed_at=NOW, opener=opener, batch_size=3, pause=lambda _: None,
+        )
+        self.assertEqual(len(evidence), 6)
+        self.assertEqual(coverage["omitted_fields"], ["followers"])
+        self.assertEqual(coverage["status"], "complete")
+        # One refused query, then every batch without the field.
+        self.assertEqual(len(queries), 3)
+        self.assertTrue(all("followers" not in query for query in queries[1:]))
+        self.assertIsNone(evidence["owner0/repo0"]["owner_followers"])
+
+    def test_repositories_lost_to_a_refused_field_are_retried_when_others_succeed(self):
+        def opener(request, timeout):
+            query = json.loads(request.data)["query"]
+            count = query.count(": repository(")
+            data, errors = {}, []
+            for index in range(count):
+                organization = "owner0/" in query.split(f"r{index}:")[1].split("\n")[0]
+                if "followers" in query and not organization:
+                    data[f"r{index}"] = None
+                    errors.append({"type": "FORBIDDEN", "message": "no", "path": [f"r{index}", "owner", "followers"]})
+                else:
+                    data[f"r{index}"] = node()
+            return FakeResponse({"data": data, "errors": errors})
+
+        evidence, coverage = fetch_evidence(
+            [f"owner{index}/repo{index}" for index in range(3)], token="t", observed_at=NOW, opener=opener,
+            batch_size=3, pause=lambda _: None,
+        )
+        self.assertEqual(sorted(evidence), ["owner0/repo0", "owner1/repo1", "owner2/repo2"])
+        self.assertEqual(coverage["omitted_fields"], ["followers"])
+
+    def test_an_unexplained_refusal_reports_the_message(self):
+        def opener(request, timeout):
+            return FakeResponse({"data": None, "errors": [{"type": "FORBIDDEN", "message": "Resource not accessible by integration"}]})
+
+        _, coverage = fetch_evidence(["owner0/repo0"], token="t", observed_at=NOW, opener=opener, pause=lambda _: None)
+        self.assertIn("Resource not accessible by integration", coverage["failures"][0])
 
     def test_budget_redirects_and_unsafe_names_are_refused(self):
         def redirected(request, timeout):
