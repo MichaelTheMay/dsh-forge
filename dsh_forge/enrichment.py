@@ -186,37 +186,92 @@ def plan_targets(
     return [slug for _, _, slug in pending[:max_repositories]], reused
 
 
-def _query(slugs: list[str], since: str) -> str:
+# Optional parts of the evidence query. A token that may not read one of them
+# (the Actions token is refused some user fields) makes GitHub null the whole
+# repository, so a refused part is dropped for the rest of the run instead.
+_SECTIONS = {
+    "watchers": "  watchers { totalCount }\n",
+    "issues": "  openIssues: issues(states: OPEN) { totalCount }\n  closedIssues: issues(states: CLOSED) { totalCount }\n",
+    "pullRequests": "  mergedPullRequests: pullRequests(states: MERGED) { totalCount }\n",
+    "releases": "  releases { totalCount }\n",
+    "mentionableUsers": "  mentionableUsers { totalCount }\n",
+    "licenseInfo": "  licenseInfo { spdxId }\n",
+    "followers": "",  # folded into the owner selection below
+    "history": None,  # needs the recent-commit date
+    "root": '  root: object(expression: "HEAD:") { ... on Tree { entries { name type object { ... on Blob { byteSize } } } } }\n',
+    "workflows": '  workflows: object(expression: "HEAD:.github/workflows") { ... on Tree { entries { name } } }\n',
+    "stargazers": None,  # needs the sample size
+}
+# Names that can appear in a GraphQL error path, mapped to the section that asked for them.
+_PATH_SECTIONS = {
+    "watchers": "watchers", "openIssues": "issues", "closedIssues": "issues",
+    "mergedPullRequests": "pullRequests", "releases": "releases",
+    "mentionableUsers": "mentionableUsers", "licenseInfo": "licenseInfo",
+    "followers": "followers", "defaultBranchRef": "history", "target": "history",
+    "history": "history", "recent": "history", "root": "root", "workflows": "workflows",
+    "stargazers": "stargazers", "edges": "stargazers", "starredAt": "stargazers",
+}
+
+
+def _query(slugs: list[str], since: str, omit: Iterable[str] = ()) -> str:
+    omitted = set(omit)
     fields = []
     for index, slug in enumerate(slugs):
         owner, name = slug.split("/", 1)
         fields.append(
             f'r{index}: repository(owner: "{owner}", name: "{name}") {{ ...evidence }}'
         )
+    parts = ["  nameWithOwner createdAt pushedAt isArchived stargazerCount forkCount\n"]
+    for section, text in _SECTIONS.items():
+        if section in omitted:
+            continue
+        if section == "history":
+            parts.append(
+                "  defaultBranchRef { target { ... on Commit {\n"
+                "    history { totalCount }\n"
+                f'    recent: history(since: "{since}") {{ totalCount }}\n'
+                "  } } }\n"
+            )
+        elif section == "stargazers":
+            parts.append(
+                f"  stargazers(first: {STARGAZER_SAMPLE}, orderBy: {{field: STARRED_AT, direction: DESC}}) "
+                "{ edges { starredAt node { login } } }\n"
+            )
+        elif text:
+            parts.append(text)
+    parts.append(
+        "  owner { login __typename ... on User { followers { totalCount } } }\n"
+        if "followers" not in omitted else "  owner { login __typename }\n"
+    )
     return (
         "query RepoEvidence {\n  rateLimit { cost remaining resetAt }\n  "
         + "\n  ".join(fields)
         + "\n}\n"
         + "fragment evidence on Repository {\n"
-        "  nameWithOwner createdAt pushedAt isArchived stargazerCount forkCount\n"
-        "  watchers { totalCount }\n"
-        "  openIssues: issues(states: OPEN) { totalCount }\n"
-        "  closedIssues: issues(states: CLOSED) { totalCount }\n"
-        "  mergedPullRequests: pullRequests(states: MERGED) { totalCount }\n"
-        "  releases { totalCount }\n"
-        "  mentionableUsers { totalCount }\n"
-        "  licenseInfo { spdxId }\n"
-        "  owner { login __typename ... on User { followers { totalCount } } }\n"
-        "  defaultBranchRef { target { ... on Commit {\n"
-        "    history { totalCount }\n"
-        f'    recent: history(since: "{since}") {{ totalCount }}\n'
-        "  } } }\n"
-        '  root: object(expression: "HEAD:") { ... on Tree { entries { name type object { ... on Blob { byteSize } } } } }\n'
-        '  workflows: object(expression: "HEAD:.github/workflows") { ... on Tree { entries { name } } }\n'
-        f"  stargazers(first: {STARGAZER_SAMPLE}, orderBy: {{field: STARRED_AT, direction: DESC}}) "
-        "{ edges { starredAt node { login } } }\n"
-        "}\n"
+        + "".join(parts)
+        + "}\n"
     )
+
+
+def _refused_sections(document: Mapping[str, Any]) -> set[str]:
+    """Query sections named in error paths (for example a field the token may not read)."""
+    found: set[str] = set()
+    for error in document.get("errors") or []:
+        if not isinstance(error, Mapping):
+            continue
+        for element in (error.get("path") or [])[1:]:
+            section = _PATH_SECTIONS.get(str(element))
+            if section:
+                found.add(section)
+                break
+    return found
+
+
+def _error_summary(document: Mapping[str, Any]) -> str:
+    for error in document.get("errors") or []:
+        if isinstance(error, Mapping) and error.get("message"):
+            return str(error.get("type") or "") + " " + str(error["message"])[:160]
+    return "GitHub GraphQL returned no repositories for this batch"
 
 
 def _post(query: str, token: str, opener: Callable[..., Any]) -> Mapping[str, Any]:
@@ -329,6 +384,7 @@ def fetch_evidence(
     targets = [slug for slug in dict.fromkeys(slugs) if isinstance(slug, str) and _SLUG.fullmatch(slug)]
     since = _iso(observed_at - dt.timedelta(days=RECENT_DAYS))
     started = clock()
+    omitted: set[str] = set()
     evidence: dict[str, dict[str, Any]] = {}
     spent = 0
     attempted = 0
@@ -344,11 +400,18 @@ def fetch_evidence(
             break
         batch = queue.pop(0)
         try:
-            document = _post(_query(batch, since), token, opener)
+            document = _post(_query(batch, since, omitted), token, opener)
             data = document.get("data")
             if not isinstance(data, Mapping) or not any(isinstance(data.get(f"r{i}"), Mapping) for i in range(len(batch))):
+                refused = _refused_sections(document) - omitted
+                if refused:
+                    # Drop what the token may not read and retry the same batch.
+                    omitted |= refused
+                    spent += 1
+                    queue.insert(0, batch)
+                    continue
                 # GitHub answers a timed-out query with HTTP 200, no data, and errors.
-                raise EnrichmentError("GitHub GraphQL returned no repositories for this batch")
+                raise EnrichmentError(_error_summary(document))
         except (OSError, EnrichmentError) as error:
             status = getattr(error, "code", None)
             if status in (403, 429):
@@ -363,7 +426,7 @@ def fetch_evidence(
                 middle = len(batch) // 2
                 queue[0:0] = [batch[:middle], batch[middle:]]
             else:
-                failures.append(f"{batch[0]}: {type(error).__name__}")
+                failures.append(f"{batch[0]}: {type(error).__name__}: {str(error)[:160]}")
             pause(2.0)
             continue
         attempted += len(batch)
@@ -378,10 +441,19 @@ def fetch_evidence(
         else:
             spent += 1
         data = document.get("data") if isinstance(document.get("data"), Mapping) else {}
+        missing = []
         for index, slug in enumerate(batch):
             node = data.get(f"r{index}")
             if isinstance(node, Mapping):
                 evidence[slug.casefold()] = normalize(node, observed_at)
+            else:
+                missing.append(slug)
+        # Some repositories can be nulled by a refused field while others in the
+        # batch succeed (only user-owned ones have followers): retry just those.
+        refused = _refused_sections(document) - omitted
+        if refused and missing:
+            omitted |= refused
+            queue.insert(0, missing)
         pause(0.2)
     complete = not queue and not stop_reason and not failures
     coverage = {
@@ -394,6 +466,8 @@ def fetch_evidence(
         "points_spent": spent,
         "point_budget": max_points,
     }
+    if omitted:
+        coverage["omitted_fields"] = sorted(omitted)
     if stop_reason:
         coverage["stopped"] = stop_reason
     if failures:
