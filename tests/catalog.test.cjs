@@ -149,12 +149,13 @@ test('public root presents the product site and routes into the working applicat
     assert.match(html, /Windows 10 and 11/);
     assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
     await landing.landingCopyInstall();
-    assert.equal(clipboard.at(-1), 'python3 scripts/serve.py --desktop --sync-catalog');
+    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog');
+    // The hero leads to the Discover page, not to a launcher preview.
+    assert(!('landingOpenLauncher' in landing));
     landing.landingCommunity();
     assert.equal(c.renderVals().showCatalog, true);
-    assert.equal(windowStub.location.hash, 'plugins');
-    c.renderVals().landingOpenLauncher();
-    assert.equal(c.renderVals().showLaunch, true);
+    assert.equal(c.renderVals().showDiscover, true);
+    assert.equal(windowStub.location.hash, 'discover');
   } finally {
     Object.assign(windowStub.location, previous);
   }
@@ -387,8 +388,8 @@ test('repository actions stay disabled while signed package install is locally g
   // `disabled` reaches React as "" (not disabled), so static buttons spell it out.
   const disabled = section.match(/<button disabled="disabled"(?: title="([^"]*)")?/g) || [];
   assert(!/<button disabled[\s>]/.test(section), 'a bare disabled attribute does not disable the button');
-  assert.equal(disabled.length, 1);
-  assert.match(disabled[0], /Package composition and upload are a separate boundary\./);
+  // No dead buttons: an action that isn't available is not shown at all.
+  assert.equal(disabled.length, 0);
   assert.match(section, /onClick="{{ installPackage }}" disabled="{{ installDisabled }}"/);
   assert(!/signed snapshot v42|nmarquez\/|@kv\/|orbit-labs\//.test(script));
   assert(CATALOG.filter(r => r.type === 'fork').every(r => r.analysis_status === 'not_analyzed'));
@@ -536,7 +537,7 @@ test('raw plugins and forks cannot bypass sandbox acquisition', () => {
 test('community browser does not publish provisional curated packages or featured strips', () => {
   // The header offers exactly four sections; packages have no tab of their own.
   const tabs = [...html.matchAll(/class="\{\{ (\w+)TabClass \}\}"/g)].map(match => match[1]);
-  assert.deepEqual(tabs, ['launch', 'plugins', 'forks', 'assistant']);
+  assert.deepEqual(tabs, ['discover', 'plugins', 'forks', 'launch', 'assistant']);
   assert(!/Forge picks/.test(html));
   assert(!/Administrator curated hidden gems/.test(html));
 });
@@ -552,7 +553,7 @@ test('plugin and fork cards open stable dedicated pages and favorites persist lo
   assert.equal(values.detail.id, plugin.id);
   assert.equal(values.favoriteClass, 'btn fav');
   values.toggleFavorite();
-  assert.equal(c.renderVals().favoriteLabel, 'Favorited');
+  assert.equal(c.renderVals().favoriteLabel, 'Saved');
   // Saving turns the button gold and plays the pop once.
   assert.equal(c.renderVals().favoriteClass, 'btn fav fav-on fav-pop');
 
@@ -560,7 +561,7 @@ test('plugin and fork cards open stable dedicated pages and favorites persist lo
   values = reopened.renderVals();
   assert(values.showArtifactPage);
   assert.equal(values.detail.id, plugin.id);
-  assert.equal(values.favoriteLabel, 'Favorited');
+  assert.equal(values.favoriteLabel, 'Saved');
   // A saved page reopens gold without replaying the animation.
   assert.equal(values.favoriteClass, 'btn fav fav-on');
   // Removing a favorite fades back to neutral with no pop.
@@ -631,7 +632,7 @@ test('hosted preview pages use the live read-only catalog without enabling local
   }
   const values = c.renderVals();
   assert.equal(c.usingCatalogStore(), true);
-  assert.equal(values.catalogSourceLabel, 'Live public catalog');
+  assert.equal(values.catalogSourceLabel, 'Updated daily from GitHub');
   assert.match(values.resultCount, /1 of 10,430 plugins/);
   assert.equal(values.installAndRunDisabled, true);
   assert(requests[0].startsWith('/api/catalog?'));
@@ -674,13 +675,43 @@ test('public catalog endpoint verifies gzip assets and searches deterministicall
   );
 });
 
+test('public discover view returns ranked gems per type, resolved packs, and records by id', async () => {
+  const endpoint = await import(pathToFileURL(path.join(root, 'api/catalog.mjs')).href);
+  const plugin = (id, stars = 0) => ({ artifact_id: 'github:' + id, artifact_type: 'plugin', full_name: 'o' + id + '/p' + id, name: 'p' + id, github_stars: stars });
+  const registry = {
+    schema_version: 1, snapshot_id: 's', entries: [{ artifact_id: 'github:9', artifact_type: 'fork', full_name: 'f/dsh', name: 'dsh' }],
+    supplemental_entries: [plugin(1), plugin(2), plugin(3), plugin(4)], package_entries: []
+  };
+  const report = (id, rank, candidate = true) => ({ research: { artifact_id: 'github:' + id, rank, candidate, reasons: ['Reason ' + id] } });
+  const research = {
+    schema: 'dsh-forge.discovery-queue/v2', policy: 'dsh-forge.hidden-gems/v3', snapshot_id: 's',
+    claims: { metadata_only: true, security_verified: false, executed: false },
+    candidates: [report(3, 1), report(1, 2), report(2, 3, false), report(9, 1)],
+    packs: [
+      { id: 'memory-and-context', title: 'Memory & context', summary: 'Remember', members: [1, 2, 3].map(id => ({ artifact_id: 'github:' + id, role: 'R' + id, why: 'W' + id })) },
+      { id: 'Bad Id!', title: 'x', members: [1, 2, 3].map(id => ({ artifact_id: 'github:' + id })) },
+      { id: 'too-small', title: 'y', members: [{ artifact_id: 'github:1' }, { artifact_id: 'github:404' }] }
+    ]
+  };
+  const feed = { snapshot_id: 's', counts: { forks: 1, plugins: 4, packages: 0, candidates: 4 } };
+  const catalog = endpoint.validateCatalog(feed, registry, research);
+  const view = endpoint.discoverView(catalog, { plugins: 5, forks: 5 });
+  assert.equal(view.policy, 'dsh-forge.hidden-gems/v3');
+  assert.deepEqual(view.gems.plugins.map(item => item.artifact_id), ['github:3', 'github:1']);
+  assert.deepEqual(view.gems.forks.map(item => item.artifact_id), ['github:9']);
+  assert.equal(view.gems.plugins[0].hidden_gem.reasons[0], 'Reason 3');
+  assert.deepEqual(view.packs.map(pack => pack.id), ['memory-and-context']);
+  assert.deepEqual(view.packs[0].members.map(member => [member.role, member.artifact.artifact_id]), [['R1', 'github:1'], ['R2', 'github:2'], ['R3', 'github:3']]);
+  assert.equal(view.packs[0].members[1].artifact.hidden_gem.candidate, false);
+});
+
 test('without an imported store the browser still reads the embedded snapshot', () => {
   const c = instance();
   c.renderVals().goPlugins();
   let values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
-  assert.equal(values.catalogSourceLabel, 'Embedded snapshot');
-  assert.equal(values.catalogFeedStatus, 'End of results');
+  assert.equal(values.catalogSourceLabel, 'A small sample');
+  assert.equal(values.catalogFeedStatus, '');
   assert(values.results.length > 0);
 
   // A connected sidecar with nothing imported keeps using the embedded corpus.
@@ -688,7 +719,7 @@ test('without an imported store the browser still reads the embedded snapshot', 
   connectedStore(c, { available: false, reason: 'No catalog store is imported yet' });
   values = c.renderVals();
   assert.equal(c.usingCatalogStore(), false);
-  assert.match(values.catalogSourceLabel, /no store imported/);
+  assert.match(values.catalogSourceLabel, /sync the catalog to see everything/);
 });
 
 test('an imported store replaces the embedded inventory and maps records identically', async () => {
@@ -705,8 +736,8 @@ test('an imported store replaces the embedded inventory and maps records identic
 
   const values = c.renderVals();
   assert.equal(c.usingCatalogStore(), true);
-  assert.equal(values.catalogSourceLabel, 'Imported catalog store');
-  assert.match(values.sortExplanation, /metadata only, not a security verdict/);
+  assert.equal(values.catalogSourceLabel, 'From your synced catalog');
+  assert.equal(values.sortExplanation, 'Hidden gems first');
   assert.equal(values.results.length, 1);
   // The store hands back snapshot records; the browser applies its one mapping.
   const embedded = CATALOG.find(item => item.id === fork.artifact_id);
@@ -770,7 +801,7 @@ test('fork coverage is disclosed beside imported results', () => {
       discovered_count: 100, reported_count_after: 26095
     }]
   });
-  assert.match(c.renderVals().catalogSourceLabel, /incomplete network \(100 of 26,095\)/);
+  assert.equal(c.renderVals().forkCoverageNote, 'Showing 100 of about 26,095 forks. The rest are still being added.');
 });
 
 test('recursive fork coverage does not compare descendants to a direct-root count', () => {
@@ -784,7 +815,7 @@ test('recursive fork coverage does not compare descendants to a direct-root coun
       discovered_count: 26137, descendant_count: 112, reported_count_after: 26099
     }]
   });
-  assert.match(c.renderVals().catalogSourceLabel, /26,137 visible · root reports 26,099 direct/);
+  assert.match(c.renderVals().forkCoverageNote, /Showing 26,137 forks found so far, including forks of forks\. GitHub lists 26,099 direct forks/);
 });
 
 test('permanent static deployment preserves the launcher security headers', () => {
@@ -827,7 +858,7 @@ test('imported research evidence marks only bounded hidden-gem candidates', asyn
   assert(detail.detailRows.some(row => row.k === 'Quality rank' && /Q02/.test(row.v)));
   assert(detail.detailRows.some(row => row.k === 'Discovery lane' && /orchestration/.test(row.v)));
   assert.match(detail.detailEvidenceText, /capability/);
-  assert.match(detail.sortExplanation, /metadata only, not a security verdict/);
+  assert.equal(detail.sortExplanation, 'Hidden gems first');
 });
 
 test('a plugin-only imported store retains the embedded fork snapshot', () => {
@@ -839,7 +870,7 @@ test('a plugin-only imported store retains the embedded fork snapshot', () => {
   assert.equal(c.usingCatalogStore(), false);
   assert.equal(values.results.length, 10);
   assert.equal(values.resultCount, '10 forks');
-  assert.match(values.catalogSourceLabel, /no imported fork records/);
+  assert.match(values.catalogSourceLabel, /small sample/);
 });
 
 test('store queries carry the active filters and load more appends by cursor', async () => {
@@ -1047,7 +1078,7 @@ test('favorites filter lists only saved artifacts of the open browser', () => {
   c.renderVals().backToCatalog();
   c.renderVals().toggleFavoritesOnly();
   assert.deepEqual(c.renderVals().results.map(r => r.id), [plugin.id]);
-  assert.equal(c.renderVals().resultCount, '1 favorite plugins');
+  assert.equal(c.renderVals().resultCount, '1 saved plugins');
   // A page opened by its route (no record loaded yet) is found by id, so the filter
   // never blanks a page that isn't a favorite.
   const other = CATALOG.find(item => item.type === 'plugin' && item.id !== plugin.id);
@@ -1056,7 +1087,7 @@ test('favorites filter lists only saved artifacts of the open browser', () => {
   c.renderVals().backToCatalog();
   c.renderVals().goForks();
   assert.equal(c.renderVals().results.length, 0);
-  assert.equal(c.renderVals().emptyTitle, 'No favorite forks yet');
+  assert.equal(c.renderVals().emptyTitle, 'No saved forks yet');
   c.renderVals().resetCatalogFilters();
   assert.equal(c.renderVals().results.length, 10);
   stored.clear();
@@ -1203,7 +1234,7 @@ function forkDetail(status = {}) {
 test('fork pages review the pinned commit before installing', async () => {
   const offline = instance({}, '#forks/' + encodeURIComponent(FORK_ID)).renderVals();
   assert.equal(offline.isForkDetail, true);
-  assert.equal(offline.forkInstallLabel, 'Install in the desktop launcher');
+  assert.equal(offline.forkInstallLabel, 'Start DSH Forge to install');
   assert.equal(offline.forkInstallDisabled, true);
 
   const c = forkDetail();
@@ -1219,7 +1250,7 @@ test('fork pages review the pinned commit before installing', async () => {
     return { id: 'fork_0123456789abcdef', state: 'queued' };
   };
   let values = c.renderVals();
-  assert.equal(values.forkInstallLabel, 'Review & install…');
+  assert.equal(values.forkInstallLabel, 'Install…');
   await values.forkInstallAction();
   values = c.renderVals();
   assert.equal(values.forkPlanOpen, true);
@@ -1251,7 +1282,7 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
     fork_installations: [{ id: 'fork_0123456789abcdef', artifact_id: FORK_ID, state: 'ready', tree_id: tree.id, commit: tree.community.commit, path: tree.path }]
   });
   let values = c.renderVals();
-  assert.equal(values.forkInstallLabel, 'Launch in sandbox…');
+  assert.equal(values.forkInstallLabel, 'Launch…');
   assert.equal(values.forkInstallPill, 'Installed');
   assert.deepEqual(values.packageVersions.map(item => item.id), ['version_bbbbbbbbbbbb']);
   assert.equal(c.defaultHostVersionId(), 'version_bbbbbbbbbbbb');
@@ -1285,7 +1316,7 @@ test('failed fork installs explain the failure and can be retried or removed', (
   const values = c.renderVals();
   assert.equal(values.forkInstallPill, 'Failed');
   assert.equal(values.forkInstallText, 'Build step exited with 1');
-  assert.equal(values.forkInstallLabel, 'Review and try again…');
+  assert.equal(values.forkInstallLabel, 'Try again…');
   assert.equal(values.forkRemovable, true);
 });
 
@@ -1311,7 +1342,7 @@ test('signed-in favorites merge with this browser and sync on change', async () 
   assert.equal(values.accountLogin, '@octo');
   assert.match(values.accountSyncLabel, /synced/);
   c.setState({ favoritesOnly: true });
-  assert.equal(c.renderVals().catalogFeedStatus, 'Favorites sync to @octo');
+  assert.equal(c.renderVals().catalogFeedStatus, 'Saved items sync to @octo');
 
   c.scheduleFavoriteSync = () => { c.syncScheduled = true; };
   c.toggleFavorite({ id: 'github:3', type: 'plugin', name: 'new' });
@@ -1330,4 +1361,166 @@ test('sign-in stays hidden when the deployment has no auth configured', async ()
   c.api = async () => { throw new Error('Unknown API endpoint'); };
   await c.loadAuth();
   assert.equal(c.renderVals().showAccount, false);
+});
+
+// ---- Discover, packs, likes, and plain-language pages
+
+function onWebsite(run) {
+  const previous = { ...windowStub.location };
+  Object.assign(windowStub.location, { href: 'https://dsh-forge.vercel.app/', protocol: 'https:', hostname: 'dsh-forge.vercel.app' });
+  return Promise.resolve().then(run).finally(() => Object.assign(windowStub.location, previous));
+}
+
+function discoverPayload() {
+  const plugins = snapshot.supplemental_entries.slice(0, 4).map((entry, index) => ({
+    ...entry,
+    hidden_gem: {
+      policy: 'dsh-forge.hidden-gems/v3', artifact_id: entry.artifact_id, score: 90 - index, rank: index + 1, candidate: true,
+      reasons: index < 3
+        ? ['Has a test suite and runs CI on every change.', (10 + index) + ' commits in the last 90 days.']
+        : ['Has a test suite and runs CI on every change.'],
+      built_percentile: 95 - index
+    }
+  }));
+  const fork = { ...snapshot.entries[0], hidden_gem: { policy: 'dsh-forge.hidden-gems/v3', artifact_id: snapshot.entries[0].artifact_id, rank: 1, candidate: true, reasons: ['Adds 12 commits on top of DeepSeek Harness.'] } };
+  return {
+    gems: { plugins, forks: [fork] },
+    packs: [{
+      id: 'memory-and-context', title: 'Memory & context', summary: 'Remember across sessions.',
+      members: plugins.slice(0, 3).map((artifact, index) => ({ role: ['Memory', 'Code navigation', 'Search'][index], why: 'Why ' + index, artifact }))
+    }],
+    policy: 'dsh-forge.hidden-gems/v3',
+    catalog_store: { available: true, public: true, artifact_count: 40275, counts: { plugin: 11656, fork: 28619, package: 0 } }
+  };
+}
+
+test('the website leads with Discover: gems, packs, and forks with plain reasons', () => onWebsite(async () => {
+  const c = instance({}, '#discover');
+  const requests = [];
+  c.api = async url => { requests.push(url); return discoverPayload(); };
+  await c.loadDiscover();
+  const values = c.renderVals();
+  assert.equal(requests[0], '/api/catalog?view=discover');
+  assert.equal(values.showDiscover, true);
+  assert.equal(values.showCatalogFeed, false);
+  assert.equal(values.discoverTabCurrent, 'page');
+  assert.equal(values.pluginsTabCurrent, 'false');
+  // Desktop-only tabs and the connection pill are not part of the website.
+  assert.equal(values.showDesktopTabs, false);
+  assert.equal(values.showStatusPill, false);
+  assert.equal(values.discoverPlugins.length, 4);
+  assert.match(values.discoverScope, /40,275 plugins and forks/);
+  // A reason already on two cards gives way to the card's next one.
+  assert.deepEqual(values.discoverPlugins.map(card => card.topReason), [
+    'Has a test suite and runs CI on every change.',
+    'Has a test suite and runs CI on every change.',
+    '12 commits in the last 90 days.',
+    'Has a test suite and runs CI on every change.'
+  ]);
+  // Cards in a shelf of gems don't repeat "Hidden gem" on every cover.
+  assert(values.discoverPlugins.every(card => !card.featured));
+  assert.equal(values.discoverForks[0].topReason, 'Adds 12 commits on top of DeepSeek Harness.');
+  assert.equal(values.discoverForks[0].aheadText, '');
+  assert.equal(values.discoverPacks[0].count, '3 plugins');
+  assert.equal(values.discoverPacks[0].roles, 'Memory · Code navigation · Search');
+  assert.match(html, /How picks work/);
+  assert.match(html, /No AI guessing/);
+}));
+
+test('packs open their own page and a plugin opened from a pack returns to it', () => onWebsite(async () => {
+  const c = instance({}, '#discover');
+  c.api = async () => discoverPayload();
+  c.componentDidMount();
+  try {
+    await c.loadDiscover();
+    c.renderVals().discoverPacks[0].open();
+    assert.equal(windowStub.location.hash, 'packs/memory-and-context');
+    windowStub.location.hash = '#packs/memory-and-context';
+    listeners.get('hashchange')();
+    let values = c.renderVals();
+    assert.equal(values.showPackPage, true);
+    assert.equal(values.showDiscover, false);
+    assert.equal(values.pack.title, 'Memory & context');
+    assert.deepEqual(values.pack.members.map(member => member.role), ['Memory', 'Code navigation', 'Search']);
+    values.pack.members[0].select();
+    windowStub.location.hash = '#' + windowStub.location.hash;
+    listeners.get('hashchange')();
+    values = c.renderVals();
+    assert.equal(values.showArtifactPage, true);
+    assert.equal(values.backLabel, 'Memory & context');
+    assert.equal(values.discoverTabCurrent, 'page');
+    values.backToCatalog();
+    assert.equal(windowStub.location.hash, 'packs/memory-and-context');
+    windowStub.location.hash = '#packs/unknown';
+    listeners.get('hashchange')();
+    assert.equal(c.renderVals().noPack, true);
+    // History navigation to a page opened elsewhere doesn't inherit the pack as its origin.
+    const plugin = snapshot.supplemental_entries[5];
+    windowStub.location.hash = '#plugins/' + encodeURIComponent(plugin.artifact_id);
+    listeners.get('hashchange')();
+    values = c.renderVals();
+    assert.equal(values.showArtifactPage, true);
+    assert.equal(values.backLabel, 'Plugins');
+    assert.equal(values.pluginsTabCurrent, 'page');
+  } finally {
+    c.componentWillUnmount();
+    windowStub.location.hash = '';
+  }
+}));
+
+test('likes respond at once, keep the server count, and roll back on failure', async () => {
+  stored.clear();
+  const c = instance({}, '#plugins');
+  c.setState({ likes: { enabled: true, counts: { 'github:1': 4 }, liked: {} } });
+  let release;
+  const requests = [];
+  c.api = (url, options) => {
+    requests.push({ url, headers: options.headers, body: JSON.parse(options.body) });
+    return new Promise(resolve => { release = resolve; });
+  };
+  const view = c.likeView('github:1');
+  assert.equal(view.likeLabel, '4');
+  assert.equal(view.likePressed, 'false');
+  let stopped = false;
+  view.toggleLike({ stopPropagation: () => { stopped = true; }, preventDefault() {} });
+  // Liking from a card never opens the card.
+  assert.equal(stopped, true);
+  assert.equal(c.likeView('github:1').likeLabel, '5');
+  assert.equal(c.likeView('github:1').likeClass, 'like like-on');
+  assert.deepEqual(requests[0].body, { id: 'github:1', liked: true });
+  assert.match(requests[0].headers['X-Forge-Visitor'], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  release({ id: 'github:1', liked: true, count: 7 });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(c.likeView('github:1').likeLabel, '7');
+
+  // A failure undoes only that item, not likes that changed meanwhile.
+  c.api = async () => {
+    c.setState({ likes: { ...c.state.likes, counts: { ...c.state.likes.counts, 'github:2': 3 } } });
+    throw new Error('Too many likes for now; try again later');
+  };
+  await c.toggleLike('github:1');
+  assert.equal(c.likeView('github:2').likeLabel, '3');
+  assert.equal(c.likeView('github:1').likeLabel, '7');
+  assert.equal(c.likeView('github:1').likePressed, 'true');
+  assert.equal(c.lastMessage, 'Too many likes for now; try again later');
+  // Records the server can't hold likes for (packages) get no heart.
+  assert.equal(c.likeView('catalog-package:memory-kit').showLike, false);
+  // Without a store there is no heart at all.
+  c.setState({ likes: { enabled: false, counts: {}, liked: {} } });
+  assert.equal(c.likeView('github:1').showLike, false);
+});
+
+test('detail pages open GitHub directly and keep internals in a collapsed section', () => {
+  const c = instance();
+  c.renderVals().goForks();
+  const fork = c.renderVals().results[0];
+  fork.select();
+  const values = c.renderVals();
+  assert.equal(values.detailGitHubUrl, values.detail.url);
+  assert.match(values.detailGitHubUrl, /^https:\/\/github\.com\//);
+  assert.match(html, /Open on GitHub<\/a>/);
+  assert(!/Copy commit link|Risk and evidence|Source and provenance|Sandbox recipe required/.test(html));
+  assert.match(html, /<details class="card tech">\s*<summary class="h2">Technical details<\/summary>/);
+  // Developer-only actions appear only with the desktop app connected.
+  assert.equal(values.showDeveloperActions, false);
 });

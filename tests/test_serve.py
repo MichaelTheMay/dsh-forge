@@ -563,6 +563,20 @@ class LauncherServer(LauncherFixture):
         self.assertEqual(payload["artifact_id"], artifact["artifact_id"])
         self.assertEqual(payload["head_sha"], artifact["head_sha"])
 
+    def test_catalog_discover_endpoint_requires_a_session(self):
+        snapshot = json.loads((ROOT / "data/public-repos.seed.json").read_text(encoding="utf-8"))
+        self.launcher.import_catalog(snapshot)
+        cookie, _ = self.establish_session()
+        with urllib.request.urlopen(
+            urllib.request.Request(self.url + "/api/v1/catalog/discover", headers={"Cookie": cookie}), timeout=3
+        ) as response:
+            payload = json.load(response)
+        self.assertEqual(set(payload["gems"]), {"plugins", "forks"})
+        self.assertIsInstance(payload["packs"], list)
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(self.url + "/api/v1/catalog/discover", timeout=3)
+        self.assertEqual(context.exception.code, 403)
+
     def test_mutations_require_the_launcher_session(self):
         body = {"tree_id": self.tree()["id"], "surface": "headless", "task": "test task", "home_mode": "fresh", "workspace": "none"}
         with self.assertRaises(urllib.error.HTTPError) as context:

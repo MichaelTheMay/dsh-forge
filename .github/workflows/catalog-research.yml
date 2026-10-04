@@ -15,19 +15,32 @@ concurrency:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Index the external plugin catalog and GitHub fork network
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/index_registry.py --output dist/registry-raw.json
+      - name: Gather bounded GitHub evidence for promising repositories
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/enrich_registry.py
+          --snapshot dist/registry-raw.json
+          --previous https://github.com/${{ github.repository }}/releases/download/catalog-latest/registry.json.gz
+          --output dist/registry-evidence.json
+          --deadline-seconds 1200
       - name: Analyze a bounded set of promising forks at immutable commits
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/analyze_registry.py --snapshot dist/registry-raw.json --output dist/registry.json
-      - name: Build the evidence-ranked hidden-gem queue
-        run: python3 scripts/research_catalog.py --snapshot dist/registry.json --output dist/hidden-gems.json
+        run: python3 scripts/analyze_registry.py --snapshot dist/registry-evidence.json --output dist/registry-analyzed.json
+      - name: Build the evidence-ranked hidden-gem queue and curated packs
+        run: >-
+          python3 scripts/research_catalog.py
+          --snapshot dist/registry-analyzed.json
+          --output dist/hidden-gems.json
+          --annotate dist/registry.json
       - name: Build the compressed public feed
         run: >-
           python3 scripts/build_catalog_feed.py
@@ -44,6 +57,7 @@ jobs:
           queue = json.loads(Path('dist/hidden-gems.json').read_text(encoding='utf-8'))
           registry = json.loads(Path('dist/registry.json').read_text(encoding='utf-8'))
           assert queue['schema'] == 'dsh-forge.discovery-queue/v2'
+          assert queue['policy'] in {'dsh-forge.hidden-gems/v2', 'dsh-forge.hidden-gems/v3'}
           assert queue['source_count'] >= queue['candidate_count'] > 0
           assert queue['quality']['selection_policy'] == 'dsh-forge.discovery-diversity/v1'
           assert queue['quality']['unique_owners'] > 0

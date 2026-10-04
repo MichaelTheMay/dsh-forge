@@ -96,6 +96,35 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertEqual(meta["snapshot_id"], seed_snapshot()["snapshot_id"])
         self.assertEqual(meta["coverage"], [])
 
+    def test_discover_returns_annotated_gems_and_packs(self):
+        snapshot = seed_snapshot()
+        plugins = [entry for entry in snapshot["supplemental_entries"] if entry.get("artifact_type") == "plugin"][:3]
+        fork = snapshot["entries"][0]
+        for rank, entry in enumerate([*plugins, fork], 1):
+            entry["discovery"] = {
+                "policy": "dsh-forge.hidden-gems/v3", "artifact_id": entry["artifact_id"], "score": 90 - rank,
+                "rank": rank, "candidate": rank != 2, "reasons": ["Has a test suite and runs CI on every change."],
+                "security_verified": False, "executed": False,
+            }
+        snapshot["discovery_policy"] = "dsh-forge.hidden-gems/v3"
+        snapshot["discovery_packs"] = [{
+            "id": "memory-and-context", "title": "Memory & context", "summary": "Remember things.",
+            "members": [{"artifact_id": entry["artifact_id"], "role": role, "why": "Because."}
+                        for entry, role in zip(plugins, ["Memory", "Code navigation", "Search"])],
+        }]
+        store = self.store(snapshot)
+        found = store.discover()
+        self.assertEqual(store.meta()["research_policy"], "dsh-forge.hidden-gems/v3")
+        plugin_ids = [item["artifact_id"] for item in found["gems"]["plugins"]]
+        # Only candidates are gems; the blocked second plugin is left out.
+        self.assertIn(plugins[0]["artifact_id"], plugin_ids)
+        self.assertNotIn(plugins[1]["artifact_id"], plugin_ids)
+        self.assertEqual(found["gems"]["plugins"][0]["hidden_gem"]["reasons"][0], "Has a test suite and runs CI on every change.")
+        self.assertEqual([item["artifact_id"] for item in found["gems"]["forks"]], [fork["artifact_id"]])
+        self.assertEqual(found["packs"][0]["title"], "Memory & context")
+        self.assertEqual([member["role"] for member in found["packs"][0]["members"]], ["Memory", "Code navigation", "Search"])
+        self.assertEqual(found["packs"][0]["members"][0]["artifact"]["artifact_id"], plugins[0]["artifact_id"])
+
     def test_records_are_returned_verbatim_so_one_mapping_serves_both_paths(self):
         snapshot = seed_snapshot()
         store = self.store(snapshot)

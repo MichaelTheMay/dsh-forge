@@ -169,10 +169,18 @@ def _terms(values: Iterable[Any]) -> str:
 def _rows_from_snapshot(snapshot: Mapping[str, Any]) -> Iterator[dict[str, Any]]:
     """Yield storable rows for forks, plugins, and packages in one shape."""
     repository_entries = list(snapshot.get("entries") or []) + list(snapshot.get("supplemental_entries") or [])
-    research = rank_artifacts(
-        (entry for entry in repository_entries if isinstance(entry, Mapping)),
-        snapshot.get("fetched_at"),
-    )
+    if str(snapshot.get("discovery_policy") or "").startswith("dsh-forge.hidden-gems/v3"):
+        # The published registry already carries the evidence-based gem reports.
+        research = {
+            str(entry.get("artifact_id")): dict(entry["discovery"])
+            for entry in repository_entries
+            if isinstance(entry, Mapping) and isinstance(entry.get("discovery"), Mapping)
+        }
+    else:
+        research = rank_artifacts(
+            (entry for entry in repository_entries if isinstance(entry, Mapping)),
+            snapshot.get("fetched_at"),
+        )
     for entry in repository_entries:
         if not isinstance(entry, dict):
             continue
@@ -365,7 +373,11 @@ def build(
                     "provenance": json.dumps(provenance or snapshot.get("provenance") or {}, sort_keys=True),
                     # Only a verified envelope may record a signature here.
                     "signature": json.dumps(dict(signature) if signature else {"verified": False}, sort_keys=True),
-                    "research_policy": POLICY_VERSION,
+                    "research_policy": str(snapshot.get("discovery_policy") or POLICY_VERSION),
+                    "packs": json.dumps(
+                        [pack for pack in snapshot.get("discovery_packs") or [] if isinstance(pack, Mapping)][:20],
+                        sort_keys=True,
+                    ),
                 }
                 connection.executemany(
                     "INSERT INTO meta (key, value) VALUES (?, ?)", sorted(recorded.items())
@@ -470,6 +482,7 @@ class CatalogStore:
             "provenance": json.loads(values.get("provenance", "{}")),
             "signature": json.loads(values.get("signature", '{"verified": false}')),
             "research_policy": values.get("research_policy", ""),
+            "packs": json.loads(values.get("packs", "[]")),
         }
 
     def status(self) -> dict[str, Any]:
@@ -573,6 +586,43 @@ class CatalogStore:
             "provenance": meta["provenance"],
             "coverage": meta["coverage"],
             "signature": meta["signature"],
+        }
+
+    def discover(self, *, plugins: int = 12, forks: int = 6) -> dict[str, Any]:
+        """Today's strongest gems per type and the curated packs, for the Discover page."""
+        meta = self.meta()
+
+        def gems(kind: str, limit: int) -> list[dict[str, Any]]:
+            page = self.search(types=[kind], sort="rank", limit=min(50, limit * 3))
+            picked = []
+            for record in page["artifacts"]:
+                report = page["research"].get(record.get("artifact_id"))
+                if isinstance(report, Mapping) and report.get("candidate"):
+                    picked.append({**record, "hidden_gem": report})
+                if len(picked) >= limit:
+                    break
+            return picked
+
+        packs = []
+        for pack in meta.get("packs") or []:
+            members = []
+            for member in pack.get("members") or []:
+                record = self.get(str(member.get("artifact_id") or ""))
+                if record:
+                    members.append({
+                        "role": str(member.get("role") or ""),
+                        "why": str(member.get("why") or ""),
+                        "artifact": {**record, "hidden_gem": self.get_research(record["artifact_id"])},
+                    })
+            if len(members) >= 3:
+                packs.append({
+                    "id": str(pack.get("id") or ""), "title": str(pack.get("title") or ""),
+                    "summary": str(pack.get("summary") or ""), "members": members,
+                })
+        return {
+            "gems": {"plugins": gems("plugin", plugins), "forks": gems("fork", forks)},
+            "packs": packs,
+            "policy": meta.get("research_policy", ""),
         }
 
     def get(self, artifact_id: str) -> dict[str, Any] | None:
