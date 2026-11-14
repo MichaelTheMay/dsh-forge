@@ -30,7 +30,7 @@ test-py:
 
 # The hidden-gem system has its own tests so it can be worked on alone.
 test-gems:
-	@if [ -d gems/tests ]; then python3 -m unittest discover -s gems/tests -t . -p 'test_*.py'; fi
+	@if [ -f gems/tests/__init__.py ]; then python3 -m unittest discover -s gems/tests -t . -p 'test_*.py'; fi
 
 preview:
 	python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html
