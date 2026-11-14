@@ -1,0 +1,20 @@
+{
+ "commit": "514746afe1d07889890737fda20d6107731c8a06",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "onlyqzq/dsh-riskproof",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 5,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Deterministic taint tracking across tool calls: web content cannot silently drive a shell command and customer data cannot leave via another tool, with no extra LLM calls.",
+ "source": "claude-session",
+ "summary": "Pre/post tool-call guard that tags tool output with taint labels (secrets, PII, untrusted web) and runs deterministic rules to allow, ask or deny risky cross-tool flows. Records redacted proof receipts and a client panel.",
+ "verdict": "gem"
+}

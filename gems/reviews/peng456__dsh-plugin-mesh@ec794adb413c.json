@@ -1,0 +1,20 @@
+{
+ "commit": "ec794adb413cd90c4e72d843ead897684e42f608",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "peng456/dsh-plugin-mesh",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 5,
+  "trust": 2,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "Delegate a long build or deploy to your other computer; the peer agent runs it and the result lands back in your Tasks panel.",
+ "source": "claude-session",
+ "summary": "Lets DSH instances on different machines discover each other (multicast, subnet scan, optional bundled Tailscale node) and hand tasks to a peer agent, with results returned; includes an approval gate for first dispatch.",
+ "verdict": "solid"
+}

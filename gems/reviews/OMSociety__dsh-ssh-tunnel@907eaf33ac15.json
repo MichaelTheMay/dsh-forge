@@ -1,0 +1,20 @@
+{
+ "commit": "907eaf33ac15f0664028cc9db2d37e48242a81f8",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "OMSociety/dsh-ssh-tunnel",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "Run remote commands and move files over SSH from the agent, with grants scoped per project and credentials kept out of model context.",
+ "source": "claude-session",
+ "summary": "Multi-host SSH inventory with per-project grants, a model-facing SSHManager tool for commands and file transfer, and a sidebar terminal plus dual-pane SFTP; secrets stay host-side.",
+ "verdict": "solid"
+}

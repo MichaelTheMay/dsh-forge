@@ -1,0 +1,20 @@
+{
+ "commit": "14f859db6955eb11d505703e47728f3398347d9f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Jannchie/dsh-bill",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "Shows which kind of content (tool output, system prompt, shell commands) your token bill actually went on, with cache-prefix pricing walked in provider order.",
+ "source": "claude-session",
+ "summary": "Cost tracking: per-turn cost line, session and account Cost panels, budgets, forecast, multi-currency, and an attribution report splitting spend by kind of content, plus a bill_stats tool for the model.",
+ "verdict": "gem"
+}

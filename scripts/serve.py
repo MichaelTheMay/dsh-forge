@@ -266,6 +266,22 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        match = re.fullmatch(r"/api/v1/comparisons/(cmp_[a-f0-9]{16})", path)
+        if match:
+            if self._api_guard() and self._session_ok():
+                try:
+                    self._json(self.server.launcher.comparison(match.group(1)))
+                except LauncherError as error:
+                    self._json({"error": str(error)}, HTTPStatus.NOT_FOUND)
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
+        if path == "/api/v1/recommendations":
+            if self._api_guard() and self._session_ok():
+                self._json(self.server.launcher.recommendations_status())
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         if path == "/api/v1/cells":
             if self._api_guard() and self._session_ok():
                 self._json({"cells": self.server.launcher.status()["cells"]})
@@ -286,7 +302,8 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         if match:
             if self._api_guard() and self._session_ok():
                 try:
-                    self._json({"url": self.server.launcher.open_url(match.group(1))})
+                    cell_id = match.group(1)
+                    self._json({"cell_id": cell_id, "url": self.server.launcher.open_url(cell_id)})
                 except LauncherError as error:
                     self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             elif self._loopback_host():
@@ -449,6 +466,19 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     self.server.launcher.run_configuration(body.get("id"), task=task),
                     HTTPStatus.CREATED,
                 )
+                return
+            if path == "/api/v1/comparisons":
+                self._json(
+                    self.server.launcher.run_comparison(body.get("configuration_ids"), body.get("task")),
+                    HTTPStatus.CREATED,
+                )
+                return
+            match = re.fullmatch(r"/api/v1/comparisons/(cmp_[a-f0-9]{16})/choose", path)
+            if match:
+                self._json(self.server.launcher.choose_comparison_run(match.group(1), body.get("cell_id")))
+                return
+            if path == "/api/v1/recommendations/consent":
+                self._json(self.server.launcher.set_recommendations_consent(body.get("enabled")))
                 return
             if path == "/api/v1/assistant/start":
                 version_id = body.get("version_id")

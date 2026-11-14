@@ -1,0 +1,20 @@
+{
+ "commit": "0fecf7a152f5127d17df27bedd30face185bfb8f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "chenkai2/dsh-daemon",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "dsh web starts at login and self-heals after crashes or sleep, with a status and logs command and a startup grace for slow boots.",
+ "source": "claude-session",
+ "summary": "Registers dsh web as a login service (LaunchAgent, systemd, cron or Windows task) with a generated watchdog that health-checks, restarts, adopts a running server, and can auto-update itself.",
+ "verdict": "solid"
+}

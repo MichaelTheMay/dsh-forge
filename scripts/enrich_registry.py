@@ -94,6 +94,11 @@ def main() -> int:
     credible = fetch_credible_accounts(snapshot, token=token)
     applied = apply_evidence(snapshot, evidence, credible_accounts=credible, coverage=coverage)
     trimmed = trim_evidence(snapshot, observed_at=observed_at)
+    if applied and trimmed >= applied:
+        print(
+            "WARNING: the size cap removed every evidence record; ranking will fall back to metadata only",
+            file=sys.stderr,
+        )
     write_json(args.output, snapshot, force=args.force, compact=True)
     print(json.dumps({
         "output": str(Path(args.output).expanduser()),

@@ -42,6 +42,24 @@ jobs:
           python3 scripts/research_catalog.py
           --snapshot dist/registry-analyzed.json
           --output dist/hidden-gems.json
+      - name: Open the top candidates and build the gem picks
+        # The gem system is a separate package: it reads the queue file and writes
+        # gem-picks.json. Repositories are fetched for reading only; nothing runs.
+        # It must never stop the catalog from publishing: if it fails or overruns,
+        # the next step finds no picks file and keeps the statistics-only order.
+        continue-on-error: true
+        timeout-minutes: 25
+        run: >-
+          python3 -m gems build
+          --queue dist/hidden-gems.json
+          --workdir "$RUNNER_TEMP/gem-checkouts"
+          --output dist/gem-picks.json
+      - name: Fold the gem picks into the queue and the registry
+        run: >-
+          python3 scripts/apply_gem_picks.py
+          --queue dist/hidden-gems.json
+          --picks dist/gem-picks.json
+          --snapshot dist/registry-analyzed.json
           --annotate dist/registry.json
       - name: Build the compressed public feed
         run: >-
@@ -90,6 +108,7 @@ jobs:
           path: |
             dist/registry.json
             dist/hidden-gems.json
+            dist/gem-picks.json
             dist/feed/
           if-no-files-found: error
           retention-days: 30
@@ -124,3 +143,9 @@ jobs:
             dist/feed/hidden-gems.json.gz \
             --clobber
           gh release upload catalog-latest dist/feed/registry-feed.json --clobber
+          # Published last and never fatal: the catalog above is complete without it,
+          # and a failure here must not leave the feed index out of step with it.
+          if [ -f dist/gem-picks.json ]; then
+            gh release upload catalog-latest dist/gem-picks.json --clobber \
+              || echo "::warning::gem-picks.json was not published; the catalog itself is up to date"
+          fi

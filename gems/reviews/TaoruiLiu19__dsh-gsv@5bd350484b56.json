@@ -1,0 +1,20 @@
+{
+ "commit": "5bd350484b56ee7011898b5a62355e82e790eb25",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "TaoruiLiu19/dsh-gsv",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Have your agent read replies aloud in a cloned or preset voice, with streaming segmented playback and a one-step local engine setup.",
+ "source": "claude-session",
+ "summary": "Text-to-speech plugin: speaks agent replies via a local GSV-TTS-Lite voice-cloning engine or Microsoft Edge cloud voices, with a read-aloud button, voice presets, a setup assistant and an installable voice market.",
+ "verdict": "solid"
+}

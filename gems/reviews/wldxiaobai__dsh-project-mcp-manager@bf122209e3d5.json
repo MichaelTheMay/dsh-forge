@@ -1,0 +1,20 @@
+{
+ "commit": "bf122209e3d5061211680308d72031af5481856e",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "wldxiaobai/dsh-project-mcp-manager",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Drop a .dsh/mcp.yml in a repo and its MCP servers mount only for sessions in that project, with live reload and per-tool allow/deny.",
+ "source": "claude-session",
+ "summary": "Loads MCP servers from per-project .dsh/mcp.yml or mcp.json (plus legacy .mcp.json), hot-reloads on file change, hides tools per session project, and ships a dsh-mcp CLI and a settings page service.",
+ "verdict": "gem"
+}

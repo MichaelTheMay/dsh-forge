@@ -202,8 +202,9 @@ class LocalProfileRunPlanTests(ProfileFixture):
         # Keys are disclosed; the secret itself is never echoed back to the UI.
         self.assertNotIn("secret-value", json.dumps(preview))
         notes = " ".join(preview["notes"]).lower()
-        self.assertIn("host", notes)
-        self.assertIn("apptainer", notes)
+        # Said in plain words: it runs on this machine, outside the container.
+        self.assertIn("directly on this computer", notes)
+        self.assertIn("isolated container", notes)
         self.assertIn("--profile", preview["argv"])
         self.assertIn("web", preview["argv"])
         self.assertIn("DSH_HOME", preview["command"])

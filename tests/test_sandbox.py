@@ -8,6 +8,7 @@ from unittest import mock
 
 from dsh_forge.launcher import Launcher, LauncherError
 from dsh_forge.sandbox import ApptainerSandbox, SandboxConfig, SandboxError
+from tests import helpers  # noqa: F401  (hides a host dsh install from the launcher scan)
 
 
 class RecordingRunner:

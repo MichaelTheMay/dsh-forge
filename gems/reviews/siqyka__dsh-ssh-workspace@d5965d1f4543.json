@@ -1,0 +1,20 @@
+{
+ "commit": "d5965d1f4543d0323ac09d3bb00e59c8e1a8653f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "siqyka/dsh-ssh-workspace",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "Point the ordinary read/edit/grep/bash tools at a remote server with ssh://alias/path, with host-key pinning and encrypted stored credentials.",
+ "source": "claude-session",
+ "summary": "Mounts a directory on an SSH host as a real DSH workspace: patches the host fs, shell, subprocess and terminal so the normal file and bash tools work remotely over SFTP, plus agent tools, port forwarding and a sidebar.",
+ "verdict": "gem"
+}

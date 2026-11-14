@@ -130,7 +130,18 @@ export function validateCatalog(feed, registry, research) {
       }))
     }))
     .filter(pack => pack.members.length >= 3);
-  return { feed, artifacts, byId, hiddenGems, packs, policy: String(research.policy || '') };
+  // Shelves name artifacts by id; anything unknown or malformed is dropped.
+  const raw = research.shelves && typeof research.shelves === 'object' ? research.shelves : {};
+  const known = id => typeof id === 'string' && id.length <= 160 && byId.has(id);
+  const shelves = {
+    new: (Array.isArray(raw.new) ? raw.new : []).filter(known).slice(0, 12),
+    new_window_days: Number.isInteger(raw.new_window_days) ? raw.new_window_days : 30,
+    best: (Array.isArray(raw.best) ? raw.best : [])
+      .filter(entry => entry && typeof entry.capability === 'string' && known(entry.artifact_id))
+      .slice(0, 12)
+      .map(entry => ({ capability: entry.capability.slice(0, 40), artifact_id: entry.artifact_id }))
+  };
+  return { feed, artifacts, byId, hiddenGems, packs, shelves, policy: String(research.policy || '') };
 }
 
 async function loadCatalog() {
@@ -233,7 +244,18 @@ export function discoverView(catalog, { plugins = 12, forks = 6 } = {}) {
     .sort((a, b) => (a.research.rank ?? Infinity) - (b.research.rank ?? Infinity))
     .slice(0, limit)
     .map(({ artifact, research }) => ({ ...artifact, hidden_gem: research }));
-  return { gems: { plugins: pick('plugin', plugins), forks: pick('fork', forks) }, packs: catalog.packs, policy: catalog.policy };
+  const withGem = id => ({ ...catalog.byId.get(id), hidden_gem: catalog.hiddenGems.get(id) || null });
+  const shelves = catalog.shelves || { new: [], new_window_days: 30, best: [] };
+  return {
+    gems: { plugins: pick('plugin', plugins), forks: pick('fork', forks) },
+    packs: catalog.packs,
+    shelves: {
+      new: shelves.new.map(withGem),
+      new_window_days: shelves.new_window_days,
+      best: shelves.best.map(entry => ({ capability: entry.capability, artifact: withGem(entry.artifact_id) }))
+    },
+    policy: catalog.policy
+  };
 }
 
 function storeMetadata(catalog) {

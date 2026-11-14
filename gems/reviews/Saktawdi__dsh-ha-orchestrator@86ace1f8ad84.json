@@ -1,0 +1,20 @@
+{
+ "commit": "86ace1f8ad84eaa7079bd0d36f17b37645a8a903",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Saktawdi/dsh-ha-orchestrator",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Long sessions survive model outages, and the model can split work across parallel subagents on its own.",
+ "source": "claude-session",
+ "summary": "Retries failed model calls on backup models with cooldowns, burst windows and provider circuit breakers, and adds an orchestrate tool that runs subagents in fanout, pipeline, supervisor, map-reduce or router modes.",
+ "verdict": "solid"
+}

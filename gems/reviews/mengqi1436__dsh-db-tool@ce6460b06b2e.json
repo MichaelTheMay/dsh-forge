@@ -1,0 +1,20 @@
+{
+ "commit": "ce6460b06b2e1ad51a1636870020e426e705c4bf",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "mengqi1436/dsh-db-tool",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Agent can query many database kinds, but destructive statements need a human confirmation token and each project only sees the connections it was granted.",
+ "source": "claude-session",
+ "summary": "Database admin tool for the agent and a sidebar: adapters for MySQL, Postgres, SQLite, Mongo, Redis, Oracle and more, per-project read-only or read-write grants, statement risk classification and one-time user confirmation.",
+ "verdict": "solid"
+}

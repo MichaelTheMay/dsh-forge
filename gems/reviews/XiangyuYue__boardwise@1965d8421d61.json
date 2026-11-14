@@ -1,0 +1,20 @@
+{
+ "commit": "1965d8421d61def71438e5ed344301060f1bb722",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "XiangyuYue/boardwise",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "Let an agent actually read an EasyEDA schematic and review it with 23 design rules, ERC and DRC, with findings tied to components, pins and nets.",
+ "source": "claude-session",
+ "summary": "DSH tools that spawn a local Python CLI to review EasyEDA Pro schematics and boards, mark findings, compile offline drawings and run diagnostics; judgement stays in Python, TypeScript is a thin argv and file adapter.",
+ "verdict": "solid"
+}

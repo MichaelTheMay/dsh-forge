@@ -120,6 +120,64 @@ class RegistryTests(unittest.TestCase):
         child = next(item for item in snapshot["entries"] if item["github_id"] == 3)
         self.assertEqual(child["parent_repository"], "example/one")
 
+    def test_a_fork_that_disappears_mid_crawl_is_recorded_not_fatal(self):
+        import urllib.error
+
+        first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
+        gone, kept = fork(1, "gone"), fork(2, "kept")
+        gone["forks_count"] = 3
+        kept["forks_count"] = 1
+        child_url = "https://api.github.com/repos/example/kept/forks?sort=oldest&per_page=100&page=1"
+        responses = iter([
+            (root(2), "https://api.github.com/repos/deepseek-ai/deepseek-harness", None),
+            ([gone, kept], first, None),
+            "404",
+            ([fork(3, "grandchild")], child_url, None),
+            (root(2), "https://api.github.com/repos/deepseek-ai/deepseek-harness", None),
+        ])
+
+        def opener(request, **_kwargs):
+            value = next(responses)
+            if value == "404":
+                raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+            return Response(value[0], value[1], link=value[2])
+
+        snapshot = fetch_github_fork_network(opener=opener)
+        coverage = snapshot["coverage"][0]
+        self.assertEqual(sorted(item["github_id"] for item in snapshot["entries"]), [1, 2, 3])
+        self.assertEqual(coverage["unavailable_parents"], [{"repository": "example/gone", "status": 404}])
+        self.assertEqual(coverage["status"], "incomplete")
+        self.assertIn("became unavailable", " ".join(coverage["incomplete_reasons"]))
+        # The lost fork's children are not counted as a mismatch: they were never read.
+        self.assertEqual(coverage["parent_count_mismatches"], [])
+
+    def test_the_root_disappearing_or_other_errors_still_stop_the_crawl(self):
+        import urllib.error
+
+        def failing(code):
+            def opener(request, **_kwargs):
+                raise urllib.error.HTTPError(request.full_url, code, "error", {}, None)
+            return opener
+
+        with self.assertRaisesRegex(RegistryError, "404"):
+            fetch_github_fork_network(opener=failing(404))
+        first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
+        parent = fork(1, "one")
+        parent["forks_count"] = 1
+        responses = iter([
+            (root(1), "https://api.github.com/repos/deepseek-ai/deepseek-harness", None),
+            ([parent], first, None),
+        ])
+
+        def rate_limited(request, **_kwargs):
+            value = next(responses, None)
+            if value is None:
+                raise urllib.error.HTTPError(request.full_url, 403, "rate limited", {}, None)
+            return Response(value[0], value[1], link=value[2])
+
+        with self.assertRaisesRegex(RegistryError, "403"):
+            fetch_github_fork_network(opener=rate_limited)
+
     def test_rejects_pagination_to_another_host(self):
         first = "https://api.github.com/repos/deepseek-ai/deepseek-harness/forks?sort=oldest&per_page=100&page=1"
         opener = SequenceOpener([

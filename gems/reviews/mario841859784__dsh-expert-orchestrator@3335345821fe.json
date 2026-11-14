@@ -1,0 +1,20 @@
+{
+ "commit": "3335345821fee6ed253d4b586206e98b320178ed",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "mario841859784/dsh-expert-orchestrator",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "A ready orchestrator mode with a bundled expert roster, delivery gates and an honest A/B report showing a modest accuracy gain.",
+ "source": "claude-session",
+ "summary": "Agent preset for multi-agent orchestration: triage, PM-first planning, delegation to a roster of expert personas via summon_expert and list_experts, a taskboard, message bus, and a downloadable expert source manager.",
+ "verdict": "solid"
+}

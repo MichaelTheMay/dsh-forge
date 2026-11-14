@@ -1,0 +1,20 @@
+{
+ "commit": "82703d80c5225bba87ce134da4fe4ed208e8d3ee",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "drscrewdriver/dsh-context-compression-improved",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Shrinks bloated tool output with exact DeepSeek token counts and shows net savings per session in a monitor panel, falling back to the original on any doubt.",
+ "source": "claude-session",
+ "summary": "Tool-result context compressor for DSH: selectable profiles, tokenizer-measured reducers, a code-skeleton gate for big source reads, a savings monitor panel with SQLite stats, and an optional LLM relevance side channel.",
+ "verdict": "solid"
+}

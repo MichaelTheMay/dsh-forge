@@ -1,0 +1,20 @@
+{
+ "commit": "b42397d1c1698d2b5f3fd8245256e44ebaeac37b",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "mokuyoaxis/dsh-iris",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "One install gives an agent image/video/audio generation with restart-safe task tracking and a local workbench UI, also reachable from other agents over MCP.",
+ "source": "claude-session",
+ "summary": "Media workspace for agents: image, video, music, speech and vision tools with model pools, durable background tasks, ComfyUI, a loopback web UI with bearer auth, an MCP server and a standalone CLI.",
+ "verdict": "solid"
+}

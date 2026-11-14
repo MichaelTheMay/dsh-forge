@@ -1725,7 +1725,7 @@ function cautionNotes(artifact) {
 }
 
 const VISITOR_KEY = 'dsh-forge:visitor:v1';
-const SOURCE_INSTALL_COMMAND = 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog';
+const SOURCE_INSTALL_COMMAND = 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh';
 
 function storedVisitor() {
   try {
@@ -1822,6 +1822,13 @@ class Component extends DCLogic {
       artifactRunBusy: false,
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
+      artifactOpenCell: null,
+      instanceTabs: [],
+      activeInstanceId: null,
+      comparisons: {},
+      compareTask: '',
+      compareSelected: [],
+      compareBusy: false,
       configurationBusy: false,
       catalogStore: { available: false },
       storeArtifacts: [],
@@ -1853,6 +1860,8 @@ class Component extends DCLogic {
       catalogLayout: storedLayout(),
       discover: null,
       discoverLoading: false,
+      recommendations: { consent: 'unasked', state: 'off', items: [], reason: '', sessions: 0 },
+      recommendationsBusy: false,
       discoverError: '',
       packId: initialRoute.packId || null,
       detailFrom: null,
@@ -1869,7 +1878,7 @@ class Component extends DCLogic {
       update: { status: 'idle', current_version: 'development' },
       sandbox: {
         mode: 'unavailable', ready: false, hostile_code_isolation: false,
-        reason: 'Start the sidecar with a pinned Apptainer image to enable complete cells.'
+        reason: 'Set up the isolated container to run plugins and forks.'
       },
       previewData: null,
       logLines: [],
@@ -1938,6 +1947,7 @@ class Component extends DCLogic {
   }
   componentDidUpdate() {
     this.syncAssistantFrame();
+    this.syncInstanceFrames();
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1952,17 +1962,244 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
+  // A session is only ever framed from a loopback HTTP address with its own port.
+  // Anything else is dropped.
+  loopbackHref(value) {
+    try {
+      const url = new URL(value || '');
+      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) return '';
+      return url.href;
+    } catch {
+      return '';
+    }
+  }
+
+  syncFrame(frame, value) {
+    const url = this.loopbackHref(value);
+    if (!url) frame.removeAttribute('src');
+    else if (frame.src !== url) frame.src = url;
+  }
+
   syncAssistantFrame() {
     if (typeof document === 'undefined') return;
     const frame = document.querySelector('iframe[data-assistant-url]');
-    if (!frame) return;
-    try {
-      const url = new URL(frame.dataset.assistantUrl || '');
-      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) throw new Error('unsafe');
-      if (frame.src !== url.href) frame.src = url.href;
-    } catch {
-      frame.removeAttribute('src');
+    if (frame) this.syncFrame(frame, frame.dataset.assistantUrl);
+  }
+
+  // ---- Sessions as tabs -------------------------------------------------------
+  // Inside the app, a running session opens as a tab in this window instead of a
+  // browser pop-up. Every open session's frame stays mounted, hidden unless its tab
+  // is selected, so switching tabs never reloads a session.
+
+  canEmbedCells() {
+    return !!this.state.sidecarConnected && !this.isPublicWeb() && typeof document !== 'undefined';
+  }
+
+  syncInstanceFrames() {
+    if (typeof document === 'undefined') return;
+    for (const frame of document.querySelectorAll('iframe[data-instance-url]')) {
+      this.syncFrame(frame, frame.dataset.instanceUrl);
     }
+  }
+
+  openInstanceTabs() {
+    return this.state.instanceTabs.filter(tab => !tab.closed);
+  }
+
+  // The launcher needs a moment after a launch before the session's address exists.
+  async resolveCellUrl(cell) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      let payload;
+      try {
+        payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      try {
+        return { url: this.validatedCellOpenUrl(payload, cell) };
+      } catch (error) {
+        return { url: '', error: error.message };
+      }
+    }
+    return { url: '', error: 'This session is still starting. Check its logs on the Local tab.' };
+  }
+
+  // What the user launched, in their words: a profile by its name, anything else
+  // by its Harness version. The port tells two sessions of the same thing apart.
+  instanceTabTitle(cell) {
+    const what = cell.purpose === 'local-profile' && cell.profile
+      ? cell.profile + ' profile'
+      : (cell.version && cell.version !== 'unknown' ? cell.version : (cell.name || 'Session'));
+    return String(cell.port ? what + ' · ' + cell.port : what).slice(0, 60);
+  }
+
+  async addInstanceTab(cell) {
+    if (!cell || !cell.id) return false;
+    const existing = this.openInstanceTabs().find(tab => tab.id === cell.id);
+    if (existing) {
+      this.activateInstanceTab(cell.id);
+      if (existing.url || existing.loading) return true;
+    } else {
+      const tab = { id: cell.id, port: cell.port, title: this.instanceTabTitle(cell), url: '', loading: true };
+      this.setState({ instanceTabs: [...this.state.instanceTabs, tab], activeInstanceId: cell.id, view: 'instance' });
+      this.persistInstanceTabs();
+    }
+    return this.connectInstanceTab(cell);
+  }
+
+  async connectInstanceTab(cell) {
+    const update = change => this.setState({
+      instanceTabs: this.state.instanceTabs.map(tab => tab.id === cell.id && !tab.closed ? { ...tab, ...change } : tab)
+    });
+    update({ loading: true, problem: '' });
+    const { url, error } = await this.resolveCellUrl(cell);
+    update({ url, loading: false, problem: url ? '' : error });
+    return !!url;
+  }
+
+  activateInstanceTab(id) {
+    this.setState({ view: 'instance', activeInstanceId: id, detailOpen: false });
+  }
+
+  // Closing a tab only detaches the view. The session keeps running until it is
+  // stopped on the Local tab. A closed tab leaves an empty slot behind so the frames
+  // after it keep their place and are not reloaded.
+  closeInstanceTab(id) {
+    let tabs = this.state.instanceTabs.map(tab => tab.id === id && !tab.closed ? { id: tab.id, closed: true } : tab);
+    while (tabs.length && tabs[tabs.length - 1].closed) tabs = tabs.slice(0, -1);
+    const open = tabs.filter(tab => !tab.closed);
+    const wasActive = this.state.activeInstanceId === id;
+    this.setState({
+      instanceTabs: tabs,
+      activeInstanceId: wasActive ? (open.length ? open[open.length - 1].id : null) : this.state.activeInstanceId,
+      ...(wasActive && !open.length && this.state.view === 'instance' ? { view: 'launch' } : {})
+    });
+    this.persistInstanceTabs(tabs);
+  }
+
+  // Tabs whose session has stopped or gone are closed for the user.
+  pruneInstanceTabs(cells) {
+    const live = new Set((cells || [])
+      .filter(cell => cell.agent_state !== 'exited' && cell.process !== 'exited')
+      .map(cell => cell.id));
+    for (const tab of this.openInstanceTabs()) {
+      if (tab.kind !== 'compare' && !live.has(tab.id)) this.closeInstanceTab(tab.id);
+    }
+  }
+
+  // Only the session id and its label are remembered. The address carries a
+  // sign-in token, so it is asked for again each time.
+  persistInstanceTabs(tabs = this.state.instanceTabs) {
+    try {
+      window.localStorage.setItem('dsh-forge.instance-tabs', JSON.stringify(
+        tabs.filter(tab => !tab.closed && tab.kind !== 'compare').map(tab => ({ id: tab.id, title: tab.title }))
+      ));
+    } catch {
+      // storage is optional
+    }
+  }
+
+  restoreInstanceTabs(cells) {
+    let saved = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem('dsh-forge.instance-tabs') || '[]');
+    } catch {
+      saved = [];
+    }
+    if (!Array.isArray(saved)) return;
+    const byId = new Map((cells || []).map(cell => [cell.id, cell]));
+    const known = new Set(this.state.instanceTabs.map(tab => tab.id));
+    for (const item of saved.slice(0, 12)) {
+      const cell = item && typeof item.id === 'string' ? byId.get(item.id) : null;
+      if (!cell || known.has(cell.id) || cell.agent_state === 'exited') continue;
+      const tab = { id: cell.id, port: cell.port, title: String(item.title || this.instanceTabTitle(cell)).slice(0, 60), url: '', loading: true };
+      this.setState({ instanceTabs: [...this.state.instanceTabs, tab] });
+      this.connectInstanceTab(cell);
+    }
+  }
+
+  // ---- Comparisons: one task on several configurations, side by side -----------
+
+  toggleCompareConfiguration(id) {
+    const selected = this.state.compareSelected.includes(id)
+      ? this.state.compareSelected.filter(item => item !== id)
+      : [...this.state.compareSelected, id].slice(0, 4);
+    this.setState({ compareSelected: selected });
+  }
+
+  async startComparison() {
+    const task = this.state.compareTask.trim();
+    const ids = this.state.compareSelected;
+    if (!task || ids.length < 2 || this.state.compareBusy) return;
+    this.setState({ compareBusy: true });
+    try {
+      const comparison = await this.api('/api/v1/comparisons', {
+        method: 'POST', body: JSON.stringify({ configuration_ids: ids, task })
+      });
+      this.openComparison(comparison);
+      await this.refreshStatus(true);
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ compareBusy: false });
+    }
+  }
+
+  // A comparison opens as a tab next to the session tabs.
+  openComparison(comparison) {
+    if (!comparison || !comparison.id) return;
+    const exists = this.openInstanceTabs().some(tab => tab.id === comparison.id);
+    const short = String(comparison.task || '').replace(/\s+/g, ' ').trim();
+    const tab = { id: comparison.id, kind: 'compare', title: 'Compare · ' + (short.length > 28 ? short.slice(0, 27) + '…' : short) };
+    this.setState({
+      comparisons: { ...this.state.comparisons, [comparison.id]: comparison },
+      instanceTabs: exists ? this.state.instanceTabs : [...this.state.instanceTabs, tab],
+      activeInstanceId: comparison.id,
+      view: 'instance'
+    });
+  }
+
+  async showComparison(id) {
+    try {
+      this.openComparison(await this.api('/api/v1/comparisons/' + encodeURIComponent(id)));
+    } catch (error) {
+      this.flash(error.message);
+    }
+  }
+
+  // Unfinished comparisons that are open are refreshed along with the status poll.
+  async refreshComparisons() {
+    const pending = this.openInstanceTabs()
+      .filter(tab => tab.kind === 'compare' && !(this.state.comparisons[tab.id] || {}).done);
+    for (const tab of pending) {
+      try {
+        const comparison = await this.api('/api/v1/comparisons/' + encodeURIComponent(tab.id));
+        this.setState({ comparisons: { ...this.state.comparisons, [tab.id]: comparison } });
+      } catch {
+        // Try again on the next poll.
+      }
+    }
+  }
+
+  async chooseComparisonRun(id, cellId) {
+    try {
+      const comparison = await this.api('/api/v1/comparisons/' + encodeURIComponent(id) + '/choose', {
+        method: 'POST', body: JSON.stringify({ cell_id: cellId })
+      });
+      this.setState({ comparisons: { ...this.state.comparisons, [id]: comparison } });
+      this.flash('Marked as your pick');
+    } catch (error) {
+      this.flash(error.message);
+    }
+  }
+
+  // For anyone who wants a session in its own browser tab. The address is already
+  // known, so the tab opens in the same click and is not blocked.
+  openInstanceInBrowser(id) {
+    const tab = this.openInstanceTabs().find(item => item.id === id);
+    const url = tab && this.loopbackHref(tab.url);
+    if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   isPublicWeb() {
@@ -2080,6 +2317,7 @@ class Component extends DCLogic {
     const detail = this.state.artifactRunConfirmation;
     const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
+    const pendingWindow = this.reserveOpenWindow();
     this.setState({ artifactRunBusy: true });
     try {
       const result = await this.api('/api/v1/catalog/install-run', {
@@ -2091,13 +2329,14 @@ class Component extends DCLogic {
         artifactRunBusy: false,
         artifactRunConfirmation: null,
         artifactRiskAcknowledged: false,
-        view: 'launch',
-        logCell: result.cell.id,
-        inspectorTab: 'logs'
+        artifactOpenCell: { artifactId: detail.id, cell: result.cell }
       });
-      if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Plugin verified, installed, and started in a disposable cell');
+      const opened = await this.openCell(result.cell, pendingWindow);
+      this.flash(opened
+        ? 'Plugin verified, installed, started, and opened'
+        : 'Plugin started; choose Open now when the authenticated URL is ready');
     } catch (error) {
+      if (pendingWindow) pendingWindow.close();
       await this.refreshStatus(true);
       this.setState({ artifactRunBusy: false });
       this.flash(error.message);
@@ -2212,27 +2451,6 @@ class Component extends DCLogic {
     this.favoriteSyncTimer = setTimeout(() => { this.favoriteSyncTimer = null; this.pushFavorites(); }, 400);
   }
 
-  async copyRepositoryRef(detail) {
-    const value = detail.url + (detail.head_sha ? '/tree/' + detail.head_sha : '');
-    try {
-      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard API unavailable');
-      await navigator.clipboard.writeText(value);
-      this.flash('Copied repository reference');
-    } catch {
-      const field = document.createElement('textarea');
-      field.value = value;
-      field.setAttribute('readonly', '');
-      field.style.position = 'fixed'; field.style.opacity = '0';
-      const previousFocus = document.activeElement;
-      document.body.appendChild(field); field.select();
-      let copied = false;
-      try { copied = document.execCommand('copy'); } catch {}
-      field.remove();
-      if (previousFocus && previousFocus.focus) previousFocus.focus();
-      this.flash(copied ? 'Copied repository reference' : 'Clipboard unavailable. Use the captured commit link.');
-    }
-  }
-
   async copyPackagePage(detail) {
     const base = typeof window !== 'undefined' && window.location && window.location.href
       ? window.location.href.split('#')[0]
@@ -2313,7 +2531,7 @@ class Component extends DCLogic {
       await this.refreshStatus(true);
       this.setState({ view: 'launch', logCell: cell.id, inspectorTab: 'logs' });
       if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Configuration started inside Apptainer');
+      this.flash('Configuration started');
     } catch (error) {
       this.flash(error.message);
     } finally {
@@ -2360,7 +2578,7 @@ class Component extends DCLogic {
   async startLocalProfile() {
     const spec = this.state.pendingProfile;
     if (!spec) return this.flash('Choose a detected profile first');
-    const pendingWindow = spec.open_browser ? window.open('about:blank', '_blank') : null;
+    const pendingWindow = spec.open_browser ? this.reserveOpenWindow() : null;
     this.setState({ profileBusy: true });
     try {
       const cell = await this.api('/api/v1/profiles/run', {
@@ -2369,7 +2587,7 @@ class Component extends DCLogic {
       this.setState({ preview: null, previewData: null, pendingProfile: null, logCell: cell.id, inspectorTab: 'logs' });
       await this.refreshStatus(true);
       this.flash('Started local profile ' + cell.profile + ' on the host');
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (spec.open_browser) this.openCell(cell, pendingWindow);
     } catch (error) {
       if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
@@ -2391,7 +2609,7 @@ class Component extends DCLogic {
     const versionId = this.state.assistantVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ assistantBusy: true, assistantVersionId: versionId, assistantUrl: '' });
     try {
       const cell = await this.api('/api/v1/assistant/start', {
@@ -2420,7 +2638,7 @@ class Component extends DCLogic {
 
   async reviewForkInstall(detail) {
     if (!this.state.sidecarConnected) return this.flash('Open the desktop launcher to install forks');
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ forkPlanBusy: true });
     try {
       const plan = await this.api('/api/v1/forks/plan', { method: 'POST', body: JSON.stringify({ artifact_id: detail.id }) });
@@ -2470,16 +2688,23 @@ class Component extends DCLogic {
   }
 
   confirmCommunityLaunch(version) {
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ communityLaunch: version, communityRiskAcknowledged: false });
   }
 
   async launchCommunity() {
     const version = this.state.communityLaunch;
     if (!version || !this.state.communityRiskAcknowledged) return;
+    const artifactId = this.state.artifactId;
+    const pendingWindow = this.reserveOpenWindow();
     this.setState({ communityLaunch: null, communityRiskAcknowledged: false });
-    if (typeof window !== 'undefined' && this.state.view !== 'launch') window.location.hash = 'launch';
-    await this.quickLaunch(version, { acknowledgeRisk: true });
+    const cell = await this.quickLaunch(version, {
+      acknowledgeRisk: true,
+      forceOpen: true,
+      preserveContext: true,
+      pendingWindow
+    });
+    if (cell && artifactId) this.setState({ artifactOpenCell: { artifactId, cell } });
   }
 
   setCatalogLayout(layout) {
@@ -2523,6 +2748,56 @@ class Component extends DCLogic {
   }
 
   // Gems and packs for the Discover page, from the hosted API or the local store.
+  // ---- Recommended for you -----------------------------------------------------
+  // Suggestions come from the local app, which works them out from session history
+  // on this computer. The website never has them.
+  async loadRecommendations(force = false) {
+    if (!this.state.sidecarConnected || this.isPublicWeb()) return;
+    const now = Date.now();
+    const wait = this.state.recommendations.state === 'scanning' ? 2500 : 30000;
+    if (!force && this._recommendationsAt && now - this._recommendationsAt < wait) return;
+    this._recommendationsAt = now;
+    try {
+      this.applyRecommendations(await this.api('/api/v1/recommendations'));
+    } catch {
+      // Suggestions are optional; the page works without them.
+    }
+  }
+
+  applyRecommendations(payload) {
+    const items = (Array.isArray(payload.items) ? payload.items : [])
+      .filter(item => item && item.artifact && item.artifact.artifact_id)
+      .map(item => ({
+        artifact: mapCatalogRecord({ ...item.artifact, hidden_gem: item.artifact.hidden_gem || null }),
+        capability: String(item.capability || ''),
+        evidence: String(item.evidence || '')
+      }));
+    this.setState({
+      recommendations: {
+        consent: ['on', 'off'].includes(payload.consent) ? payload.consent : 'unasked',
+        state: String(payload.state || 'off'),
+        reason: String(payload.reason || ''),
+        sessions: Number.isInteger(payload.sessions) ? payload.sessions : 0,
+        items
+      }
+    });
+  }
+
+  async answerRecommendations(enabled) {
+    this.setState({ recommendationsBusy: true });
+    try {
+      this.applyRecommendations(await this.api('/api/v1/recommendations/consent', {
+        method: 'POST', body: JSON.stringify({ enabled })
+      }));
+      this._recommendationsAt = 0;
+      this.flash(enabled ? 'Reading your recent sessions on this computer' : 'Suggestions are off and their data is deleted');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ recommendationsBusy: false });
+    }
+  }
+
   async loadDiscover() {
     if (this._discoverPromise) return this._discoverPromise;
     const hosted = this.isPublicWeb() && !this.state.sidecarConnected;
@@ -2545,6 +2820,13 @@ class Component extends DCLogic {
             ...pack,
             members: (pack.members || []).map(member => ({ ...member, artifact: map(member.artifact) }))
           })),
+          shelves: {
+            new: ((page.shelves && page.shelves.new) || []).map(map),
+            newWindowDays: page.shelves && Number.isInteger(page.shelves.new_window_days) ? page.shelves.new_window_days : 30,
+            best: ((page.shelves && page.shelves.best) || [])
+              .filter(entry => entry && entry.artifact)
+              .map(entry => ({ capability: String(entry.capability || ''), artifact: map(entry.artifact) }))
+          },
           policy: page.policy || ''
         };
         this.setState({
@@ -2766,8 +3048,15 @@ class Component extends DCLogic {
     const trees = Array.isArray(status.trees) ? status.trees : [];
     const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
     const cells = Array.isArray(status.cells) ? status.cells : [];
+    // "Open now" on a plugin or fork page points at one running session. Once that
+    // session has stopped or gone, the button must go back to offering a fresh run.
+    const opened = this.state.artifactOpenCell;
+    const openedCell = opened && cells.find(cell => cell.id === opened.cell.id);
+    const artifactOpenCell = openedCell && openedCell.agent_state !== 'exited' && openedCell.process !== 'exited'
+      ? opened : null;
     this.setState({
-      sidecarConnected: true, trees, treeId: current, cells,
+      recentComparisons: Array.isArray(status.comparisons) ? status.comparisons : [],
+      sidecarConnected: true, trees, treeId: current, cells, artifactOpenCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
@@ -2779,6 +3068,11 @@ class Component extends DCLogic {
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
     });
+    this.pruneInstanceTabs(cells);
+    if (!this._instanceTabsRestored && this.canEmbedCells()) {
+      this._instanceTabsRestored = true;
+      this.restoreInstanceTabs(cells);
+    }
     const openFork = this.state.detailOpen && this.state.catalogType === 'fork' ? this.forkInstallation(this.state.artifactId) : null;
     if (openFork && ['queued', 'fetching', 'building', 'failed'].includes(openFork.state)) this.refreshForkLog(openFork);
     // An imported corpus replaces the embedded inventory for artifact types it
@@ -2796,6 +3090,8 @@ class Component extends DCLogic {
     try {
       const status = await this.api('/api/v1/status');
       this.applyStatus(status);
+      this.loadRecommendations();
+      this.refreshComparisons();
       await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
@@ -2885,21 +3181,35 @@ class Component extends DCLogic {
     return h > 0 ? h + 'h ' + pad(m) + 'm ' + pad(s % 60) + 's' : m + 'm ' + pad(s % 60) + 's';
   }
 
-  async quickLaunch(version, { acknowledgeRisk = false } = {}) {
-    if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
-    if (!version.treeId) return this.flash('That version is not available on this machine');
+  async quickLaunch(version, {
+    acknowledgeRisk = false,
+    forceOpen = false,
+    preserveContext = false,
+    pendingWindow = null
+  } = {}) {
+    if (!this.state.sidecarConnected) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash('Open the DSH Forge app to run this');
+      return null;
+    }
+    if (!version.treeId) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash('That version is not available on this machine');
+      return null;
+    }
     const launch = version.launchSettings || {
       surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
       home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
     };
-    const pendingWindow = launch.open_browser ? window.open('about:blank', '_blank') : null;
+    const shouldOpen = forceOpen || !!launch.open_browser;
+    const target = pendingWindow || (shouldOpen ? this.reserveOpenWindow() : null);
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId,
         surface: 'web',
         profile: launch.profile || 'tui-min',
         port: 'auto',
-        open_browser: !!launch.open_browser,
+        open_browser: shouldOpen,
         home_mode: 'fresh',
         workspace: 'managed',
         network: 'host',
@@ -2907,12 +3217,16 @@ class Component extends DCLogic {
         ...(acknowledgeRisk ? { acknowledge_risk: true } : {})
       }) });
       await this.refreshStatus(true);
-      await this.inspectCell(cell, 'logs');
-      this.flash('Launched ' + version.version + ' on port ' + cell.port);
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (!preserveContext) await this.inspectCell(cell, 'logs');
+      const opened = shouldOpen ? await this.openCell(cell, target) : false;
+      this.flash(opened
+        ? 'Launched and opened ' + version.version + ' on port ' + cell.port
+        : 'Launched ' + version.version + ' on port ' + cell.port);
+      return cell;
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
+      if (target) target.close();
       this.flash(error.message);
+      return null;
     }
   }
 
@@ -2929,19 +3243,57 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
-  async openCell(cell, existingWindow = null) {
-    const target = existingWindow || window.open('about:blank', '_blank');
-    for (let attempt = 0; attempt < 30; attempt++) {
-      try {
-        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-        if (target) target.location.replace(payload.url);
-        return;
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
+  reserveOpenWindow() {
+    if (this.canEmbedCells()) return null;
+    if (typeof window === 'undefined' || typeof window.open !== 'function') return null;
+    try {
+      // Not 'noopener': with it window.open returns null, so there would be no tab
+      // to send the session to. The link back to this page is cut by hand instead.
+      const target = window.open('about:blank', '_blank');
+      if (target) target.opener = null;
+      return target || null;
+    } catch {
+      return null;
     }
-    if (target) target.close();
-    this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
+  }
+
+  validatedCellOpenUrl(payload, cell) {
+    if (!payload || payload.cell_id !== cell.id) throw new Error('Open URL cell identity does not match the launched cell');
+    if (typeof payload.url !== 'string' || !payload.url) throw new Error('Open URL is missing');
+    let parsed;
+    try {
+      parsed = new URL(payload.url);
+    } catch {
+      throw new Error('Open URL is invalid');
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'http:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(hostname) || !parsed.port) {
+      throw new Error('Open URL must use loopback HTTP with an explicit port');
+    }
+    if (Number.isInteger(cell.port) && Number(parsed.port) !== cell.port) {
+      throw new Error('Open URL does not match the launched cell port');
+    }
+    return parsed.href;
+  }
+
+  async openCell(cell, existingWindow = null) {
+    if (this.canEmbedCells()) {
+      if (existingWindow) existingWindow.close();
+      return this.addInstanceTab(cell);
+    }
+    const target = existingWindow || this.reserveOpenWindow();
+    if (!target) {
+      this.flash('Your browser blocked the new tab. Allow pop-ups for this page, then choose Open again.');
+      return false;
+    }
+    const { url, error } = await this.resolveCellUrl(cell);
+    if (url) {
+      target.location.replace(url);
+      return true;
+    }
+    target.close();
+    this.flash(error);
+    return false;
   }
 
   async inspectCell(cell, tab = 'logs') {
@@ -2988,7 +3340,7 @@ class Component extends DCLogic {
           ? 'Community fork · ' + (community.full_name || 'catalog') + ' @ ' + String(community.commit || '').slice(0, 7)
           : (saved && saved.source === 'auto' ? 'Found automatically' : (saved ? 'Added manually' : 'Found for this session')),
         isCommunity: !!community,
-        launchSummary: 'auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
+        launchSummary: 'fresh session each time' + (gpuMode === 'allocated' ? ' · GPU' : ''),
         status,
         statusColor: canLaunch ? OK : WARN,
         buttonLabel: canLaunch ? (community ? 'Launch…' : 'Launch') : status,
@@ -3137,6 +3489,9 @@ class Component extends DCLogic {
     const detail = !s.detailOpen ? {}
       : ((s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
         CATALOG.find(a => a.id === s.artifactId) || s.storeArtifacts.find(a => a.id === s.artifactId) || {});
+    const activeArtifactCell = s.artifactOpenCell && s.artifactOpenCell.artifactId === detail.id
+      ? s.artifactOpenCell.cell
+      : null;
     const hostVersions = s.savedVersions.filter(item => item.state === 'ready' && !(item.primary_tree && item.primary_tree.trust === 'community'));
     const packageVersions = hostVersions.map(item => ({
       id: item.id,
@@ -3217,7 +3572,9 @@ class Component extends DCLogic {
     const forkReady = forkState === 'ready' && !!forkInstall.tree_id;
     const forkTree = forkReady ? s.trees.find(tree => tree.id === forkInstall.tree_id) : null;
     const forkLaunchable = !!(forkTree && forkTree.trust === 'community' && forkTree.launchability === 'ready');
-    const forkCopy = !s.sidecarConnected
+    const forkCopy = activeArtifactCell
+      ? { pill: 'Running', label: 'Open now', disabled: false, text: 'This fork is running on your computer. Open it in a new tab.' }
+      : (!s.sidecarConnected
       ? (this.isPublicWeb()
         ? {
             pill: '', label: 'Get the desktop app to install', disabled: false, web: true,
@@ -3235,7 +3592,7 @@ class Component extends DCLogic {
         : (forkActive
           ? { pill: forkState === 'building' ? 'Building' : 'Downloading', label: 'Installing…', disabled: true, text: forkInstall.detail || 'Working…' }
           : (!sandbox.ready
-            ? { pill: '', label: 'Isolation setup required', disabled: true, text: 'Set up the isolated container on the Local tab before installing forks.' }
+            ? { pill: '', label: 'Finish setup to install', disabled: true, text: 'Set up the isolated container on the Local tab before installing forks.' }
             : {
                 pill: forkState === 'failed' ? 'Failed' : '',
                 label: s.forkPlanBusy ? 'Checking…' : (forkState === 'failed' ? 'Try again…' : 'Install…'),
@@ -3243,7 +3600,22 @@ class Component extends DCLogic {
                 text: forkState === 'failed'
                   ? forkInstall.detail
                   : 'Downloads this exact version, builds it in an isolated container, and adds it to Local.'
-              })));
+              }))));
+    const artifactReadiness = detail.type === 'plugin'
+      ? [
+          { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
+          { label: 'Exact signed recipe', ready: !!(artifactExecution.exact_package && artifactExecution.exact_repository_commit), detail: artifactExecution.reason || 'No matching recipe' },
+          { label: 'Harness target selected', ready: !!selectedPackageVersion, detail: selectedPackageVersion ? 'Launch-ready official or personal version' : 'Add a launch-ready version on Local' },
+          { label: 'Isolated container', ready: !!sandbox.ready, detail: sandbox.ready ? 'Ready' : 'Set it up on the Local tab' }
+        ]
+      : (detail.type === 'fork'
+        ? [
+            { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
+            { label: 'Pinned fork installed', ready: forkReady, detail: forkReady ? String(forkInstall.commit).slice(0, 12) : 'Review and install one exact commit' },
+            { label: 'Launch-ready fork tree', ready: forkLaunchable, detail: forkLaunchable ? forkTree.version : 'Complete the isolated build and registration' },
+            { label: 'Isolated container', ready: !!sandbox.ready, detail: sandbox.ready ? 'Ready' : 'Set it up on the Local tab' }
+          ]
+        : []);
     const forkPlan = s.forkPlan;
     const forkLayout = s.catalogLayout.fork === 'list' ? 'list' : 'grid';
     const pluginLayout = s.catalogLayout.plugin === 'list' ? 'list' : 'grid';
@@ -3382,7 +3754,9 @@ class Component extends DCLogic {
     const detailCautions = detail.id && !detail.catalogPackage ? [
       ...cautionNotes(detail),
       ...(detail.licenseOk ? [] : ['No license reported, so reuse terms are unclear']),
-      'DSH Forge checks public information about projects, not their code'
+      detail.hiddenGem && detail.hiddenGem.gem && /^reviewed/.test(String(detail.hiddenGem.gem.confidence))
+        ? 'A reviewer read this project’s code, but nothing was run. Reading is not a safety guarantee'
+        : 'DSH Forge checks public information about projects, not their code'
     ] : [];
     const spotlightSource = discoverData.plugins[0] || null;
     const landingSpotlight = spotlightSource ? {
@@ -3412,6 +3786,66 @@ class Component extends DCLogic {
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
+      hasInstanceTabs: s.instanceTabs.some(tab => !tab.closed),
+      instanceDeckClass: s.view === 'instance' ? 'instance-deck' : 'instance-deck deck-parked',
+      instanceTabs: s.instanceTabs.filter(tab => !tab.closed).map(tab => {
+        const active = s.view === 'instance' && s.activeInstanceId === tab.id;
+        return {
+          id: tab.id,
+          title: tab.title,
+          className: active ? 'tab itab tab-on' : 'tab itab',
+          current: active ? 'page' : 'false',
+          dotColor: tab.kind === 'compare'
+            ? ((s.comparisons[tab.id] || {}).done ? OK : WARN)
+            : (tab.loading ? WARN : (tab.url ? OK : BAD)),
+          select: () => this.activateInstanceTab(tab.id),
+          close: event => { if (event && event.stopPropagation) event.stopPropagation(); this.closeInstanceTab(tab.id); },
+          closeLabel: tab.kind === 'compare'
+            ? 'Close this comparison tab (you can reopen it from the Local tab)'
+            : 'Close the ' + tab.title + ' tab (the session keeps running)'
+        };
+      }),
+      // One slot per tab ever opened in this window, closed ones left empty, so
+      // every frame keeps its position and none reloads when another tab closes.
+      instanceSlots: s.instanceTabs.map(tab => {
+        const active = s.view === 'instance' && s.activeInstanceId === tab.id;
+        if (!tab.closed && tab.kind === 'compare') {
+          const comparison = s.comparisons[tab.id] || { runs: [], task: '' };
+          const labels = { running: 'Running…', finished: 'Finished', failed: 'Did not start', gone: 'No longer available' };
+          const colors = { running: WARN, finished: OK, failed: BAD, gone: MUTED };
+          return {
+            id: tab.id, open: true, isCompare: true, isSession: false, ready: false, waiting: false,
+            title: tab.title, className: active ? 'instance-pane' : 'instance-pane pane-hidden',
+            task: comparison.task || '',
+            summary: comparison.done ? 'All runs have finished. Read them side by side and pick one.' : 'Running. Results appear as each one prints.',
+            runs: (comparison.runs || []).map(run => ({
+              name: run.name || 'Configuration',
+              stateLabel: labels[run.state] || run.state,
+              stateColor: colors[run.state] || MUTED,
+              output: run.error || (run.output || []).join('\n') || (run.state === 'running' ? 'Waiting for output…' : 'No output.'),
+              canPick: !!run.cell_id && run.state !== 'failed' && !run.chosen,
+              picked: !!run.chosen,
+              className: run.chosen ? 'compare-col compare-picked' : 'compare-col',
+              pick: () => this.chooseComparisonRun(tab.id, run.cell_id)
+            }))
+          };
+        }
+        return {
+          id: tab.id,
+          open: !tab.closed,
+          isCompare: false,
+          isSession: !tab.closed,
+          title: tab.title || '',
+          url: tab.url || '',
+          ready: !tab.closed && !!tab.url,
+          waiting: !tab.closed && !tab.url,
+          waitingLabel: tab.loading ? 'Connecting to this session…' : (tab.problem || 'This session is not reachable.'),
+          canRetry: !tab.closed && !tab.url && !tab.loading,
+          retry: () => this.connectInstanceTab({ id: tab.id, port: tab.port }),
+          className: active ? 'instance-pane' : 'instance-pane pane-hidden',
+          openInBrowser: () => this.openInstanceInBrowser(tab.id)
+        };
+      }),
       goLaunch: () => this.navigate('launch'),
       goPlugins: () => this.openBrowser('plugin'),
       goForks: () => this.openBrowser('fork'),
@@ -3436,6 +3870,10 @@ class Component extends DCLogic {
       updateLabel: 'Update ' + (update.latest_version || ''),
       updateUrl: update.release_url || 'https://github.com/MichaelTheMay/dsh-forge/releases/latest',
       showPlatformNotice: application.platform === 'windows' && !nativeSandbox.available,
+      // Without the isolated container nothing can run, so say how to set it up
+      // instead of leaving a disabled button to guess at.
+      showContainerSetup: !!s.sidecarConnected && !sandbox.ready && application.platform !== 'windows',
+      containerSetupCommand: './scripts/install.sh',
       platformNotice: nativeSandbox.message || '',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,
@@ -3462,7 +3900,7 @@ class Component extends DCLogic {
       noVersions: versions.length === 0,
       emptyVersionsText: s.sidecarConnected
         ? 'Forge checks ' + ((s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions') + ' automatically. Use Add folder for a checkout anywhere else.'
-        : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
+        : 'This is a preview. Open the DSH Forge app to find and run Harness versions on this computer.',
       localProfiles,
       hasLocalProfiles: localProfiles.length > 0,
       noLocalProfiles: localProfiles.length === 0,
@@ -3470,8 +3908,10 @@ class Component extends DCLogic {
       versionBusy: s.versionBusy,
       versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
       pickVersion: () => this.pickLocalVersion(),
-      sandboxTitle: sandbox.ready ? 'Isolation ready' : 'Isolation setup required',
-      sandboxReason: sandbox.reason || 'No capability result is available.',
+      sandboxTitle: sandbox.ready ? 'Isolated container ready' : 'Isolated container needs setup',
+      sandboxReason: sandbox.ready
+        ? 'Plugins and forks run inside an isolated container, separate from your own setup.'
+        : 'Plugins and forks only run inside an isolated container. It is not set up on this computer yet.',
       sandboxColor: sandbox.ready ? OK : WARN,
 
       inspectorTabs,
@@ -3595,14 +4035,22 @@ class Component extends DCLogic {
       forkFiles: divergence ? Number(divergence.listed_file_count || 0).toLocaleString('en-US') + (divergence.files_truncated ? '+' : '') : '',
       forkSurfaces: (detail.compatibility && detail.compatibility.changed_surfaces) || [],
       hasForkSurfaces: !!(detail.compatibility && (detail.compatibility.changed_surfaces || []).length),
-      executionPill: artifactExecution.eligible ? 'Signed recipe' : 'Browse only',
-      executionPillClass: artifactExecution.eligible ? 'pill pill-ok' : 'pill',
-      installAndRunDisabled: !artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy,
-      installAndRunLabel: s.artifactRunBusy
-        ? 'Installing and testing…'
-        : (artifactExecution.eligible ? 'Install and run…' : 'Sandbox recipe required'),
-      installAndRunReason: artifactExecution.reason,
-      installAndRun: () => detail.id ? this.confirmArtifactRun(detail) : undefined,
+      artifactReadiness: artifactReadiness.map(item => ({ ...item, blocked: !item.ready })),
+      hasArtifactReadiness: artifactReadiness.length > 0,
+      executionPill: activeArtifactCell ? 'Running' : (artifactExecution.eligible ? 'Signed recipe' : 'Browse only'),
+      executionPillClass: (activeArtifactCell || artifactExecution.eligible) ? 'pill pill-ok' : 'pill',
+      installAndRunDisabled: activeArtifactCell ? false : (!artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy),
+      installAndRunLabel: activeArtifactCell
+        ? 'Open now'
+        : (s.artifactRunBusy
+          ? 'Installing and testing…'
+          : (artifactExecution.eligible ? 'Review, install & run…' : 'Can’t be installed from here yet')),
+      installAndRunReason: activeArtifactCell
+        ? 'The verified local cell is running on port ' + activeArtifactCell.port
+        : artifactExecution.reason,
+      installAndRun: () => activeArtifactCell
+        ? this.openCell(activeArtifactCell)
+        : (detail.id ? this.confirmArtifactRun(detail) : undefined),
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
         ...component,
         name: component.package.name,
@@ -3621,7 +4069,7 @@ class Component extends DCLogic {
       installLabel: s.packageInstallBusy ? 'Testing package…' : (latestPackageInstall && latestPackageInstall.state === 'ready' ? 'Install again' : 'Verify, test & install'),
       installStatus: latestPackageInstall
         ? (latestPackageInstall.state === 'ready' ? 'Ready · tested profile saved' : latestPackageInstall.detail)
-        : (recipeConfigured ? 'Signed recipe configured locally' : 'Signed recipe required'),
+        : (recipeConfigured ? 'Ready to verify and install' : 'Not yet reviewed for installing'),
       sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,
       saveConfiguration: () => detail.id ? this.saveCatalogConfiguration(detail) : undefined,
       saveConfigurationDisabled: !detail.id || !s.sidecarConnected || !selectedPackageVersion || s.configurationBusy,
@@ -3635,15 +4083,15 @@ class Component extends DCLogic {
       emptyDescription: emptyCopy.description,
       emptyActionLabel: emptyCopy.action,
       resetCatalogFilters: emptyCopy.run,
-      copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
       forkInstallPill: forkCopy.pill,
-      forkInstallPillClass: forkReady ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
+      forkInstallPillClass: (activeArtifactCell || forkReady) ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
       forkInstallText: forkCopy.text,
       forkInstallLabel: forkCopy.label,
       forkInstallDisabled: forkCopy.disabled,
       forkInstallAction: () => {
         if (!detail.id) return undefined;
+        if (activeArtifactCell) return this.openCell(activeArtifactCell);
         if (!s.sidecarConnected) return this.showDownloads();
         if (forkReady && forkTree) {
           return this.confirmCommunityLaunch({
@@ -3661,7 +4109,7 @@ class Component extends DCLogic {
 
       forkPlanOpen: !!forkPlan,
       forkPlanName: forkPlan ? forkPlan.full_name : '',
-      forkPlanCommit: forkPlan ? forkPlan.commit : '',
+      forkPlanCommit: forkPlan ? String(forkPlan.commit || '').slice(0, 12) : '',
       forkPlanCommitSource: forkPlan
         ? (forkPlan.commit_source === 'catalog'
           ? 'Commit captured by the catalog'
@@ -3706,9 +4154,39 @@ class Component extends DCLogic {
         statusColor: (configuration.runtime || {}).runnable ? OK : (configuration.status === 'draft' ? WARN : MUTED),
         run: () => this.runConfiguration(configuration),
         runDisabled: !(configuration.runtime || {}).runnable || s.configurationBusy,
-        runLabel: (configuration.runtime || {}).runnable ? 'Run in Apptainer' : 'Not ready'
+        runLabel: (configuration.runtime || {}).runnable ? 'Run' : 'Not ready'
       })),
       noConfigurations: s.configurations.length === 0,
+      ...(() => {
+        const options = s.configurations.map(configuration => {
+          const runnable = !!(configuration.runtime || {}).runnable;
+          const selected = s.compareSelected.includes(configuration.id);
+          return {
+            id: configuration.id, name: configuration.name, selected,
+            disabled: !runnable || (!selected && s.compareSelected.length >= 4),
+            note: runnable ? '' : 'Not ready to run',
+            toggle: () => this.toggleCompareConfiguration(configuration.id)
+          };
+        });
+        const count = s.compareSelected.length;
+        const ready = count >= 2 && !!s.compareTask.trim() && !s.compareBusy;
+        return {
+          showCompare: !!s.sidecarConnected && s.configurations.length >= 2,
+          compareOptions: options,
+          compareTask: s.compareTask,
+          setCompareTask: event => this.setState({ compareTask: String(event.target.value).slice(0, 20000) }),
+          compareDisabled: !ready,
+          compareLabel: s.compareBusy ? 'Starting…' : (count >= 2 ? 'Run on ' + count + ' configurations' : 'Choose at least two'),
+          startComparison: () => this.startComparison(),
+          recentComparisons: (s.recentComparisons || []).slice(0, 5).map(item => ({
+            id: item.id,
+            task: String(item.task || ''),
+            meta: item.runs + ' runs' + (item.chosen ? ' · picked' : ''),
+            open: () => this.showComparison(item.id)
+          })),
+          hasRecentComparisons: (s.recentComparisons || []).length > 0
+        };
+      })(),
 
       artifactRunConfirmationOpen: !!s.artifactRunConfirmation,
       artifactRunBusy: s.artifactRunBusy,
@@ -3767,6 +4245,62 @@ class Component extends DCLogic {
       hasDiscoverError: !!s.discoverError && !s.discover,
       discoverError: s.discoverError,
       retryDiscover: () => this.loadDiscover(),
+      ...(() => {
+        const shelves = (s.discover && s.discover.shelves) || { new: [], newWindowDays: 30, best: [] };
+        const compact = (artifact, label) => {
+          const card = cardView(artifact, { badge: false });
+          return {
+            id: card.id, name: card.name, owner: card.owner, description: card.description,
+            avatarStyle: card.avatarStyle, initials: card.initials, label,
+            reason: card.topReason || card.activity || '',
+            accessibleLabel: 'Open ' + card.slug,
+            select: () => this.selectCatalogArtifact(artifact)
+          };
+        };
+        const fresh = shelves.new.map(artifact => compact(artifact, artifact.created_at || artifact.pushed_at
+          ? 'Updated ' + relativeTime(artifact.pushed_at || artifact.created_at) : 'New'));
+        const best = shelves.best.map(entry => compact(entry.artifact, 'Best for ' + entry.capability));
+        return {
+          newShelf: fresh,
+          hasNewShelf: fresh.length > 0,
+          newShelfTitle: shelves.newWindowDays <= 7 ? 'New this week' : 'New this month',
+          bestShelf: best,
+          hasBestShelf: best.length > 0
+        };
+      })(),
+      ...(() => {
+        const recs = s.recommendations;
+        const local = !!s.sidecarConnected && !this.isPublicWeb();
+        const on = local && recs.consent === 'on';
+        const items = on ? recs.items.map(item => {
+          const card = cardView(item.artifact, { badge: false });
+          return {
+            id: card.id, name: card.name, owner: card.owner, description: card.description,
+            avatarStyle: card.avatarStyle, initials: card.initials,
+            capability: item.capability, evidence: item.evidence,
+            accessibleLabel: 'Open ' + card.slug,
+            select: () => this.selectCatalogArtifact(item.artifact)
+          };
+        }) : [];
+        const sessions = recs.sessions === 1 ? '1 session' : recs.sessions.toLocaleString('en-US') + ' sessions';
+        return {
+          showRecsBlock: local && recs.consent !== 'off',
+          recsAsk: local && recs.consent === 'unasked',
+          recsOn: on,
+          recsBusy: s.recommendationsBusy,
+          recsYes: () => this.answerRecommendations(true),
+          recsNo: () => this.answerRecommendations(false),
+          recItems: items,
+          hasRecs: items.length > 0,
+          recsNote: recs.state === 'scanning'
+            ? 'Reading your recent sessions…'
+            : (recs.state === 'unavailable' ? '' : 'From ' + sessions + ' on this computer. Nothing is uploaded.'),
+          recsEmpty: on && !items.length && recs.state !== 'scanning',
+          recsEmptyText: recs.state === 'unavailable'
+            ? recs.reason
+            : 'Nothing to suggest yet. Suggestions appear once you have a few sessions, and only for things you don’t already have a plugin for.'
+        };
+      })(),
       discoverPlugins: distinct(discoverData.plugins.map(item => cardView(item, { badge: false }))),
       hasDiscoverPlugins: discoverData.plugins.length > 0,
       discoverForks: distinct(discoverData.forks.map(item => cardView(item, { badge: false }))),
@@ -3793,6 +4327,19 @@ class Component extends DCLogic {
       hasWhyGem: whyReasons.length > 0,
       whyGemReasons: whyReasons,
       whyGemTitle: detail.hiddenGem && detail.hiddenGem.candidate ? 'Why it’s a hidden gem' : 'What we measured',
+      // When someone read this project's code, lead with what they found.
+      ...(() => {
+        const gem = detail.hiddenGem && detail.hiddenGem.gem && typeof detail.hiddenGem.gem === 'object' ? detail.hiddenGem.gem : null;
+        const read = !!gem && (gem.confidence === 'reviewed' || gem.confidence === 'reviewed at an earlier version');
+        return {
+          gemSummary: read && typeof gem.summary === 'string' ? gem.summary : '',
+          hasGemSummary: read && typeof gem.summary === 'string' && !!gem.summary,
+          gemReadLabel: !gem ? '' : (gem.confidence === 'reviewed'
+            ? 'We read the code'
+            : (read ? 'We read an earlier version of the code' : 'Measured from the code, not yet read')),
+          hasGemReadLabel: !!gem
+        };
+      })(),
       whyGemFootnote: detail.hiddenGem && detail.hiddenGem.built_percentile != null
         ? 'Built better than ' + detail.hiddenGem.built_percentile + '% of plugins we measured.'
         : '',

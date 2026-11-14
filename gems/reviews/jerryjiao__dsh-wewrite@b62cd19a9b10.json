@@ -1,0 +1,20 @@
+{
+ "commit": "b62cd19a9b10be04cb63d31fcdb3772268973fab",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "jerryjiao/dsh-wewrite",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "End-to-end WeChat article workflow inside DSH, from hot topic to pushed draft, with a quality gate and local-only credentials.",
+ "source": "claude-session",
+ "summary": "WeChat official-account writing pipeline: topic digest, outline, draft, quality gate, themed HTML render, images and draft push, with a web workbench panel, scheduler, and agent tools.",
+ "verdict": "solid"
+}

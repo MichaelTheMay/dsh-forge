@@ -1,0 +1,20 @@
+{
+ "commit": "2899342f096c64eaed639ccc9c41bc58d356626f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "wings1848/dsh-mcp-lazy",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "Cuts per-request tool-schema tokens (about 93 percent for a 29-tool server) and stops idle MCP servers from running, with the break-even honestly documented.",
+ "source": "claude-session",
+ "summary": "MCP gateway exposing one constant mcp tool instead of every server tool schema; starts servers on first use, idles them out, caches metadata on disk, ranks search, and truncates large results to a spill file.",
+ "verdict": "gem"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "70c47959c75b4b263973409f480e1fc491690ed4",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "linkbag/dsh-swarm-orchestrator",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "One goal becomes a supervised agent team with per-role model pinning, review loops, machine-checked evidence contracts and a live kanban and flow chart tab in the web GUI.",
+ "source": "claude-session",
+ "summary": "In-process multi-agent orchestration: architect decomposes a goal into a task DAG, builders run in parallel as subagents, reviewers gate results, an integrator merges, with a duty table pinning models per role and a live web dashboard.",
+ "verdict": "gem"
+}

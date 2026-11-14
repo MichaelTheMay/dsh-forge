@@ -122,7 +122,10 @@ def validate_catalog(catalog: Mapping[str, Any]) -> None:
             raise MarketplaceError("Catalog entry has invalid discovery labels")
         for key, limit in (("name", 256), ("version", 128), ("description", 10_000), ("license", 128)):
             value = package.get(key)
-            if value is not None and (not isinstance(value, str) or not value or len(value) > limit):
+            # An empty description is a package that never wrote one, not a malformed
+            # feed: normalize_catalog() gives it placeholder text.
+            blank = not value and key != "description"
+            if value is not None and (not isinstance(value, str) or blank or len(value) > limit):
                 raise MarketplaceError(f"Catalog entry has invalid package {key}")
         risks = entry.get("riskSignals") or []
         if not isinstance(risks, list) or len(risks) > 32 or any(

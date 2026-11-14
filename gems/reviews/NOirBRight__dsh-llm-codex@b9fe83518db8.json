@@ -1,0 +1,20 @@
+{
+ "commit": "b9fe83518db8ad69142404ec9778f8b38ec9fae3",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "NOirBRight/dsh-llm-codex",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "Use your ChatGPT subscription's Codex models inside DSH with sign-in from the settings card, a usage meter and Fast rows.",
+ "source": "claude-session",
+ "summary": "Adds a ChatGPT Codex provider to DSH: browser OAuth sign-in, usage meter, live model catalog with Fast and 1M variants, retry policy, and optional search and image tools, via chatgpt.com backend and pi-ai.",
+ "verdict": "solid"
+}

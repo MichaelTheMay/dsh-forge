@@ -1,0 +1,20 @@
+{
+ "commit": "9b8f54496294db471f3f657d59daa9adb6185098",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "rogerdigital/dsh-searxng",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Key-free web search for the agent via your own SearXNG, with a one-command managed Docker setup and a doctor/repair CLI.",
+ "source": "claude-session",
+ "summary": "Registers a SearXNG-backed web search provider (cache, pacing, failover URLs) plus a large CLI that sets up, repairs and updates a managed Docker SearXNG instance.",
+ "verdict": "solid"
+}

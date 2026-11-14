@@ -1,0 +1,20 @@
+{
+ "commit": "49307b4229edd8cb0a6a29bef4cec7cc36240892",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "nishuoyang/dsh-wallpaper-bg",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "Animated or static wallpaper behind your DSH window, including Wallpaper Engine videos, with readable-surface controls.",
+ "source": "claude-session",
+ "summary": "Paints a wallpaper layer under the DSH web and desktop UI from built-in images, uploads, or a local Wallpaper Engine library read through a companion service, with blur, brightness and a retheme.",
+ "verdict": "solid"
+}

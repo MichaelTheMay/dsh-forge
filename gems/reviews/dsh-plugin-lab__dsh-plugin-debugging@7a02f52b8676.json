@@ -1,0 +1,20 @@
+{
+ "commit": "7a02f52b8676730f22253244c3d72adad80c6714",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "dsh-plugin-lab/dsh-plugin-debugging",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Ask the agent why your plugin change did not take effect; it probes the live profile and says whether to wait, hot reload or restart.",
+ "source": "claude-session",
+ "summary": "Gives a DSH agent tools to inspect its own runtime: list instances, check auth, diagnose why a plugin did not load, tell live-apply from restart, dump composed config, hot-reload an entry, and a gated restart.",
+ "verdict": "gem"
+}

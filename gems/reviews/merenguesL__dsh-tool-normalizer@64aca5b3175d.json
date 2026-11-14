@@ -1,0 +1,20 @@
+{
+ "commit": "64aca5b3175dd1e74ed434ef5d36a63632ee8c5c",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "merenguesL/dsh-tool-normalizer",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Fewer wasted retry round-trips from malformed tool calls, with a dashboard of what was healed.",
+ "source": "claude-session",
+ "summary": "Intercepts tool calls to repair common model mistakes (missing description, markdown fences in code, relative paths, bad ranges), retries safe cases through the host pipeline, and shows healing stats in a dashboard.",
+ "verdict": "solid"
+}

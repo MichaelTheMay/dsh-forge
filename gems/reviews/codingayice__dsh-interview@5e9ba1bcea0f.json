@@ -1,0 +1,20 @@
+{
+ "commit": "5e9ba1bcea0feda5e47d0545d674e523631f712a",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "codingayice/dsh-interview",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Run a realistic mock interview from your resume and job description, with history kept locally.",
+ "source": "claude-session",
+ "summary": "Local interview practice workspace: five modes (flashcards, mock interview, resume drill, scenarios, LeetCode Hot 100) with agent tools, prompt policies, a web UI and SQLite-stored practice history.",
+ "verdict": "solid"
+}

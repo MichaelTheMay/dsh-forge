@@ -1,0 +1,20 @@
+{
+ "commit": "8799d63790e2405b70271e1b90517e8e4634cdca",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Crosery/dsh-viewer",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "The agent can open a generated PDF, spreadsheet or video right in the chat instead of just printing a file path.",
+ "source": "claude-session",
+ "summary": "Adds a display_file tool that shows images, video, audio, PDF, HTML and converted Office documents inline in the DSH UI, served by a signed HTTP route with range support and LibreOffice conversion.",
+ "verdict": "solid"
+}

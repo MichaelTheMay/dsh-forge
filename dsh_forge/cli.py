@@ -272,6 +272,26 @@ def _parser() -> argparse.ArgumentParser:
     run_configuration.add_argument("configuration_id")
     run_configuration.add_argument("--task", help="override the task of a headless configuration")
 
+    compare = commands.add_parser("compare", help="run one task on several saved configurations and compare the results")
+    compare_commands = compare.add_subparsers(dest="compare_command", required=True)
+    compare_run = compare_commands.add_parser("run", help="start one headless run of the task per configuration")
+    compare_run.add_argument("--task", required=True)
+    compare_run.add_argument("configuration_ids", nargs="+", metavar="CONFIGURATION_ID")
+    compare_show = compare_commands.add_parser("show", help="show each run's state and output")
+    compare_show.add_argument("comparison_id")
+    compare_choose = compare_commands.add_parser("choose", help="mark one run as your pick")
+    compare_choose.add_argument("comparison_id")
+    compare_choose.add_argument("cell_id")
+    compare_commands.add_parser("list", help="list recent comparisons")
+
+    recommendations = commands.add_parser(
+        "recommendations", help="plugins suggested from your local session history (nothing leaves this computer)"
+    )
+    recommendation_commands = recommendations.add_subparsers(dest="recommendations_command", required=True)
+    recommendation_commands.add_parser("show", help="show suggestions, or whether history reading is on")
+    recommendation_commands.add_parser("enable", help="allow reading local session history, then show suggestions")
+    recommendation_commands.add_parser("disable", help="stop reading local session history and delete what was derived")
+
     cells = commands.add_parser("cells", help="control persistent local cells")
     cell_commands = cells.add_subparsers(dest="cells_command", required=True)
     cell_commands.add_parser("list", help="list cells, including recovered processes")
@@ -430,6 +450,10 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"packages.{args.packages_command}"
     if args.command == "research":
         return f"research.{args.research_command}"
+    if args.command == "recommendations":
+        return f"recommendations.{args.recommendations_command}"
+    if args.command == "compare":
+        return f"compare.{args.compare_command}"
     return str(args.command)
 
 
@@ -928,6 +952,22 @@ def run(
                 data = {"configurations": launcher.remove_configuration(args.configuration_id)}
             elif command == "configurations.run":
                 data = launcher.run_configuration(args.configuration_id, task=args.task)
+            elif command == "compare.run":
+                data = launcher.run_comparison(list(args.configuration_ids), args.task)
+            elif command == "compare.show":
+                data = launcher.comparison(args.comparison_id)
+            elif command == "compare.choose":
+                data = launcher.choose_comparison_run(args.comparison_id, args.cell_id)
+            elif command == "compare.list":
+                data = {"comparisons": launcher.comparisons()}
+            elif command == "recommendations.show":
+                data = launcher.recommendations_status()
+            elif command == "recommendations.enable":
+                launcher.set_recommendations_consent(True)
+                launcher.recommendations.wait(120)
+                data = launcher.recommendations_status()
+            elif command == "recommendations.disable":
+                data = launcher.set_recommendations_consent(False)
             elif command == "cells.list":
                 status = launcher.status()
                 data = {"cells": status["cells"], "registry": status["registry"]}

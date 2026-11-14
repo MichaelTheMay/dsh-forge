@@ -1,0 +1,20 @@
+{
+ "commit": "3c28a8e8457bff4e7418aff2e6a397c8cdd5916b",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "python3603/dsh-weather-panel",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "A polished weather sidebar with China-specific alerts, typhoon paths and radar that needs no API key and no host permissions.",
+ "source": "claude-session",
+ "summary": "Client-only sidebar weather panel: IP geolocation, Open-Meteo forecasts, NMC alerts, typhoon tracks, radar and satellite imagery, all fetched directly from the browser; host half is an empty apply.",
+ "verdict": "solid"
+}

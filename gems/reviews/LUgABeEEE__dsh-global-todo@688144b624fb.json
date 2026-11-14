@@ -1,0 +1,20 @@
+{
+ "commit": "688144b624fbee954ed94a20b20289c76dab4941",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "LUgABeEEE/dsh-global-todo",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 5,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "An agent can never close its own todo: it waits in Needs review for you, in a phone-friendly panel with one shared JSON file you can read and diff.",
+ "source": "claude-session",
+ "summary": "Cross-session todo list stored in one JSON file that both person and agent write; agent done lands in Needs review until a person confirms. Panel, 11 agent tools, dispatch to sessions, reminders, two-machine sync folder.",
+ "verdict": "solid"
+}

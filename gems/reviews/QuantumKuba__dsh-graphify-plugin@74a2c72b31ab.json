@@ -1,0 +1,20 @@
+{
+ "commit": "74a2c72b31abef95adf7afa53ec45d7dcb0ba47e",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "QuantumKuba/dsh-graphify-plugin",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Gives the agent a graph-backed map of the repo with stale-graph detection, including a compact tool mode for small local models.",
+ "source": "claude-session",
+ "summary": "Connects the external Graphify code knowledge graph to DSH over MCP: tools for symbol and dependency queries, a freshness check that can run incremental updates, a /graphify command and a status tool.",
+ "verdict": "solid"
+}

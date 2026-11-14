@@ -1,0 +1,20 @@
+{
+ "commit": "6d81141a73b2da014b8eefd2d543d30c734241a3",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "fan56/dsh-subagent-registry",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Write an agent as a markdown file with a model and persona, and the main model can delegate to it, resume it after an interruption, and follow up.",
+ "source": "claude-session",
+ "summary": "Turns markdown files in ~/.dsh/agents into callable subagents via use_agent and ask_agent tools, with resume of interrupted runs, background dispatch, a /registry-config command, and an opt-in codemode toolchain.",
+ "verdict": "solid"
+}

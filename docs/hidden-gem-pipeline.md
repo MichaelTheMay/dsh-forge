@@ -6,9 +6,15 @@ policy selects at most 250 entries for the research queue and the website's
 **Discover** page. Being in that queue is not a security verdict or an install
 authorization.
 
-No language model ranks or explains a pick. Every number below is computed from
-public GitHub facts, and every sentence a reader sees is generated from those
-numbers.
+Discovery has two stages. **Stage 1** (this document, `dsh_forge/discovery.py`)
+scores every project from public GitHub facts without opening a repository; no
+language model is involved in it. **Stage 2** (the separate [`gems/`](../gems/README.md)
+package) fetches the top stage-1 candidates for reading only, measures what is
+inside, joins any saved code-review verdicts, and writes `gem-picks.json`.
+`scripts/apply_gem_picks.py` folds those picks back into the queue described
+here, so every reader sees the improved order with no change to the file
+contracts. Review verdicts may be written by a person or a model; the interface
+says which picks were read and which were only measured.
 
 ## Pipeline
 
@@ -18,6 +24,7 @@ numbers.
 | Gather evidence | Promising repositories, one GraphQL query per 25 | Tests, CI, README size, docs, releases, commit activity, merged PRs, contributors, recent stargazers | No |
 | Analyze fork leads | Top metadata leads | Exact head/base commits, bounded changed paths, static compatibility and risk signals | No |
 | Rank | Evidence, repository, and source-diff metadata | Score, plain-language reasons, gaps, global rank, curated packs | No |
+| Read (stage 2) | The top plugin candidates, fetched at their exact commit | Measurements of the code, review verdicts, `gem-picks.json`, a re-ranked queue | No (read only) |
 | Propose | Curator-selected queue entries | Exact npm SRI pins and a draft package manifest | No |
 | Certify | Four explicit reviews plus an Ed25519 key | Signed local recipe and certification receipt | No |
 | Install | Signed recipe plus a saved DSH version | Quarantine, archive inspection, networkless sandbox test, atomic promotion | Yes, only inside Apptainer |
@@ -37,7 +44,7 @@ that is **built like projects that get noticed, but hasn't been noticed yet**.
    identities are reduced to two numbers before publication: endorsements
    (stars from upstream Harness contributors or authors of plugins with 50+
    stars) and stars in the last 30 days. If evidence would push the published
-   registry past 60 MB, the least promising records lose theirs first.
+   registry past 120 MB, the least promising records lose theirs first.
 2. **How well it's built.** An equal-weight craft index over the same
    creator-controlled practices (tests, CI, README depth, docs, changelog,
    releases, license, commit volume, recent commits, freshness), so a good

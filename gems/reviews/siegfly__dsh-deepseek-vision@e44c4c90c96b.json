@@ -1,0 +1,20 @@
+{
+ "commit": "e44c4c90c96b2c2e85828e96db8c7e9b222b2f67",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "siegfly/dsh-deepseek-vision",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Paste a screenshot to a text-only DeepSeek model and have it described transparently, with per-image caching so retries are not billed twice.",
+ "source": "claude-session",
+ "summary": "Registers a DeepSeek provider route that claims image input; images pasted or returned by tools are described by a configurable vision-language model (Qwen-VL by default) before the text-only wire.",
+ "verdict": "solid"
+}

@@ -418,6 +418,8 @@ class ScannerAndRunner(LauncherFixture):
             self.assertNotIn("token=test-capability", rendered_logs)
             self.assertIn("authenticated URL redacted", rendered_logs)
             self.launcher.stop(cell["id"])
+            with self.assertRaisesRegex(serve.LauncherError, "not running"):
+                self.launcher.open_url(cell["id"])
 
     def test_host_home_and_existing_workspace_are_rejected(self):
         with self.assertRaisesRegex(serve.LauncherError, "host DSH home is never mounted"):
@@ -638,6 +640,34 @@ class LauncherServer(LauncherFixture):
         self.assertTrue(updated["launch"]["open_browser"])
         self.assertEqual(updated["launch"]["resources"]["gpu"], "allocated")
 
+    def test_recommendation_endpoints_ask_first_and_need_a_session(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(self.url + "/api/v1/recommendations", timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        cookie, _status = self.establish_session()
+        request = urllib.request.Request(self.url + "/api/v1/recommendations", headers={"Cookie": cookie})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            payload = json.load(response)
+        self.assertEqual((payload["consent"], payload["state"], payload["items"]), ("unasked", "off", []))
+
+        with self.request("/api/v1/recommendations/consent", {"enabled": True}, cookie) as response:
+            self.assertEqual(json.load(response)["consent"], "on")
+        self.launcher.recommendations.wait()
+        with self.request("/api/v1/recommendations/consent", {"enabled": False}, cookie) as response:
+            self.assertEqual(json.load(response)["consent"], "off")
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request("/api/v1/recommendations/consent", {"enabled": "yes"}, cookie)
+        self.assertEqual(caught.exception.code, 400)
+        # Another site cannot switch history reading on.
+        foreign = urllib.request.Request(
+            self.url + "/api/v1/recommendations/consent", data=json.dumps({"enabled": True}).encode(), method="POST",
+            headers={"Content-Type": "application/json", "Cookie": cookie, "Origin": "https://elsewhere.example"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(foreign, timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        self.assertEqual(self.launcher.recommendations.consent(), "off")
+
     def test_configuration_endpoints_save_and_run_without_accepting_paths(self):
         cookie, _ = self.establish_session()
         with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
@@ -656,6 +686,49 @@ class LauncherServer(LauncherFixture):
                 started = json.load(response)
         self.assertEqual(started["id"], "cell_web")
         self.assertNotIn("path", launch.call_args.args[0])
+
+    def test_comparison_endpoints_start_show_and_choose(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        identities = []
+        for name in ("One", "Two"):
+            with self.request(
+                "/api/v1/configurations", {"name": name, "version_id": saved_id, "launch": {"profile": "web"}}, cookie=cookie,
+            ) as response:
+                identities.append(json.load(response)["id"])
+        launched = iter(["cell_aaaaaaaaaa", "cell_bbbbbbbbbb"])
+        with mock.patch.object(self.launcher, "launch", side_effect=lambda raw: {"id": next(launched)}) as launch:
+            with self.request(
+                "/api/v1/comparisons", {"configuration_ids": identities, "task": "compare this"}, cookie=cookie,
+            ) as response:
+                self.assertEqual(response.status, 201)
+                started = json.load(response)
+        # Each run is headless with the task, and no path or command came from the request.
+        for call in launch.call_args_list:
+            self.assertEqual((call.args[0]["surface"], call.args[0]["task"]), ("headless", "compare this"))
+            self.assertNotIn("path", call.args[0])
+        self.assertEqual([run["cell_id"] for run in started["runs"]], ["cell_aaaaaaaaaa", "cell_bbbbbbbbbb"])
+        request = urllib.request.Request(self.url + "/api/v1/comparisons/" + started["id"], headers={"Cookie": cookie})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(json.load(response)["task"], "compare this")
+        with self.request(
+            "/api/v1/comparisons/" + started["id"] + "/choose", {"cell_id": "cell_bbbbbbbbbb"}, cookie=cookie,
+        ) as response:
+            self.assertEqual(json.load(response)["chosen_cell_id"], "cell_bbbbbbbbbb")
+        for path, body in [
+            ("/api/v1/comparisons", {"configuration_ids": identities[:1], "task": "x"}),
+            ("/api/v1/comparisons/" + started["id"] + "/choose", {"cell_id": "cell_cccccccccc"}),
+        ]:
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request(path, body, cookie=cookie)
+            self.assertEqual(caught.exception.code, 400)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(self.url + "/api/v1/comparisons/" + started["id"], timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        status = urllib.request.Request(self.url + "/api/v1/status", headers={"Cookie": cookie})
+        with urllib.request.urlopen(status, timeout=3) as response:
+            self.assertEqual(json.load(response)["comparisons"][0]["id"], started["id"])
 
     def test_assistant_endpoint_passes_only_saved_version_identity(self):
         cookie, _ = self.establish_session()

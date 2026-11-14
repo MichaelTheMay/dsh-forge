@@ -76,6 +76,525 @@ test('assistant iframe is inert in source and accepts only an explicit loopback 
   }
 });
 
+test('cell open URLs require the requested cell and exact loopback port', () => {
+  const c = instance();
+  const cell = { id: 'cell_safe', port: 3200 };
+  assert.equal(
+    c.validatedCellOpenUrl({ cell_id: cell.id, url: 'http://127.0.0.1:3200/?token=secret' }, cell),
+    'http://127.0.0.1:3200/?token=secret'
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: 'cell_other', url: 'http://127.0.0.1:3200/' }, cell),
+    /cell identity/
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: cell.id, url: 'https://example.com:3200/' }, cell),
+    /loopback HTTP/
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: cell.id, url: 'http://127.0.0.1:9999/' }, cell),
+    /cell port/
+  );
+});
+
+test('a blocked new tab is reported instead of claimed as opened', async () => {
+  const c = instance();
+  const messages = [];
+  c.flash = message => messages.push(message);
+  let asked = false;
+  c.api = async () => { asked = true; return { cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/' }; };
+  const previousOpen = windowStub.open;
+  // What a real browser returns when it blocks the pop-up.
+  windowStub.open = () => null;
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), false);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.equal(asked, false);
+  assert.match(messages[0], /blocked the new tab/);
+});
+
+test('a reserved tab is cut off from this page and receives the session address', async () => {
+  const c = instance();
+  const replaced = [];
+  const tab = { opener: {}, location: { replace: url => replaced.push(url) }, close() {} };
+  const previousOpen = windowStub.open;
+  const calls = [];
+  windowStub.open = (...args) => { calls.push(args); return tab; };
+  c.api = async () => ({ cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/?token=t' });
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), true);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.deepEqual(calls, [['about:blank', '_blank']]);
+  assert.equal(tab.opener, null);
+  assert.deepEqual(replaced, ['http://127.0.0.1:3200/?token=t']);
+});
+
+test('Open now disappears once its session has stopped or gone', () => {
+  const c = instance();
+  const status = cells => ({ trees: [], cells, saved_versions: [], configurations: [], package_installations: [] });
+  const opened = { artifactId: 'github:1', cell: { id: 'cell_a', port: 3200 } };
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'alive', agent_state: 'idle' }]));
+  assert.equal(c.state.artifactOpenCell, opened);
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'exited', agent_state: 'exited' }]));
+  assert.equal(c.state.artifactOpenCell, null);
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([]));
+  assert.equal(c.state.artifactOpenCell, null);
+});
+
+// ---- Sessions as tabs ----
+function embedded() {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  c.canEmbedCells = () => true;
+  stored.delete('dsh-forge.instance-tabs');
+  return c;
+}
+const liveCell = (id, port) => ({ id, port, name: 'Session ' + id, version: 'unknown', process: 'alive', agent_state: 'idle' });
+const statusWith = cells => ({ trees: [], cells, saved_versions: [], configurations: [], package_installations: [] });
+
+test('inside the app a session opens as a tab, never a pop-up', async () => {
+  const c = embedded();
+  const previousOpen = windowStub.open;
+  let popups = 0;
+  windowStub.open = () => { popups += 1; return null; };
+  c.api = async url => ({ cell_id: 'cell_a', url: 'http://127.0.0.1:3200/?token=t' });
+  try {
+    assert.equal(c.reserveOpenWindow(), null);
+    assert.equal(await c.openCell(liveCell('cell_a', 3200)), true);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.equal(popups, 0);
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell_a');
+  const values = c.renderVals();
+  assert.equal(values.hasInstanceTabs, true);
+  assert.deepEqual(values.instanceTabs.map(tab => [tab.title, tab.className, tab.current]), [['Session cell_a · 3200', 'tab itab tab-on', 'page']]);
+  assert.deepEqual(values.instanceSlots.map(slot => [slot.ready, slot.url, slot.className]), [[true, 'http://127.0.0.1:3200/?token=t', 'instance-pane']]);
+  assert.equal(values.instanceDeckClass, 'instance-deck');
+  // Opening it again selects the tab instead of adding another.
+  c.setState({ view: 'launch' });
+  assert.equal(c.renderVals().instanceDeckClass, 'instance-deck deck-parked');
+  assert.equal(await c.openCell(liveCell('cell_a', 3200)), true);
+  assert.equal(c.state.instanceTabs.length, 1);
+  assert.equal(c.state.view, 'instance');
+});
+
+test('a tab never frames an address that is not its own session', async () => {
+  const c = embedded();
+  for (const payload of [
+    { cell_id: 'cell_other', url: 'http://127.0.0.1:3200/' },
+    { cell_id: 'cell_a', url: 'http://127.0.0.1:9999/' },
+    { cell_id: 'cell_a', url: 'https://example.com:3200/' }
+  ]) {
+    c.setState({ instanceTabs: [], activeInstanceId: null });
+    c.api = async () => payload;
+    assert.equal(await c.openCell(liveCell('cell_a', 3200)), false);
+    const slot = c.renderVals().instanceSlots[0];
+    assert.equal(slot.url, '');
+    assert.equal(slot.ready, false);
+    assert.equal(slot.canRetry, true);
+    assert.ok(slot.waitingLabel.length > 0);
+  }
+  assert.equal(c.loopbackHref('http://127.0.0.1:3200/x'), 'http://127.0.0.1:3200/x');
+  for (const bad of ['https://127.0.0.1:3200/', 'http://example.com:3200/', 'http://127.0.0.1/', 'javascript:alert(1)', '', null]) {
+    assert.equal(c.loopbackHref(bad), '');
+  }
+});
+
+test('frames only ever receive loopback addresses', () => {
+  const c = embedded();
+  const frame = (url, src = '') => ({ dataset: { instanceUrl: url }, src, removed: false, removeAttribute() { this.removed = true; this.src = ''; } });
+  const good = frame('http://127.0.0.1:3200/?token=t');
+  const same = frame('http://127.0.0.1:3201/', 'http://127.0.0.1:3201/');
+  const bad = frame('https://evil.example/', 'http://127.0.0.1:3202/');
+  let sets = 0;
+  Object.defineProperty(same, 'src', { get: () => 'http://127.0.0.1:3201/', set: () => { sets += 1; } });
+  global.document = { querySelectorAll: () => [good, same, bad], querySelector: () => null };
+  try {
+    c.syncInstanceFrames();
+  } finally {
+    delete global.document;
+  }
+  assert.equal(good.src, 'http://127.0.0.1:3200/?token=t');
+  // An unchanged frame is left alone, so a running session is not reloaded.
+  assert.equal(sets, 0);
+  assert.equal(bad.removed, true);
+});
+
+test('closing a tab leaves the other sessions in place', async () => {
+  const c = embedded();
+  for (const [id, port] of [['a', 3201], ['b', 3202], ['c', 3203]]) {
+    c.api = async () => ({ cell_id: id, url: 'http://127.0.0.1:' + port + '/' });
+    await c.openCell(liveCell(id, port));
+  }
+  assert.equal(c.state.activeInstanceId, 'c');
+  c.closeInstanceTab('b');
+  let values = c.renderVals();
+  // The middle slot is emptied, not removed: session c keeps the third position.
+  assert.deepEqual(values.instanceSlots.map(slot => [slot.id, slot.open]), [['a', true], ['b', false], ['c', true]]);
+  assert.deepEqual(values.instanceTabs.map(tab => tab.id), ['a', 'c']);
+  assert.equal(c.state.activeInstanceId, 'c');
+  c.closeInstanceTab('c');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['a']);
+  assert.equal(c.state.activeInstanceId, 'a');
+  assert.equal(c.state.view, 'instance');
+  c.closeInstanceTab('a');
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('a tab closes itself when its session stops', async () => {
+  const c = embedded();
+  c.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/' });
+  await c.openCell(liveCell('a', 3201));
+  c.applyStatus(statusWith([liveCell('a', 3201)]));
+  assert.equal(c.renderVals().hasInstanceTabs, true);
+  c.applyStatus(statusWith([{ ...liveCell('a', 3201), process: 'exited', agent_state: 'exited' }]));
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('open tabs are remembered by id only and reconnect to live sessions', async () => {
+  const c = embedded();
+  c.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/?token=secret' });
+  await c.openCell(liveCell('a', 3201));
+  const saved = stored.get('dsh-forge.instance-tabs');
+  assert.deepEqual(JSON.parse(saved), [{ id: 'a', title: 'Session a · 3201' }]);
+  assert(!saved.includes('secret'));
+
+  // A fresh window: the saved tab comes back for a live session and not for a gone one.
+  stored.set('dsh-forge.instance-tabs', JSON.stringify([{ id: 'a', title: 'Session a' }, { id: 'gone', title: 'Old' }, { nope: 1 }]));
+  const next = instance();
+  next.state.sidecarConnected = true;
+  next.canEmbedCells = () => true;
+  next.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/?token=fresh' });
+  next.applyStatus(statusWith([liveCell('a', 3201)]));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(next.state.instanceTabs.map(tab => [tab.id, tab.url]), [['a', 'http://127.0.0.1:3201/?token=fresh']]);
+  // Restored tabs wait in the background; the user stays where they were.
+  assert.notEqual(next.state.view, 'instance');
+  stored.delete('dsh-forge.instance-tabs');
+});
+
+test('a tab is named for what was launched', () => {
+  const c = embedded();
+  assert.equal(c.instanceTabTitle({ purpose: 'local-profile', profile: 'web', name: 'bin-web-3100', port: 3100 }), 'web profile · 3100');
+  assert.equal(c.instanceTabTitle({ version: '0.1.1-rc.2', name: 'x', port: 3101 }), '0.1.1-rc.2 · 3101');
+  assert.equal(c.instanceTabTitle({ version: 'unknown', name: 'my-fork' }), 'my-fork');
+  assert.equal(c.instanceTabTitle({}), 'Session');
+});
+
+test('the tab markup keeps frames mounted, sandboxed and referrer-free', () => {
+  assert.match(html, /<iframe data-instance-url="\{\{ p\.url \}\}"[^>]*referrerpolicy="no-referrer"[^>]*sandbox="[^"]*allow-scripts[^"]*"/);
+  assert(!/sandbox="[^"]*allow-top-navigation/.test(html));
+  assert.match(html, /sc-for list="\{\{ instanceSlots \}\}"/);
+  assert.match(html, /\.pane-hidden \{ visibility: hidden/);
+});
+
+// ---- Recommended for you ----
+function localApp() {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  return c;
+}
+const recommendation = (id, name, capability = 'testing') => ({
+  artifact: {
+    artifact_id: id, artifact_type: 'plugin', full_name: 'owner/' + name, owner: 'owner', name,
+    description: 'Does ' + name, github_stars: 2, topics: [], license: { spdx: 'MIT' }, package: { name }
+  },
+  capability,
+  evidence: 'You ran tests 18 times across 4 sessions.'
+});
+
+test('suggestions are asked for first, and only inside the local app', () => {
+  const offline = instance();
+  assert.equal(offline.renderVals().showRecsBlock, false);
+  const c = localApp();
+  let values = c.renderVals();
+  assert.equal(values.showRecsBlock, true);
+  assert.equal(values.recsAsk, true);
+  assert.equal(values.recsOn, false);
+  assert.equal(values.hasRecs, false);
+  assert.match(html, /Nothing leaves this computer, and it keeps only counts, never what you typed\./);
+  return onWebsite(() => {
+    const site = instance();
+    site.state.sidecarConnected = true;
+    assert.equal(site.renderVals().showRecsBlock, false);
+  });
+});
+
+test('saying yes turns suggestions on and shows them with their evidence', async () => {
+  const c = localApp();
+  const calls = [];
+  c.api = async (url, options) => {
+    calls.push([url, options && options.body]);
+    return { consent: 'on', state: 'ready', sessions: 12, reason: '', items: [recommendation('github:1', 'dsh-test-runner'), { bad: true }] };
+  };
+  await c.renderVals().recsYes();
+  assert.deepEqual(calls, [['/api/v1/recommendations/consent', '{"enabled":true}']]);
+  const values = c.renderVals();
+  assert.equal(values.recsAsk, false);
+  assert.equal(values.recsOn, true);
+  assert.equal(values.recsNote, 'From 12 sessions on this computer. Nothing is uploaded.');
+  assert.deepEqual(values.recItems.map(item => [item.name, item.capability, item.evidence]),
+    [['dsh-test-runner', 'testing', 'You ran tests 18 times across 4 sessions.']]);
+  // A suggestion opens that plugin's page.
+  values.recItems[0].select();
+  assert.equal(c.state.artifactId, 'github:1');
+  assert.equal(c.state.detailOpen, true);
+});
+
+test('saying no hides suggestions for good, and turning them off deletes them', async () => {
+  const c = localApp();
+  c.api = async () => ({ consent: 'off', state: 'off', items: [], sessions: 0 });
+  await c.renderVals().recsNo();
+  const values = c.renderVals();
+  assert.equal(values.showRecsBlock, false);
+  assert.equal(c.state.recommendations.items.length, 0);
+  assert.match(c.lastMessage, /off and their data is deleted/);
+});
+
+test('suggestions explain themselves while reading, when empty, and when unavailable', () => {
+  const c = localApp();
+  c.applyRecommendations({ consent: 'on', state: 'scanning', sessions: 3, items: [] });
+  let values = c.renderVals();
+  assert.equal(values.recsNote, 'Reading your recent sessions…');
+  assert.equal(values.recsEmpty, false);
+  c.applyRecommendations({ consent: 'on', state: 'ready', sessions: 1, items: [] });
+  values = c.renderVals();
+  assert.equal(values.recsNote, 'From 1 session on this computer. Nothing is uploaded.');
+  assert.equal(values.recsEmpty, true);
+  assert.match(values.recsEmptyText, /Nothing to suggest yet/);
+  c.applyRecommendations({ consent: 'on', state: 'unavailable', reason: 'Install the zstd tool.', items: [] });
+  values = c.renderVals();
+  assert.equal(values.recsEmptyText, 'Install the zstd tool.');
+  // A payload this page does not understand is treated as "not asked yet".
+  c.applyRecommendations({ consent: 'maybe', items: 'nope' });
+  assert.equal(c.state.recommendations.consent, 'unasked');
+});
+
+test('suggestions are refreshed sparingly, faster while still reading', async () => {
+  const c = localApp();
+  let calls = 0;
+  c.api = async () => { calls += 1; return { consent: 'on', state: calls === 1 ? 'scanning' : 'ready', sessions: 1, items: [] }; };
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    await c.loadRecommendations();
+    await c.loadRecommendations();
+    assert.equal(calls, 1);
+    now += 3000; // still reading: checked again after a few seconds
+    await c.loadRecommendations();
+    assert.equal(calls, 2);
+    now += 3000; // finished: not asked again so soon
+    await c.loadRecommendations();
+    assert.equal(calls, 2);
+    now += 30000;
+    await c.loadRecommendations();
+    assert.equal(calls, 3);
+    c.setState({ sidecarConnected: false });
+    await c.loadRecommendations(true);
+    assert.equal(calls, 3);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a plugin page leads with what the code reviewer found', () => {
+  const c = instance();
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  const open = hiddenGem => {
+    c.setState({ view: 'catalog', catalogType: 'plugin', detailOpen: true, artifactId: plugin.id, detailArtifact: { ...plugin, hiddenGem } });
+    return c.renderVals();
+  };
+  const report = { policy: 'p', candidate: true, score: 90, rank: 1, reasons: ['Worth a look.', '900 lines of its own code'] };
+  let values = open({ ...report, gem: { confidence: 'reviewed', verdict: 'gem', summary: 'Keeps a searchable memory.', reasons: [], rank: 1, score: 91 } });
+  assert.equal(values.hasGemSummary, true);
+  assert.equal(values.gemSummary, 'Keeps a searchable memory.');
+  assert.equal(values.gemReadLabel, 'We read the code');
+  assert.deepEqual(values.whyGemReasons, ['Worth a look.', '900 lines of its own code']);
+  // The install caution no longer claims the code was not looked at.
+  assert(values.detailCautions.some(note => /read this project’s code, but nothing was run/.test(note)));
+  assert(!values.detailCautions.some(note => /not their code/.test(note)));
+  values = open({ ...report, gem: { confidence: 'reviewed at an earlier version', summary: 'Older read.' } });
+  assert.equal(values.gemReadLabel, 'We read an earlier version of the code');
+  assert.equal(values.hasGemSummary, true);
+  // Measured only: no reviewer text is shown, and the label says so.
+  values = open({ ...report, gem: { confidence: 'measured', verdict: null, summary: 'Catalog text', reasons: [] } });
+  assert.equal(values.hasGemSummary, false);
+  assert.equal(values.gemReadLabel, 'Measured from the code, not yet read');
+  assert(values.detailCautions.some(note => /not their code/.test(note)));
+  // No gem block at all: nothing new appears.
+  values = open(report);
+  assert.equal(values.hasGemReadLabel, false);
+  assert.equal(values.hasGemSummary, false);
+  values = open({ ...report, gem: 'nonsense' });
+  assert.equal(values.hasGemReadLabel, false);
+});
+
+test('Discover shows what is new and the best plugin for each job', async () => {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  c.state.catalogStore = { available: true };
+  const record = (id, name, extra = {}) => ({
+    artifact_id: id, artifact_type: 'plugin', full_name: 'owner/' + name, owner: 'owner', name,
+    description: 'Does ' + name, github_stars: 2, topics: [], license: { spdx: 'MIT' }, package: { name },
+    pushed_at: new Date(Date.now() - 2 * 86400000).toISOString(), ...extra
+  });
+  c.api = async () => ({
+    gems: { plugins: [], forks: [] }, packs: [], policy: 'p',
+    shelves: {
+      new: [record('github:1', 'fresh-one')], new_window_days: 7,
+      best: [
+        { capability: 'memory', artifact: record('github:2', 'dsh-memory', { hidden_gem: { policy: 'p', candidate: true, rank: 1, reasons: ['Recalls last week.'] } }) },
+        { capability: 'testing' }
+      ]
+    }
+  });
+  c.loadMostLiked = () => {};
+  await c.loadDiscover();
+  let values = c.renderVals();
+  assert.equal(values.hasNewShelf, true);
+  assert.equal(values.newShelfTitle, 'New this week');
+  assert.deepEqual(values.newShelf.map(item => [item.name, item.label]), [['fresh-one', 'Updated 2 days ago']]);
+  assert.deepEqual(values.bestShelf.map(item => [item.name, item.label, item.reason]), [['dsh-memory', 'Best for memory', 'Recalls last week.']]);
+  values.bestShelf[0].select();
+  assert.equal(c.state.artifactId, 'github:2');
+  // A month-wide window is named honestly, and missing shelves show nothing.
+  c.setState({ discover: { ...c.state.discover, shelves: { new: c.state.discover.shelves.new, newWindowDays: 30, best: [] } } });
+  values = c.renderVals();
+  assert.equal(values.newShelfTitle, 'New this month');
+  assert.equal(values.hasBestShelf, false);
+  c.setState({ discover: { plugins: [], forks: [], packs: [] } });
+  values = c.renderVals();
+  assert.equal(values.hasNewShelf, false);
+  assert.match(html, /Best in each category/);
+});
+
+// ---- Comparisons ----
+function compareApp() {
+  const c = embedded();
+  const configuration = (id, name, runnable = true) => ({
+    id, name, version_id: 'v', status: 'ready', selections: [], runtime: { runnable, reason: runnable ? 'Ready' : 'Needs setup' }
+  });
+  c.applyStatus({
+    ...statusWith([]),
+    configurations: [configuration('config_a', 'Fast'), configuration('config_b', 'Careful'), configuration('config_c', 'Broken', false)],
+    comparisons: [{ id: 'cmp_0000000000000001', task: 'older task', runs: 2, chosen: true }]
+  });
+  return c;
+}
+const comparisonView = (done, chosen = null) => ({
+  id: 'cmp_00000000000000aa', task: 'Summarise the repository in three bullet points', done, chosen_cell_id: chosen,
+  runs: [
+    { name: 'Fast', cell_id: 'cell_aaaaaaaaaa', state: done ? 'finished' : 'running', output: done ? ['one', 'two'] : [], error: '', chosen: chosen === 'cell_aaaaaaaaaa' },
+    { name: 'Careful', cell_id: null, state: 'failed', output: [], error: 'No free port', chosen: false }
+  ]
+});
+
+test('comparing needs a task and at least two ready configurations', () => {
+  const c = compareApp();
+  let values = c.renderVals();
+  assert.equal(values.showCompare, true);
+  assert.deepEqual(values.compareOptions.map(option => [option.name, option.disabled, option.note]),
+    [['Fast', false, ''], ['Careful', false, ''], ['Broken', true, 'Not ready to run']]);
+  assert.equal(values.compareDisabled, true);
+  assert.equal(values.compareLabel, 'Choose at least two');
+  values.compareOptions[0].toggle();
+  c.renderVals().compareOptions[1].toggle();
+  values = c.renderVals();
+  assert.equal(values.compareDisabled, true); // still no task
+  values.setCompareTask({ target: { value: '  compare this  ' } });
+  values = c.renderVals();
+  assert.equal(values.compareDisabled, false);
+  assert.equal(values.compareLabel, 'Run on 2 configurations');
+  // Unticking drops back below two.
+  values.compareOptions[0].toggle();
+  assert.equal(c.renderVals().compareDisabled, true);
+  // With fewer than two saved configurations the section is not shown at all.
+  const empty = embedded();
+  assert.equal(empty.renderVals().showCompare, false);
+  assert.deepEqual(values.recentComparisons.map(item => [item.task, item.meta]), [['older task', '2 runs · picked']]);
+});
+
+test('a comparison opens as a tab with one column per configuration', async () => {
+  const c = compareApp();
+  c.setState({ compareSelected: ['config_a', 'config_b'], compareTask: 'Summarise the repository in three bullet points' });
+  const calls = [];
+  c.refreshStatus = async () => {};
+  c.api = async (url, options) => {
+    calls.push([url, options && options.body]);
+    return comparisonView(false);
+  };
+  await c.renderVals().startComparison();
+  assert.deepEqual(calls[0], ['/api/v1/comparisons', JSON.stringify({ configuration_ids: ['config_a', 'config_b'], task: 'Summarise the repository in three bullet points' })]);
+  assert.equal(c.state.view, 'instance');
+  let values = c.renderVals();
+  assert.deepEqual(values.instanceTabs.map(tab => tab.title), ['Compare · Summarise the repository in…']);
+  let pane = values.instanceSlots[0];
+  assert.equal(pane.isCompare, true);
+  assert.equal(pane.isSession, false);
+  assert.deepEqual(pane.runs.map(run => [run.name, run.stateLabel, run.output, run.canPick]), [
+    ['Fast', 'Running…', 'Waiting for output…', true],
+    ['Careful', 'Did not start', 'No free port', false]
+  ]);
+
+  // The status poll refreshes an unfinished comparison, then leaves a finished one alone.
+  c.api = async url => { calls.push([url]); return comparisonView(true); };
+  await c.refreshComparisons();
+  pane = c.renderVals().instanceSlots[0];
+  assert.equal(pane.runs[0].output, 'one\ntwo');
+  assert.match(pane.summary, /All runs have finished/);
+  const before = calls.length;
+  await c.refreshComparisons();
+  assert.equal(calls.length, before);
+
+  // Picking marks that run and removes its button.
+  c.api = async (url, options) => { calls.push([url, options.body]); return comparisonView(true, 'cell_aaaaaaaaaa'); };
+  await pane.runs[0].pick();
+  assert.deepEqual(calls.at(-1), ['/api/v1/comparisons/cmp_00000000000000aa/choose', '{"cell_id":"cell_aaaaaaaaaa"}']);
+  pane = c.renderVals().instanceSlots[0];
+  assert.deepEqual([pane.runs[0].picked, pane.runs[0].canPick, pane.runs[0].className], [true, false, 'compare-col compare-picked']);
+});
+
+test('a comparison tab survives status updates and is not remembered as a session', async () => {
+  const c = compareApp();
+  c.openComparison(comparisonView(true));
+  // No live session has this id, but a comparison tab is not a session tab.
+  c.applyStatus(statusWith([]));
+  assert.equal(c.renderVals().instanceTabs.length, 1);
+  assert.equal(stored.get('dsh-forge.instance-tabs') || '[]', '[]');
+  // Reopening the same comparison does not add a second tab.
+  c.openComparison(comparisonView(true));
+  assert.equal(c.state.instanceTabs.length, 1);
+  c.closeInstanceTab('cmp_00000000000000aa');
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  // Output is plain text in a pre block, never markup.
+  assert.match(html, /<pre class="compare-output">\{\{ r\.output \}\}<\/pre>/);
+});
+
+test('when nothing can run yet, the Local page says how to finish setup', () => {
+  const c = instance();
+  assert.equal(c.renderVals().showContainerSetup, false); // not connected: nothing to set up from here
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: false, reason: 'internal detail' } });
+  let values = c.renderVals();
+  assert.equal(values.showContainerSetup, true);
+  assert.equal(values.containerSetupCommand, './scripts/install.sh');
+  assert.match(html, /One more step before you can run things/);
+  // The explanation is in plain words and does not leak the internal reason.
+  assert(!/internal detail/.test(JSON.stringify([values.sandboxReason, values.sandboxTitle])));
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: true } });
+  assert.equal(c.renderVals().showContainerSetup, false);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -118,7 +637,7 @@ test('launcher remains default and Community opens individual plugins and forks'
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
   assert.equal(c.renderVals().sidecarLabel, 'Offline preview');
-  assert.match(c.renderVals().emptyVersionsText, /No sample process is presented as real/);
+  assert.match(c.renderVals().emptyVersionsText, /This is a preview\. Open the DSH Forge app/);
   c.renderVals().goPlugins(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'plugins');
   assert.equal(c.renderVals().pluginsTabCurrent, 'page');
@@ -146,10 +665,13 @@ test('public root presents the product site and routes into the working applicat
     assert.equal(landing.showAppShell, false);
     assert.match(html, /Every plugin\. <span>Every fork\. One launcher\.<\/span>/);
     assert.doesNotMatch(html, /Apple silicon and Intel|macOS releases/);
-    assert.match(html, /Windows 10 and 11/);
     assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
     await landing.landingCopyInstall();
-    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog');
+    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh');
+    // The site only offers what exists: a Linux install, and other systems marked as later.
+    assert.match(html, /Install on Linux/);
+    assert.match(html, /Windows and macOS<\/span><h3>Coming later/);
+    assert(!/Download for Windows/.test(html));
     // The hero leads to the Discover page, not to a launcher preview.
     assert(!('landingOpenLauncher' in landing));
     landing.landingCommunity();
@@ -202,7 +724,7 @@ test('portable preview shows no versions or cells that are not locally detected'
   assert(values.noVersions);
   assert.equal(values.versionGroups.length, 0);
   assert.equal(values.hasLocalRows, false);
-  assert.equal(values.sandboxTitle, 'Isolation setup required');
+  assert.equal(values.sandboxTitle, 'Isolated container needs setup');
   assert(!/Fail-closed cell fleet/.test(html));
   assert(!/quota unenforced/.test(html));
 });
@@ -368,14 +890,6 @@ test('license filter is based on reported metadata, not a verification claim', (
   assert(c.renderVals().results.every(r => r.licenseOk));
   assert(CATALOG.every(r => r.verification.security_verified === false));
 });
-test('copy pinned ref actually writes the captured commit URL', async () => {
-  const c = instance(); const plugin = snapshot.supplemental_entries[0];
-  c.renderVals().goPlugins();
-  c.renderVals().results.find(r => r.id === plugin.artifact_id).select();
-  await c.renderVals().copyRef();
-  assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
-  assert.equal(c.lastMessage, 'Copied repository reference');
-});
 test('catalog interactions cannot add, stop, or modify local cells', () => {
   const c = instance(); const before = JSON.stringify(c.state.cells);
   c.renderVals().goPlugins(); c.renderVals().results[5].select();
@@ -433,7 +947,7 @@ test('installed-profile rail one-clicks web and headless and copies the rest', a
       argv: ['/usr/bin/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '3100', '--no-open'],
       command: "DSH_HOME=~/.dsh /usr/bin/dsh --profile web", cwd: '~/dsh-forge', home: '~/.dsh',
       environment_keys: ['PATH'], credential_keys: [],
-      notes: ['This is an existing local profile, so it runs directly on the host rather than inside Apptainer.']
+      notes: ['This is one of your own setups, so it runs directly on this computer rather than in the isolated container.']
     };
   };
   await values.localProfiles[0].run();
@@ -463,11 +977,11 @@ test('plugin detail never exposes a host install command', () => {
   assert.equal(values.isPluginDetail, true);
   assert(!Object.keys(values).some(key => /InstallCommand|Download(?:Url|Command)/.test(key)));
   assert.equal(values.installAndRunDisabled, true);
-  assert.equal(values.installAndRunLabel, 'Sandbox recipe required');
+  assert.equal(values.installAndRunLabel, 'Can’t be installed from here yet');
   assert(!/Copy exact-version install command/.test(html));
 });
 
-test('eligible plugin requires a large risk confirmation before the stable-ID install-run request', async () => {
+test('eligible plugin requires confirmation, stays on its detail page, and opens the verified cell', async () => {
   const c = instance();
   const saved = {
     id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
@@ -480,40 +994,62 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
   });
   const plugin = CATALOG.find(item => item.type === 'plugin');
   c.setState({
+    view: 'catalog',
+    catalogType: 'plugin',
     detailOpen: true,
     artifactId: plugin.id,
     detailArtifact: {
       ...plugin,
       execution: {
         eligible: true, reason: 'Exact signed recipe is ready for sandbox installation',
-        recipe_slug: 'single-vet', recipe_name: 'Single vet', reviewer: 'Release curator'
+        recipe_slug: 'single-vet', recipe_name: 'Single vet', reviewer: 'Release curator',
+        exact_package: true, exact_repository_commit: true
       }
     }
   });
   let values = c.renderVals();
   assert.equal(values.installAndRunDisabled, false);
+  assert.deepEqual(values.artifactReadiness.map(item => [item.label, item.ready]), [
+    ['Launcher connected', true],
+    ['Exact signed recipe', true],
+    ['Harness target selected', true],
+    ['Isolated container', true]
+  ]);
   values.installAndRun();
   values = c.renderVals();
   assert.equal(values.artifactRunConfirmationOpen, true);
   assert.equal(values.artifactRunConfirmDisabled, true);
   values.toggleArtifactRisk({ target: { checked: true } });
   let request;
+  const pendingWindow = { location: { replace() {} }, close() {} };
+  const opened = [];
+  const previousOpen = windowStub.open;
+  windowStub.open = (...args) => { opened.push(args); return pendingWindow; };
   c.api = async (url, options) => {
     request = { url, body: JSON.parse(options.body) };
-    return { cell: { id: 'cell_plugin' } };
+    return { cell: { id: 'cell_plugin', port: 3200 } };
   };
   c.refreshStatus = async () => {};
-  await c.renderVals().startArtifactRun();
+  let openRequest;
+  c.openCell = async (cell, target) => { openRequest = { cell, target }; return true; };
+  try {
+    await c.renderVals().startArtifactRun();
+  } finally {
+    windowStub.open = previousOpen;
+  }
   assert.deepEqual(request, {
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  // The new session opens on the Local tab with its startup logs showing.
-  assert.equal(c.state.view, 'launch');
-  assert.equal(c.state.logCell, 'cell_plugin');
+  assert.deepEqual(opened, [['about:blank', '_blank']]);
+  assert.equal(pendingWindow.opener, null);
+  assert.deepEqual(openRequest, { cell: { id: 'cell_plugin', port: 3200 }, target: pendingWindow });
+  assert.equal(c.state.view, 'catalog');
+  assert.equal(c.state.detailOpen, true);
+  assert.equal(c.state.artifactId, plugin.id);
   assert.equal(c.state.artifactRunConfirmation, null);
-  assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
-  assert.match(html, /Apptainer shares the host kernel/);
+  assert.match(html, /The isolated container lowers the risk but does not remove it/);
+  assert.match(html, /shares this computer’s operating system core/);
 });
 
 test('raw plugins and forks cannot bypass sandbox acquisition', () => {
@@ -703,6 +1239,22 @@ test('public discover view returns ranked gems per type, resolved packs, and rec
   assert.deepEqual(view.packs.map(pack => pack.id), ['memory-and-context']);
   assert.deepEqual(view.packs[0].members.map(member => [member.role, member.artifact.artifact_id]), [['R1', 'github:1'], ['R2', 'github:2'], ['R3', 'github:3']]);
   assert.equal(view.packs[0].members[1].artifact.hidden_gem.candidate, false);
+  // A queue from before shelves existed has none.
+  assert.deepEqual(view.shelves, { new: [], new_window_days: 30, best: [] });
+
+  const shelved = endpoint.discoverView(endpoint.validateCatalog(feed, registry, {
+    ...research,
+    shelves: {
+      new: ['github:4', 'github:404', 7, 'github:1'], new_window_days: 7,
+      best: [{ capability: 'memory', artifact_id: 'github:2' }, { capability: 'testing', artifact_id: 'github:404' }, { capability: 5, artifact_id: 'github:1' }, null]
+    }
+  }));
+  assert.deepEqual(shelved.shelves.new.map(item => item.artifact_id), ['github:4', 'github:1']);
+  assert.equal(shelved.shelves.new_window_days, 7);
+  assert.deepEqual(shelved.shelves.best.map(entry => [entry.capability, entry.artifact.artifact_id]), [['memory', 'github:2']]);
+  // Shelf entries carry their gem report when they have one.
+  assert.equal(shelved.shelves.new[1].hidden_gem.reasons[0], 'Reason 1');
+  assert.equal(shelved.shelves.new[0].hidden_gem, null);
 });
 
 test('without an imported store the browser still reads the embedded snapshot', () => {
@@ -1254,7 +1806,8 @@ test('fork pages review the pinned commit before installing', async () => {
   await values.forkInstallAction();
   values = c.renderVals();
   assert.equal(values.forkPlanOpen, true);
-  assert.equal(values.forkPlanCommit, 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754');
+  // The dialog shows a short form of the exact version, not a 40-character id.
+  assert.equal(values.forkPlanCommit, 'fe8e3f8d5e19');
   assert.equal(values.forkInstallConfirmDisabled, true);
   await values.confirmForkInstall();
   assert.equal(requests.length, 1, 'no install without acknowledgement');
@@ -1284,6 +1837,12 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
   let values = c.renderVals();
   assert.equal(values.forkInstallLabel, 'Launch…');
   assert.equal(values.forkInstallPill, 'Installed');
+  assert.deepEqual(values.artifactReadiness.map(item => [item.label, item.ready]), [
+    ['Launcher connected', true],
+    ['Pinned fork installed', true],
+    ['Launch-ready fork tree', true],
+    ['Isolated container', true]
+  ]);
   assert.deepEqual(values.packageVersions.map(item => item.id), ['version_bbbbbbbbbbbb']);
   assert.equal(c.defaultHostVersionId(), 'version_bbbbbbbbbbbb');
 
@@ -1292,17 +1851,30 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
   assert.equal(local.buttonLabel, 'Launch…');
   let launched;
   c.api = async (url, options) => { launched = { url, body: JSON.parse(options.body) }; return { id: 'cell_x', port: 3200 }; };
-  c.inspectCell = async () => {};
-  local.launch();
+  let openRequest;
+  c.openCell = async (cell, target) => { openRequest = { cell, target }; return true; };
+  const pendingWindow = { location: { replace() {} }, close() {} };
+  const previousOpen = windowStub.open;
+  windowStub.open = () => pendingWindow;
+  values.forkInstallAction();
   values = c.renderVals();
   assert.equal(values.communityLaunchOpen, true);
   assert.equal(values.communityLaunchDisabled, true);
   values.toggleCommunityRisk({ target: { checked: true } });
-  await c.renderVals().confirmCommunityLaunch();
+  try {
+    await c.renderVals().confirmCommunityLaunch();
+  } finally {
+    windowStub.open = previousOpen;
+  }
   assert.equal(launched.url, '/api/v1/cells');
   assert.equal(launched.body.tree_id, tree.id);
   assert.equal(launched.body.acknowledge_risk, true);
   assert.equal(launched.body.home_mode, 'fresh');
+  assert.equal(launched.body.open_browser, true);
+  assert.deepEqual(openRequest, { cell: { id: 'cell_x', port: 3200 }, target: pendingWindow });
+  assert.equal(c.state.view, 'catalog');
+  assert.equal(c.state.detailOpen, true);
+  assert.equal(c.state.artifactId, FORK_ID);
 
   const forks = instance({}, '#forks');
   forks.setState({ forkInstallations: [{ artifact_id: FORK_ID, state: 'building' }] });
@@ -1424,7 +1996,9 @@ test('the website leads with Discover: gems, packs, and forks with plain reasons
   assert.equal(values.discoverPacks[0].count, '3 plugins');
   assert.equal(values.discoverPacks[0].roles, 'Memory · Code navigation · Search');
   assert.match(html, /How picks work/);
-  assert.match(html, /No AI guessing/);
+  assert.match(html, /read their code/);
+  // The page says plainly who does the reading.
+  assert.match(html, /today an AI model working through a fixed checklist/);
 }));
 
 test('packs open their own page and a plugin opened from a pack returns to it', () => onWebsite(async () => {

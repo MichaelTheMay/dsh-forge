@@ -731,6 +731,71 @@ def compose_packs(
 
 
 # --------------------------------------------------------------------------- queue
+# -------------------------------------------------------------------------- shelves
+
+SHELF_NEW_LIMIT = 8
+SHELF_NEW_MINIMUM = 3
+SHELF_NEW_WINDOWS = (7, 30)
+_SHELF_FORGIVEN = {"already well known", "attention already matches quality"}
+
+
+def compose_shelves(
+    records: Sequence[Mapping[str, Any]], reports: Mapping[str, Mapping[str, Any]], observed_at: dt.datetime,
+) -> dict[str, Any]:
+    """Two more Discover shelves, both measured: what is new, and the best per category.
+
+    ``new`` holds well-built plugins whose repository was created in the last week
+    (the last month when a week has too few). ``best`` holds, for each capability,
+    the best-built plugin whose main purpose is that capability. Unlike gems, a
+    shelf entry may already be popular: "best" should simply be the best.
+    """
+    eligible = []
+    for record in records:
+        if record.get("artifact_type") == "fork":
+            continue
+        report = reports.get(str(record.get("artifact_id")))
+        evidence = _evidence(record)
+        if not report or not evidence:
+            continue
+        if [reason for reason in report.get("blocked_by") or [] if reason not in _SHELF_FORGIVEN]:
+            continue
+        eligible.append((record, report, evidence))
+
+    def order(item: tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]) -> tuple[Any, ...]:
+        record, report, _evidence_ = item
+        return (-(report.get("built_percentile") or 0), -(report.get("score") or 0), -_stars(record), str(record["artifact_id"]))
+
+    new: list[str] = []
+    window = SHELF_NEW_WINDOWS[-1]
+    for days in SHELF_NEW_WINDOWS:
+        owners: set[str] = set()
+        fresh = []
+        for item in sorted(eligible, key=order):
+            created = _instant(item[2].get("created_at"))
+            if not created or not 0 <= (observed_at - created).days <= days or _owner(item[0]) in owners:
+                continue
+            owners.add(_owner(item[0]))
+            fresh.append(str(item[0]["artifact_id"]))
+        new, window = fresh[:SHELF_NEW_LIMIT], days
+        if len(new) >= SHELF_NEW_MINIMUM:
+            break
+    if len(new) < SHELF_NEW_MINIMUM:
+        new = []
+
+    best = []
+    taken: set[str] = set()
+    for capability in PRIMARY_TERMS:
+        for item in sorted(eligible, key=order):
+            strengths = capability_strengths(item[0])
+            identity = str(item[0]["artifact_id"])
+            # The plugin's main purpose, and clearly so: the same bar a pack role uses.
+            if strengths and strengths[0][0] == capability and strengths[0][1] >= PACK_MIN_STRENGTH and identity not in taken:
+                taken.add(identity)
+                best.append({"capability": capability, "artifact_id": identity})
+                break
+    return {"new": new, "new_window_days": window, "best": best}
+
+
 def evidence_coverage(records: Sequence[Mapping[str, Any]]) -> float:
     plugins = [record for record in records if record.get("artifact_type") != "fork"]
     if not plugins:
@@ -750,6 +815,7 @@ def discovery_queue(snapshot: Mapping[str, Any], *, limit: int = MAX_DISCOVERY_Q
         queue = metadata_queue(snapshot, limit=limit)
         queue["quality"]["discovery"] = {"policy": queue["policy"], "fallback": "too little evidence", "evidence_coverage": round(coverage, 4)}
         queue["packs"] = []
+        queue["shelves"] = {"new": [], "new_window_days": SHELF_NEW_WINDOWS[-1], "best": []}
         return queue
 
     observed_at = _instant(snapshot.get("fetched_at")) or dt.datetime.now(dt.timezone.utc)
@@ -785,6 +851,7 @@ def discovery_queue(snapshot: Mapping[str, Any], *, limit: int = MAX_DISCOVERY_Q
         "candidate_count": len(candidates),
         "candidates": candidates,
         "packs": packs,
+        "shelves": compose_shelves(records, reports, observed_at),
         "quality": {
             "selection_policy": SELECTION_POLICY,
             "score_window": 5,
@@ -828,4 +895,5 @@ def annotate(snapshot: dict[str, Any], queue: Mapping[str, Any]) -> int:
                 count += 1
     snapshot["discovery_policy"] = str(queue.get("policy") or "")
     snapshot["discovery_packs"] = [dict(pack) for pack in queue.get("packs") or [] if isinstance(pack, Mapping)]
+    snapshot["discovery_shelves"] = dict(queue["shelves"]) if isinstance(queue.get("shelves"), Mapping) else {}
     return count

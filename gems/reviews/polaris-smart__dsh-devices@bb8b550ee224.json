@@ -1,0 +1,20 @@
+{
+ "commit": "bb8b550ee224b3f79bb7949eeb44dc0292583542",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "polaris-smart/dsh-devices",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 2,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Pair a second machine on your network once, then let the agent run commands and move files across your fleet over SSH with zero npm dependencies.",
+ "source": "claude-session",
+ "summary": "Fleet plugin for multiple machines: mDNS discovery and key pairing on the LAN, SSH exec and SFTP transfer to paired devices, exposed as fleet_* agent tools. Pairing can append the master SSH key to the target's authorized_keys.",
+ "verdict": "solid"
+}

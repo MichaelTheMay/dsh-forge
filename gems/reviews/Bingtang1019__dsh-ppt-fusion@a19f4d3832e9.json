@@ -1,0 +1,20 @@
+{
+ "commit": "a19f4d3832e92b4c722e305c7b9b67cae9ad8153",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Bingtang1019/dsh-ppt-fusion",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "Generates real editable PowerPoint decks (native charts and tables) from the agent, with design and render audits and a live deck preview card.",
+ "source": "claude-session",
+ "summary": "Skill, preview tool and CLI that drive a vendored ppt-master Python engine and a pptwise front end to produce native editable PPTX decks, with audit, merge, theme and render checks.",
+ "verdict": "solid"
+}

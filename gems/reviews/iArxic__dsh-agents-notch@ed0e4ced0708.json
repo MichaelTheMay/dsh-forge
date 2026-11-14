@@ -1,0 +1,20 @@
+{
+ "commit": "ed0e4ced070804b90e72d1722e26d8bf2468ccc1",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "iArxic/dsh-agents-notch",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "A never-focused always-on-top notch showing which agent sessions are working, blocked on you, or done.",
+ "source": "claude-session",
+ "summary": "Host half publishes session state for an always-on-top Windows notch window written in C#; the host downloads that exe from a GitHub release if missing and spawns it to show which sessions need you.",
+ "verdict": "solid"
+}

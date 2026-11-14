@@ -39,13 +39,42 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
 
   /* Shell */
-  .app-root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: oklch(0.185 0.008 255); color: oklch(0.93 0.006 255); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .app-root { position: relative; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: oklch(0.185 0.008 255); color: oklch(0.93 0.006 255); font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
   .app-header { flex: 0 0 auto; display: flex; align-items: center; gap: 36px; height: 56px; padding: 0 28px; border-bottom: 1px solid oklch(0.3 0.012 255); background: oklch(0.21 0.01 255); }
   .brand { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
   .tabs { display: flex; gap: 26px; align-self: stretch; }
   .tab { display: flex; align-items: center; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: oklch(0.66 0.012 255); font-size: 13px; font-weight: 500; white-space: nowrap; }
   .tab:hover { color: oklch(0.86 0.01 255); }
   .tab-on { color: oklch(0.95 0.006 255); border-bottom-color: oklch(0.78 0.11 235); }
+  /* Running sessions shown as tabs. Every open session stays mounted; only the
+     selected one is visible, so switching tabs never reloads a session. */
+  .tab-sep { align-self: center; width: 1px; height: 18px; background: oklch(0.34 0.012 255); }
+  .itab { gap: 7px; max-width: 220px; }
+  .itab-name { overflow: hidden; text-overflow: ellipsis; }
+  .itab-x { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: oklch(0.6 0.012 255); }
+  .itab-x:hover { background: oklch(0.3 0.012 255); color: oklch(0.9 0.008 255); }
+  .instance-deck { position: relative; flex: 1 1 auto; min-height: 0; }
+  .deck-parked { position: absolute; inset: 56px 0 0 0; visibility: hidden; pointer-events: none; z-index: -1; }
+  .instance-pane { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: oklch(0.185 0.008 255); }
+  .instance-pane iframe { flex: 1 1 auto; width: 100%; min-height: 0; border: 0; background: white; }
+  .instance-pane .empty { margin: auto; border: 0; }
+  .instance-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 16px; border-bottom: 1px solid oklch(0.3 0.012 255); color: oklch(0.7 0.012 255); font-size: 12px; }
+  .pane-hidden { visibility: hidden; pointer-events: none; }
+  /* Comparisons */
+  .compare { margin-top: 34px; }
+  .compare-form { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; margin-bottom: 12px; }
+  .compare-options { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+  .compare-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: oklch(0.9 0.008 255); }
+  .compare-actions { display: flex; align-items: center; gap: 14px; }
+  .compare-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+  .compare-pane { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding: 18px 22px; gap: 14px; overflow: auto; }
+  .compare-task-text { margin: 4px 0 6px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .compare-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: 14px; flex: 1 1 auto; min-height: 240px; overflow-x: auto; }
+  .compare-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid oklch(0.31 0.013 255); border-radius: 12px; background: oklch(0.205 0.01 255); }
+  .compare-picked { border-color: oklch(0.6 0.13 150); }
+  .compare-col-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid oklch(0.3 0.012 255); }
+  .compare-name { font-weight: 600; font-size: 13px; }
+  .compare-output { flex: 1 1 auto; margin: 0; padding: 12px 14px; overflow: auto; font: 12px/1.55 'IBM Plex Mono', monospace; white-space: pre-wrap; word-break: break-word; color: oklch(0.86 0.008 255); }
   .tab-fork.tab-on { border-bottom-color: oklch(0.78 0.11 300); }
   .status-pill { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-size: 11.5px; color: oklch(0.7 0.012 255); white-space: nowrap; }
   .update-link { font: 500 11.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
@@ -426,6 +455,25 @@
   .shelf-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .shelf-head .link-btn { margin-left: auto; }
   .shelf-note { font-size: 13px; color: oklch(0.62 0.013 255); }
+  /* Recommended for you */
+  .recs { margin: 4px 0 22px; }
+  .recs .shelf-head { margin-top: 0; margin-bottom: 14px; }
+  .recs-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; padding: 18px 22px; border: 1px solid oklch(0.36 0.05 235); border-radius: 14px; background: oklch(0.225 0.022 240); }
+  .recs-ask h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .recs-ask p { max-width: 640px; font-size: 13px; line-height: 1.55; color: oklch(0.78 0.012 255); }
+  .recs-actions { display: flex; gap: 10px; margin-left: auto; flex: 0 0 auto; }
+  .rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .rcard { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px 18px; border: 1px solid oklch(0.31 0.013 255); border-radius: 14px; background: oklch(0.205 0.01 255); cursor: pointer; }
+  .rcard:hover { border-color: oklch(0.45 0.04 235); }
+  .rcard .pcard-head { margin-top: 0; align-items: center; }
+  .rcard .tag { margin-left: auto; align-self: flex-start; white-space: nowrap; }
+  .recs-empty { margin: 0; }
+  .setup-note { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin: 4px 0 22px; padding: 16px 22px; border: 1px solid oklch(0.42 0.07 85); border-radius: 14px; background: oklch(0.225 0.025 85); }
+  .setup-note h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .setup-note p { max-width: 700px; font-size: 13px; line-height: 1.55; color: oklch(0.82 0.012 255); }
+  .setup-command { margin-left: auto; padding: 9px 14px; border: 1px solid oklch(0.36 0.012 255); border-radius: 8px; background: oklch(0.17 0.008 255); font: 13px 'IBM Plex Mono', monospace; color: oklch(0.92 0.008 255); white-space: nowrap; user-select: all; }
+  .gem-read { margin-left: 10px; vertical-align: middle; font-weight: 500; }
+  .gem-summary { margin: 8px 0 4px; font-size: 13.5px; line-height: 1.6; color: oklch(0.88 0.008 255); }
   .skeleton { display: block; height: 260px; border-radius: 14px; background: linear-gradient(90deg, oklch(0.21 0.01 255), oklch(0.25 0.012 255), oklch(0.21 0.01 255)); background-size: 200% 100%; animation: dshshimmer 1.4s linear infinite; }
   @keyframes dshshimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
   .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
@@ -593,10 +641,10 @@
 
     <section class="landing-section" id="landing-downloads">
       <span class="landing-kicker">Desktop app</span><h2>Run them on your own machine.</h2><p class="landing-section-lede">The desktop app finds the DeepSeek Harness versions on your computer, installs plugins and forks, and launches each one in its own session.</p>
-      <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>A signed installer with a Start Menu shortcut. The app tells you when an update is available.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Download for Windows</a></article><article class="landing-download"><span class="platform">Linux and macOS</span><h3>Run from source</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article></div>
+      <div class="landing-downloads"><article class="landing-download"><span class="platform">Linux</span><h3>Install on Linux</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal, then start the app with <b>dsh-forge</b>:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article><article class="landing-download"><span class="platform">Windows and macOS</span><h3>Coming later</h3><p>You can browse everything on this site today from any computer. Installing and running plugins needs an isolated container that only works on Linux for now.</p><button class="landing-cta landing-cta-secondary" onClick="{{ goDiscover }}">Browse the catalog</button></article></div>
     </section>
 
-    <footer class="landing-footer"><span>DSH Forge · open source</span><span>Picks are based on public information about each project, not a review of its code.</span></footer>
+    <footer class="landing-footer"><span>DSH Forge · open source</span><span>Top picks are read by a reviewer. Nothing is run, and a pick is not a safety guarantee.</span></footer>
   </main>
   </sc-if>
 
@@ -612,6 +660,15 @@
       <sc-if value="{{ showDesktopTabs }}" hint-placeholder-val="{{ true }}">
         <button class="{{ launchTabClass }}" onClick="{{ goLaunch }}" aria-current="{{ launchTabCurrent }}">Local</button>
         <button class="{{ assistantTabClass }}" onClick="{{ goAssistant }}" aria-current="{{ assistantTabCurrent }}">Assistant</button>
+      </sc-if>
+      <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+        <span class="tab-sep" aria-hidden="true"></span>
+        <sc-for list="{{ instanceTabs }}" as="t" hint-placeholder-count="0">
+          <span class="{{ t.className }}">
+            <button class="tab itab-name" onClick="{{ t.select }}" aria-current="{{ t.current }}"><span class="dot" style="background: {{ t.dotColor }}; margin-right: 7px;"></span>{{ t.title }}</button>
+            <button class="itab-x" onClick="{{ t.close }}" aria-label="{{ t.closeLabel }}" title="{{ t.closeLabel }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </span>
+        </sc-for>
       </sc-if>
     </nav>
     <span class="spacer"></span>
@@ -636,6 +693,37 @@
   </header>
   </sc-if>
 
+  <sc-if value="{{ hasInstanceTabs }}" hint-placeholder-val="{{ false }}">
+  <div class="{{ instanceDeckClass }}" aria-label="Running sessions">
+    <sc-for list="{{ instanceSlots }}" as="p" hint-placeholder-count="0">
+      <sc-if value="{{ p.open }}" hint-placeholder-val="{{ false }}">
+        <div class="{{ p.className }}">
+          <sc-if value="{{ p.ready }}" hint-placeholder-val="{{ false }}">
+            <div class="instance-bar"><span>{{ p.title }} is running on this computer.</span><span class="spacer"></span><button class="btn btn-sm" onClick="{{ p.openInBrowser }}">Open in browser</button></div>
+            <iframe data-instance-url="{{ p.url }}" data-instance-id="{{ p.id }}" title="{{ p.title }}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"></iframe>
+          </sc-if>
+          <sc-if value="{{ p.waiting }}" hint-placeholder-val="{{ false }}">
+            <div class="empty"><h2>{{ p.title }}</h2><p>{{ p.waitingLabel }}</p><sc-if value="{{ p.canRetry }}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ p.retry }}">Try again</button></sc-if></div>
+          </sc-if>
+          <sc-if value="{{ p.isCompare }}" hint-placeholder-val="{{ false }}">
+            <div class="compare-pane">
+              <div class="compare-head"><span class="label">The task</span><p class="compare-task-text">{{ p.task }}</p><p class="note">{{ p.summary }}</p></div>
+              <div class="compare-cols">
+                <sc-for list="{{ p.runs }}" as="r" hint-placeholder-count="0">
+                  <article class="{{ r.className }}">
+                    <header class="compare-col-head"><span class="compare-name">{{ r.name }}</span><span class="note"><span class="dot" style="display: inline-block; margin-right: 6px; background: {{ r.stateColor }};"></span>{{ r.stateLabel }}</span><span class="spacer"></span><sc-if value="{{ r.picked }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">Your pick</span></sc-if><sc-if value="{{ r.canPick }}" hint-placeholder-val="{{ false }}"><button class="btn btn-sm" onClick="{{ r.pick }}">Pick this one</button></sc-if></header>
+                    <pre class="compare-output">{{ r.output }}</pre>
+                  </article>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+    </sc-for>
+  </div>
+  </sc-if>
+
   <sc-if value="{{ showLaunch }}" hint-placeholder-val="{{ true }}">
   <main class="page" aria-label="Local Harness versions">
     <div class="page-inner">
@@ -643,13 +731,62 @@
       <div class="page-head">
         <div>
           <h1 class="page-title">Local versions</h1>
-          <p class="page-lede">Harness checkouts found on this machine. Every launch gets its own port, home, and workspace.</p>
+          <p class="page-lede">Harness versions found on this computer. Each run gets its own separate space, so runs never interfere with each other or with your own setup.</p>
         </div>
         <div class="head-actions">
           <span class="sandbox-status" title="{{ sandboxReason }}"><span class="dot" style="background: {{ sandboxColor }};"></span>{{ sandboxTitle }}</span>
           <button class="btn" onClick="{{ pickVersion }}" disabled="{{ versionControlsDisabled }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 10.5v6M9 13.5h6"/></svg>Add folder</button>
         </div>
       </div>
+
+      <sc-if value="{{ showRecsBlock }}" hint-placeholder-val="{{ false }}">
+        <section class="recs" aria-label="Recommended for you">
+          <sc-if value="{{ recsAsk }}" hint-placeholder-val="{{ false }}">
+            <div class="recs-ask">
+              <div>
+                <h2>Want suggestions based on how you work?</h2>
+                <p>DSH Forge can look at your session history on this computer and suggest plugins you would actually use. Nothing leaves this computer, and it keeps only counts, never what you typed.</p>
+              </div>
+              <div class="recs-actions">
+                <button class="btn btn-go" onClick="{{ recsYes }}" disabled="{{ recsBusy }}">Yes, suggest plugins</button>
+                <button class="btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">No thanks</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ recsOn }}" hint-placeholder-val="{{ false }}">
+            <div class="shelf-head"><h2>Recommended for you</h2><span class="shelf-note">{{ recsNote }}</span><button class="link-btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">Turn off</button></div>
+            <sc-if value="{{ hasRecs }}" hint-placeholder-val="{{ false }}">
+              <div class="rgrid">
+                <sc-for list="{{ recItems }}" as="r" hint-placeholder-count="0">
+                  <div class="rcard" onClick="{{ r.select }}">
+                    <span class="pcard-head">
+                      <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                      <span class="pcard-title">
+                        <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                        <span class="iowner">{{ r.owner }}</span>
+                      </span>
+                      <span class="tag">{{ r.capability }}</span>
+                    </span>
+                    <span class="desc2">{{ r.description }}</span>
+                    <span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.evidence }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}"><p class="note recs-empty">{{ recsEmptyText }}</p></sc-if>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{ showContainerSetup }}" hint-placeholder-val="{{ false }}">
+        <aside class="setup-note" aria-label="Finish setup to run things">
+          <div>
+            <h2>One more step before you can run things</h2>
+            <p>You can browse now. Plugins and forks only run inside an isolated container, which is not set up on this computer yet. In a terminal, go to the DSH Forge folder and run the command on the right. It sets the container up, or tells you what to install first. Then start DSH Forge again.</p>
+          </div>
+          <code class="setup-command">{{ containerSetupCommand }}</code>
+        </aside>
+      </sc-if>
 
       <sc-if value="{{ showPlatformNotice }}" hint-placeholder-val="{{ false }}">
         <aside class="platform-note" aria-label="Windows isolation capability">{{ platformNotice }}</aside>
@@ -742,7 +879,7 @@
       <section class="section" aria-label="Installed profiles">
         <div class="section-head">
           <h2 class="h2">Installed profiles</h2>
-          <span class="note">{{ profileCountLabel }} in $DSH_HOME/profiles. These run directly on the host, not in Apptainer.</span>
+          <span class="note">{{ profileCountLabel }} in your Harness folder. These are your own setups, so they run directly on this computer rather than in the isolated container.</span>
         </div>
         <sc-if value="{{ noLocalProfiles }}" hint-placeholder-val="{{ true }}"><div class="empty empty-sm">No installed profile manifests found.</div></sc-if>
         <sc-if value="{{ hasLocalProfiles }}" hint-placeholder-val="{{ false }}">
@@ -760,6 +897,28 @@
           </div>
         </sc-if>
       </section>
+
+      <sc-if value="{{ showCompare }}" hint-placeholder-val="{{ false }}">
+      <section class="compare" aria-label="Compare configurations">
+        <div class="section-head"><h2 class="h2">Compare configurations</h2><span class="note">Give the same task to up to four saved configurations and read the results side by side.</span></div>
+        <div class="panel compare-form">
+          <div class="compare-options">
+            <sc-for list="{{ compareOptions }}" as="o" hint-placeholder-count="2">
+              <label class="compare-option"><input type="checkbox" checked="{{ o.selected }}" disabled="{{ o.disabled }}" onChange="{{ o.toggle }}" /><span>{{ o.name }}</span><sc-if value="{{ o.note }}" hint-placeholder-val="{{ false }}"><span class="note">{{ o.note }}</span></sc-if></label>
+            </sc-for>
+          </div>
+          <textarea class="ptask" value="{{ compareTask }}" onChange="{{ setCompareTask }}" placeholder="The task to give each configuration" aria-label="Task to compare"></textarea>
+          <div class="compare-actions"><button class="btn btn-go" onClick="{{ startComparison }}" disabled="{{ compareDisabled }}">{{ compareLabel }}</button><span class="note">Each one runs in its own isolated container and uses its own model calls.</span></div>
+        </div>
+        <sc-if value="{{ hasRecentComparisons }}" hint-placeholder-val="{{ false }}">
+          <div class="panel">
+            <sc-for list="{{ recentComparisons }}" as="k" hint-placeholder-count="0">
+              <div class="prow"><span class="pname compare-task">{{ k.task }}</span><span class="note">{{ k.meta }}</span><span class="spacer"></span><button class="btn btn-sm" onClick="{{ k.open }}">Open</button></div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+      </sc-if>
 
     </div>
   </main>
@@ -779,18 +938,59 @@
           <details class="how">
             <summary>How picks work</summary>
             <div class="how-body">
-              <p>No AI guessing. Every day we measure each project the same way, then look for the gap between how well it’s built and how much attention it gets.</p>
+              <p>Two steps. Every day we measure each project the same way and look for the gap between how well it’s built and how much attention it gets. Then we open the most promising ones and read their code.</p>
               <ol>
                 <li><b>How it’s built.</b> Tests, CI, docs, releases, a license, and steady recent work.</li>
                 <li><b>What that usually earns.</b> A model trained on the whole catalog predicts the stars a project built like this tends to have.</li>
                 <li><b>The gap.</b> Projects with far fewer stars than predicted rise to the top.</li>
                 <li><b>Someone else noticed.</b> Stars from Harness contributors and plugin authors, merged pull requests, and outside contributors count as real-world checks.</li>
+                <li><b>What’s really inside.</b> For the top candidates we fetch the code and check it: how much is its own, whether it has tests, whether it is a copy of something else. Nothing is run.</li>
+                <li><b>It gets read.</b> A reviewer, today an AI model working through a fixed checklist, reads the code and says what it does and whether it’s worth your time. Picks marked “We read the code” have been through this; the rest are measured only.</li>
               </ol>
               <p>The prediction is tested on projects it wasn’t trained on. If it doesn’t hold up that day, picks fall back to a simple equal-weight quality score instead.</p>
               <p>Archived, unlicensed, abandoned, or barely documented projects are left out. Forks are judged only on what they changed, and a fork of a fork can’t borrow its parent’s work.</p>
             </div>
           </details>
         </div>
+
+        <sc-if value="{{ showRecsBlock }}" hint-placeholder-val="{{ false }}">
+          <section class="recs" aria-label="Recommended for you">
+            <sc-if value="{{ recsAsk }}" hint-placeholder-val="{{ false }}">
+              <div class="recs-ask">
+                <div>
+                  <h2>Want suggestions based on how you work?</h2>
+                  <p>DSH Forge can look at your session history on this computer and suggest plugins you would actually use. Nothing leaves this computer, and it keeps only counts, never what you typed.</p>
+                </div>
+                <div class="recs-actions">
+                  <button class="btn btn-go" onClick="{{ recsYes }}" disabled="{{ recsBusy }}">Yes, suggest plugins</button>
+                  <button class="btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">No thanks</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ recsOn }}" hint-placeholder-val="{{ false }}">
+              <div class="shelf-head"><h2>Recommended for you</h2><span class="shelf-note">{{ recsNote }}</span><button class="link-btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">Turn off</button></div>
+              <sc-if value="{{ hasRecs }}" hint-placeholder-val="{{ false }}">
+                <div class="rgrid">
+                  <sc-for list="{{ recItems }}" as="r" hint-placeholder-count="0">
+                    <div class="rcard" onClick="{{ r.select }}">
+                      <span class="pcard-head">
+                        <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                        <span class="pcard-title">
+                          <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                          <span class="iowner">{{ r.owner }}</span>
+                        </span>
+                        <span class="tag">{{ r.capability }}</span>
+                      </span>
+                      <span class="desc2">{{ r.description }}</span>
+                      <span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.evidence }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}"><p class="note recs-empty">{{ recsEmptyText }}</p></sc-if>
+            </sc-if>
+          </section>
+        </sc-if>
 
         <sc-if value="{{ discoverLoading }}" hint-placeholder-val="{{ false }}">
           <div class="pgrid pgrid-skeleton" aria-busy="true" aria-label="Loading picks"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
@@ -842,6 +1042,46 @@
                     </span>
                   </sc-if>
                 </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasBestShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>Best in each category</h2><span class="shelf-note">The best-built plugin for each job, popular or not.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ bestShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNewShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>{{ newShelfTitle }}</h2><span class="shelf-note">Well-built plugins that just appeared.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ newShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
               </div>
             </sc-for>
           </div>
@@ -1270,7 +1510,8 @@
             <div class="stack">
               <sc-if value="{{ hasWhyGem }}" hint-placeholder-val="{{ false }}">
                 <section class="card why">
-                  <h2 class="h2">{{ whyGemTitle }}</h2>
+                  <h2 class="h2">{{ whyGemTitle }}<sc-if value="{{ hasGemReadLabel }}" hint-placeholder-val="{{ false }}"><span class="tag gem-read">{{ gemReadLabel }}</span></sc-if></h2>
+                  <sc-if value="{{ hasGemSummary }}" hint-placeholder-val="{{ false }}"><p class="gem-summary">{{ gemSummary }}</p></sc-if>
                   <ul class="why-list">
                     <sc-for list="{{ whyGemReasons }}" as="reason" hint-placeholder-count="3"><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span>{{ reason }}</span></li></sc-for>
                   </ul>
@@ -1379,7 +1620,7 @@
         </select>
       </label>
       <button class="btn btn-primary btn-lg btn-block" onClick="{{ startAssistant }}" disabled="{{ assistantStartDisabled }}">{{ assistantStartLabel }}</button>
-      <p class="note">Requires a saved local Harness, the MCP client plugin in that Harness, and a passing pinned Apptainer capability probe. There is no host fallback.</p>
+      <p class="note">Needs a saved Harness version that includes the MCP client plugin, and the isolated container set up on the Local tab.</p>
       <div class="divider"></div>
       <h2 class="h2">Saved configurations</h2>
       <sc-if value="{{ noConfigurations }}" hint-placeholder-val="{{ true }}"><p class="note">Save a package or catalog selection to see it here and run it later from the CLI.</p></sc-if>
@@ -1394,7 +1635,7 @@
     </aside>
     <section class="assistant-frame">
       <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe data-assistant-url="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
-      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="empty"><h2>Start the isolated assistant</h2><p>The embedded Harness appears here once its authenticated loopback URL is ready.</p></div></sc-if>
+      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="empty"><h2>Start the isolated assistant</h2><p>The assistant appears here once it has started.</p></div></sc-if>
     </section>
   </main>
   </sc-if>
@@ -1408,8 +1649,8 @@
           <p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p>
         </header>
         <div class="modal-body">
-          <p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p>
-          <div class="warn-box">Sandboxing reduces risk but does not eliminate it. Apptainer shares the host kernel, and the running web surface uses host networking for its loopback port. Forge does not mount your host DSH home or forward launcher secrets.</div>
+          <p class="prose">This runs code written by someone else. Before it starts, DSH Forge checks that the package is exactly the one that was reviewed, installs it with no network access and with its install scripts switched off, tries it inside the isolated container, and only then starts your session from that tested copy.</p>
+          <div class="warn-box">The isolated container lowers the risk but does not remove it. It shares this computer’s operating system core, and the running session can use your network. Your own Harness folder and DSH Forge’s keys are never shared with it.</div>
           <label class="ack"><input type="checkbox" checked="{{ artifactRiskAcknowledged }}" onChange="{{ toggleArtifactRisk }}" /><span>I understand that this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelArtifactRun }}" disabled="{{ artifactRunBusy }}">Cancel</button><button class="btn btn-go" onClick="{{ startArtifactRun }}" disabled="{{ artifactRunConfirmDisabled }}">{{ artifactRunConfirmLabel }}</button></footer>
@@ -1427,11 +1668,11 @@
         </header>
         <div class="modal-body">
           <div class="codebox">
-            <div class="code-row"><span class="code-k">commit</span><span class="code-v" style="color: oklch(0.86 0.11 300);">{{ forkPlanCommit }}</span></div>
+            <div class="code-row"><span class="code-k">exact version</span><span class="code-v" style="color: oklch(0.86 0.11 300);">{{ forkPlanCommit }}</span></div>
             <div class="code-row"><span class="code-k">into</span><span class="code-v">{{ forkPlanDestination }}</span></div>
           </div>
           <ol class="notes"><sc-for list="{{ forkPlanSteps }}" as="step" hint-placeholder-count="3"><li>{{ step }}</li></sc-for></ol>
-          <div class="warn-box">This builds and runs third-party code. Apptainer shares the host kernel, dependency installation and web cells use host networking, and isolation reduces risk without eliminating it. Forge never mounts your DSH home or forwards launcher secrets.</div>
+          <div class="warn-box">This builds and runs code written by someone else. The isolated container lowers the risk but does not remove it: it shares this computer’s operating system core, and building and running can use your network. Your own Harness folder and DSH Forge’s keys are never shared with it.</div>
           <label class="ack"><input type="checkbox" checked="{{ forkRiskAcknowledged }}" onChange="{{ toggleForkRisk }}" /><span>I understand this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelForkPlan }}">Cancel</button><button class="btn btn-fork" onClick="{{ confirmForkInstall }}" disabled="{{ forkInstallConfirmDisabled }}">{{ forkInstallConfirmLabel }}</button></footer>
@@ -1448,7 +1689,7 @@
           <p class="note mono">commit {{ communityLaunchCommit }} · fresh home · managed workspace</p>
         </header>
         <div class="modal-body">
-          <p class="prose">The fork starts in its own Apptainer cell on a free loopback port. Its web surface uses host networking so you can open it.</p>
+          <p class="prose">The fork starts in its own isolated container. It can use your network, which is how you are able to open it.</p>
           <label class="ack"><input type="checkbox" checked="{{ communityRiskAcknowledged }}" onChange="{{ toggleCommunityRisk }}" /><span>Run this community fork in the sandbox.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelCommunityLaunch }}">Cancel</button><button class="btn btn-go" onClick="{{ confirmCommunityLaunch }}" disabled="{{ communityLaunchDisabled }}">Launch</button></footer>

@@ -25,10 +25,12 @@ from typing import Any, Iterable, Mapping
 
 
 from .catalog_store import CatalogStore, CatalogStoreError, build, verify_snapshot
+from .comparisons import ComparisonError, ComparisonRegistry, validate_request
 from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .forks import ForkInstallError, ForkInstaller, detect_build, normalize_remote
 from .packages import PackageError
+from .recommendations import RecommendationService
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
 
@@ -396,6 +398,7 @@ class Launcher:
         self.trusted_package_recipes_root = self.state_root / "trusted-package-recipes"
         self.trusted_package_recipes_root.mkdir(exist_ok=True, mode=0o700)
         self.configuration_registry = ConfigurationRegistry(self.state_root)
+        self.comparison_registry = ComparisonRegistry(self.state_root)
         self._lock = threading.RLock()
         self._mutation_lock = threading.RLock()
         self._processes: dict[str, subprocess.Popen[bytes]] = {}
@@ -435,6 +438,9 @@ class Launcher:
         home_candidates.append(Path(configured_home).expanduser() if configured_home else Path.home() / ".dsh")
         self._dsh_homes = self._dedupe_paths(home_candidates)
         self.fork_installer = ForkInstaller(self.versions_directory / "forks", self.state_root)
+        self.recommendations = RecommendationService(
+            self.state_root, self._session_homes, self._ranked_plugins, self._installed_plugin_names,
+        )
         self.scan()
 
     def _load_roots(self) -> dict[str, dict[str, Any]]:
@@ -1033,6 +1039,51 @@ class Launcher:
         except CatalogStoreError as error:
             raise LauncherError(str(error)) from error
 
+    # ---- recommendations ----------------------------------------------------
+
+    def _session_homes(self) -> list[Path]:
+        """Where session logs live: the user's Harness homes and each launcher session's own home."""
+        homes = list(self._dsh_homes)
+        cells = self.state_root / "cells"
+        if cells.is_dir():
+            try:
+                homes.extend(sorted(path / "home" for path in cells.iterdir() if (path / "home").is_dir())[:500])
+            except OSError:
+                pass
+        return homes
+
+    def _ranked_plugins(self, limit: int = 250) -> list[dict[str, Any]]:
+        """Catalog plugins, best first (reviewed gems lead), each with its gem report."""
+        plugins: list[dict[str, Any]] = []
+        cursor = ""
+        try:
+            while len(plugins) < limit:
+                page = self.catalog_store.search(types=["plugin"], sort="rank", limit=50, cursor=cursor)
+                for record in page["artifacts"]:
+                    report = page["research"].get(record.get("artifact_id"))
+                    plugins.append({**record, **({"hidden_gem": report} if report else {})})
+                cursor = page.get("next_cursor") or ""
+                if not cursor:
+                    break
+        except CatalogStoreError:
+            return []
+        return plugins[:limit]
+
+    def _installed_plugin_names(self) -> list[str]:
+        names: set[str] = set()
+        for profile in self._discover_profiles().values():
+            names.update(profile.get("dependencies") or [])
+        return sorted(names)
+
+    def recommendations_status(self) -> dict[str, Any]:
+        return self.recommendations.status()
+
+    def set_recommendations_consent(self, enabled: Any) -> dict[str, Any]:
+        try:
+            return self.recommendations.set_consent(enabled)
+        except ValueError as error:
+            raise LauncherError(str(error)) from error
+
     def catalog_discover(self) -> dict[str, Any]:
         try:
             return self.catalog_store.discover()
@@ -1171,6 +1222,7 @@ class Launcher:
             "fork_installations": self._fork_installations(),
             "trusted_package_recipes": self.trusted_package_recipes(),
             "configurations": self.configurations(),
+            "comparisons": self.comparisons(),
             "versions_directory": {
                 "path": _display_path(self.versions_directory),
                 "available": self.versions_directory.is_dir(),
@@ -1452,7 +1504,7 @@ class Launcher:
             "environment_keys": sorted(environment),
             "credential_keys": [name for name in SECRET_NAMES if environment.get(name)],
             "notes": [
-                "This is an existing local profile, so it runs directly on the host rather than inside Apptainer.",
+                "This is one of your own setups, so it runs directly on this computer rather than in the isolated container.",
                 "The selected profile and its installed plugins can read the user account and inherited credential keys.",
                 "Forge passes an exact argv without a shell and records the process identity before managing it.",
             ],
@@ -1658,8 +1710,15 @@ class Launcher:
             raise LauncherError("Promoted package profile receipt does not match the saved configuration")
         return resolved
 
-    def run_configuration(self, configuration_id: str, *, task: str | None = None) -> dict[str, Any]:
-        """Launch a reviewed configuration, cloning only a tested promoted home."""
+    def run_configuration(
+        self, configuration_id: str, *, task: str | None = None, headless: bool = False,
+    ) -> dict[str, Any]:
+        """Launch a reviewed configuration, cloning only a tested promoted home.
+
+        ``headless`` runs the configuration once on ``task`` with no window, whatever
+        surface it was saved with. Comparisons use it so every configuration answers
+        the same task the same way.
+        """
 
         try:
             record = self.configuration_registry.get(configuration_id)
@@ -1670,7 +1729,11 @@ class Launcher:
             raise LauncherError(runtime["reason"])
         tree = self._tree_for_saved_version(record["version_id"])
         launch = dict(record["launch"])
-        if task is not None:
+        if headless:
+            if not isinstance(task, str) or not task.strip():
+                raise LauncherError("A headless run needs a task")
+            launch.update({"surface": "headless", "task": task, "open_browser": False})
+        elif task is not None:
             if launch["surface"] != "headless":
                 raise LauncherError("Task overrides are supported only for headless configurations")
             launch["task"] = str(task)
@@ -1684,6 +1747,103 @@ class Launcher:
             "lineage_action": "configuration-run",
         }
         return self.launch(raw)
+
+    # ---- comparisons: one task, several configurations ----------------------
+
+    COMPARISON_OUTPUT_LINES = 200
+
+    def run_comparison(self, configuration_ids: Any, task: Any) -> dict[str, Any]:
+        """Start one headless run of ``task`` per configuration and group them.
+
+        Every configuration is checked before anything starts, so a comparison never
+        begins half-ready. If a run then fails to start, its reason is recorded and
+        the others continue; the call fails only when nothing started.
+        """
+        try:
+            identities, text = validate_request(configuration_ids, task)
+        except ComparisonError as error:
+            raise LauncherError(str(error)) from error
+        configurations = []
+        for identity in identities:
+            try:
+                record = self.configuration_registry.get(identity)
+            except ConfigurationError as error:
+                raise LauncherError(str(error)) from error
+            runtime = self._configuration_runtime(record)["runtime"]
+            if not runtime["runnable"]:
+                raise LauncherError(f"{record['name']} is not ready to run: {runtime['reason']}")
+            configurations.append(record)
+        runs = []
+        for record in configurations:
+            run = {"configuration_id": record["id"], "name": record["name"], "cell_id": None, "error": ""}
+            try:
+                run["cell_id"] = self.run_configuration(record["id"], task=text, headless=True)["id"]
+            except LauncherError as error:
+                run["error"] = str(error)
+            runs.append(run)
+        if not any(run["cell_id"] for run in runs):
+            raise LauncherError("None of the configurations could start: " + "; ".join(run["error"] for run in runs))
+        return self._comparison_view(self.comparison_registry.create(text, runs))
+
+    def comparison(self, comparison_id: Any) -> dict[str, Any]:
+        try:
+            return self._comparison_view(self.comparison_registry.get(comparison_id))
+        except ComparisonError as error:
+            raise LauncherError(str(error)) from error
+
+    def choose_comparison_run(self, comparison_id: Any, cell_id: Any) -> dict[str, Any]:
+        try:
+            return self._comparison_view(self.comparison_registry.choose(comparison_id, cell_id))
+        except ComparisonError as error:
+            raise LauncherError(str(error)) from error
+
+    def comparisons(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Recent comparisons, newest first, without their output."""
+        try:
+            records = self.comparison_registry.list(limit)
+        except ComparisonError:
+            return []
+        return [
+            {"id": record["id"], "task": str(record.get("task") or "")[:200], "created_at": record.get("created_at"),
+             "runs": len(record.get("runs") or []), "chosen": bool(record.get("chosen_cell_id"))}
+            for record in records
+        ]
+
+    def _comparison_view(self, record: dict[str, Any]) -> dict[str, Any]:
+        """A comparison with each run's current state and what it has printed so far."""
+        cells = {cell["id"]: cell for cell in self.status()["cells"]}
+        runs = []
+        for run in record.get("runs") or []:
+            cell = cells.get(run.get("cell_id") or "")
+            if not run.get("cell_id"):
+                state, output = "failed", []
+            elif cell is None:
+                state, output = "gone", []
+            else:
+                finished = cell.get("agent_state") == "exited" or cell.get("process") == "exited"
+                state = "finished" if finished else "running"
+                try:
+                    output = [line["msg"] for line in self.logs(cell["id"], limit=self.COMPARISON_OUTPUT_LINES)]
+                except LauncherError:
+                    output = []
+            runs.append({
+                "configuration_id": run.get("configuration_id"),
+                "name": run.get("name"),
+                "cell_id": run.get("cell_id"),
+                "error": run.get("error") or "",
+                "state": state,
+                "exit_code": cell.get("returncode") if cell else None,
+                "output": output,
+                "chosen": bool(run.get("cell_id")) and run.get("cell_id") == record.get("chosen_cell_id"),
+            })
+        return {
+            "id": record["id"],
+            "task": record.get("task") or "",
+            "created_at": record.get("created_at"),
+            "chosen_cell_id": record.get("chosen_cell_id"),
+            "done": all(run["state"] != "running" for run in runs),
+            "runs": runs,
+        }
 
     def install_acquired_package(
         self,
@@ -2115,7 +2275,7 @@ class Launcher:
         installer.update(
             install_id,
             state="building",
-            detail="Installing dependencies and building inside Apptainer",
+            detail="Installing what it needs and building it inside the isolated container",
             build={"manager": build["manager"], "steps": [" ".join(step) for step in build["steps"]], "note": build["reason"]},
         )
         log = Path(str(record["log_path"]))
@@ -2838,9 +2998,19 @@ class Launcher:
             if not cell:
                 raise LauncherError("Unknown cell")
             self._refresh_cell(cell)
+            if cell.get("process") != "alive" or cell.get("state") not in {"starting", "running"}:
+                raise LauncherError("The cell is not running; start it again before opening")
             value = cell.get("open_url")
             if not value:
                 raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
+            parsed = urlsplit(str(value))
+            if (
+                parsed.scheme != "http"
+                or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or parsed.port != cell.get("port")
+            ):
+                cell.pop("open_url", None)
+                raise LauncherError("The authenticated DSH Web URL failed loopback validation")
             return str(value)
 
     def artifacts(self, cell_id: str, limit: int = 100) -> list[dict[str, Any]]:

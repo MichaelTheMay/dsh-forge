@@ -1,0 +1,20 @@
+{
+ "commit": "45200106112b0a13cc88bf18379f48da83a917b4",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "MichengAI/dsh-simplify",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "A scoped simplify command that limits the agent to changed lines and verifies file hashes before editing.",
+ "source": "claude-session",
+ "summary": "Adds a /simplify command that reads the Git change scope, hashes each file, and queues a tightly bounded simplify-without-changing-behavior task for the current agent, refusing on unreliable scope.",
+ "verdict": "solid"
+}

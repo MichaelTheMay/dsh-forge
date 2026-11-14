@@ -15,3 +15,7 @@ __pycache__/
 *.bundle
 *.patch
 .vercel
+
+# Full code-review notes, including critical remarks about third-party projects.
+# Kept on the reviewer's machine; the published reviews carry only what is shown to users.
+gems/reviews-private/

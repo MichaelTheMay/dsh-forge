@@ -1,0 +1,1510 @@
+{
+ "based_on": {
+  "snapshot_id": "registry-d11104a2a9062a3ca8ac-analysis-02ae0464046e0db3ed81",
+  "stage1_policy": "dsh-forge.hidden-gems/v3"
+ },
+ "claims": {
+  "executed": false,
+  "security_verified": false
+ },
+ "counts": {
+  "considered": 111,
+  "inspected": 111,
+  "picks": 60,
+  "reviewed": 60
+ },
+ "generated_at": "2026-11-14T02:46:29Z",
+ "picks": [
+  {
+   "artifact_id": "github:1354524531",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "3d21fb963dd0e27db0832b46094d18d03cc01de1",
+   "confidence": "reviewed",
+   "full_name": "yindf/taskfold",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 93.8,
+    "stage1": 79.0,
+    "substance": 88.3
+   },
+   "rank": 1,
+   "reasons": [
+    "Finished work collapses into one short titled summary that reuses the provider prefix cache, with the exact original always recoverable, so long sessions stay cheap.",
+    "6,924 lines of its own code with 15 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 89.5,
+   "stars": 11,
+   "summary": "Task_begin and task_end tools let the agent wrap work in named tasks; on close the span is summarised by a subclassed compaction engine, the original saved to a file, and fold_recall can restore it. Adds task bar UI and savings stats.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1344469282",
+   "capabilities": [
+    "review"
+   ],
+   "commit": "ffc876d18bfb68a3a0ef9f091bfc550326d08e7e",
+   "confidence": "reviewed",
+   "full_name": "whutzefengxie-ops/dsh-shadow-mind",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 86.2,
+    "stage1": 84.0,
+    "substance": 100.0
+   },
+   "rank": 2,
+   "reasons": [
+    "A second, independent AI quietly audits your agent's work after tool turns and only surfaces findings that pass structural validation.",
+    "23,324 lines of its own code with 37 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 89.2,
+   "stars": 10,
+   "summary": "After tool-using turns it probabilistically spawns fresh read-only background reviewer agents over a reasoning-free trajectory, validates their structured findings, and relays accepted reports into the root session.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1398563079",
+   "capabilities": [],
+   "commit": "d5965d1f4543d0323ac09d3bb00e59c8e1a8653f",
+   "confidence": "reviewed",
+   "full_name": "siqyka/dsh-ssh-workspace",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 93.8,
+    "stage1": 70.0,
+    "substance": 94.0
+   },
+   "rank": 3,
+   "reasons": [
+    "Point the ordinary read/edit/grep/bash tools at a remote server with ssh://alias/path, with host-key pinning and encrypted stored credentials.",
+    "34,615 lines of its own code with 83 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 89.1,
+   "stars": 10,
+   "summary": "Mounts a directory on an SSH host as a real DSH workspace: patches the host fs, shell, subprocess and terminal so the normal file and bash tools work remotely over SFTP, plus agent tools, port forwarding and a sidebar.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1335786799",
+   "capabilities": [],
+   "commit": "14f859db6955eb11d505703e47728f3398347d9f",
+   "confidence": "reviewed",
+   "full_name": "Jannchie/dsh-bill",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 93.8,
+    "stage1": 74.0,
+    "substance": 88.6
+   },
+   "rank": 4,
+   "reasons": [
+    "Shows which kind of content (tool output, system prompt, shell commands) your token bill actually went on, with cache-prefix pricing walked in provider order.",
+    "6,836 lines of its own code with 13 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 88.5,
+   "stars": 10,
+   "summary": "Cost tracking: per-turn cost line, session and account Cost panels, budgets, forecast, multi-currency, and an attribution report splitting spend by kind of content, plus a bill_stats tool for the model.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1333939452",
+   "capabilities": [
+    "security"
+   ],
+   "commit": "53757f4681a143315706d6ebf8350a2cb4f609dc",
+   "confidence": "reviewed",
+   "full_name": "MicroMilo/upstream-radar",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 86.2,
+    "stage1": 91.0,
+    "substance": 88.0
+   },
+   "rank": 5,
+   "reasons": [
+    "Find out which DSH plugins still work or carry advisories before users do, with deduplicated alerts, exact dependency paths and a no-execute inspect command.",
+    "44,862 lines of its own code with 111 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 87.6,
+   "stars": 10,
+   "summary": "Monitors the exact versions of DSH and its plugins against OSV, GitHub advisories and npm releases, persists events, and hands deduplicated analysis tasks to an agent; also a CLI to inspect plugin artifacts without running them.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1345803397",
+   "capabilities": [],
+   "commit": "713ef1440a26744f3767d91eb928277c1dcc4c67",
+   "confidence": "reviewed",
+   "full_name": "kuun993/dsh-loop-engine",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 83.8,
+    "stage1": 75.0,
+    "substance": 95.0
+   },
+   "rank": 6,
+   "reasons": [
+    "Run one chat on Codex and another on Claude Code or Kimi inside the same DSH, switchable from the composer.",
+    "20,632 lines of its own code with 77 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 84.8,
+   "stars": 9,
+   "summary": "Per-session choice of agent loop: built-in, or hosted Claude Code, Codex, Pi or Kimi Code drivers, with a routing factory, composer selector, header badge and a managed block in the profile patch file.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1351302871",
+   "capabilities": [],
+   "commit": "bfab6ccd35f62820dbe960469a0631836a001351",
+   "confidence": "reviewed",
+   "full_name": "addozhang/dsh-discord",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 80.0,
+    "stage1": 82.0,
+    "substance": 97.2
+   },
+   "rank": 7,
+   "reasons": [
+    "Approve tool calls and answer agent questions from your phone in Discord, with the first surface to answer (Discord or web) winning and the other retiring.",
+    "16,731 lines of its own code with 93 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 84.7,
+   "stars": 9,
+   "summary": "Discord bot adapter that runs on the dsh web profile: an @mention opens a thread, creates a DSH session, streams the answer, and turns approvals and questions into buttons mirrored with the web panel.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1365064934",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "2899342f096c64eaed639ccc9c41bc58d356626f",
+   "confidence": "reviewed",
+   "full_name": "wings1848/dsh-mcp-lazy",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 87.5,
+    "stage1": 68.0,
+    "substance": 91.7
+   },
+   "rank": 8,
+   "reasons": [
+    "Cuts per-request tool-schema tokens (about 93 percent for a 29-tool server) and stops idle MCP servers from running, with the break-even honestly documented.",
+    "8,540 lines of its own code with 19 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 84.7,
+   "stars": 11,
+   "summary": "MCP gateway exposing one constant mcp tool instead of every server tool schema; starts servers on first use, idles them out, caches metadata on disk, ranks search, and truncates large results to a spill file.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1415839539",
+   "capabilities": [],
+   "commit": "7a02f52b8676730f22253244c3d72adad80c6714",
+   "confidence": "reviewed",
+   "full_name": "dsh-plugin-lab/dsh-plugin-debugging",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 78.8,
+    "stage1": 82.0,
+    "substance": 97.5
+   },
+   "rank": 9,
+   "reasons": [
+    "Ask the agent why your plugin change did not take effect; it probes the live profile and says whether to wait, hot reload or restart.",
+    "21,002 lines of its own code with 33 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 84.1,
+   "stars": 9,
+   "summary": "Gives a DSH agent tools to inspect its own runtime: list instances, check auth, diagnose why a plugin did not load, tell live-apply from restart, dump composed config, hot-reload an entry, and a gated restart.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1410639172",
+   "capabilities": [],
+   "commit": "aeb5dd65e59e55d56e25200d444bbcecba69934c",
+   "confidence": "reviewed",
+   "full_name": "justskill-ai/justskill-design",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 86.2,
+    "stage1": 61.0,
+    "substance": 97.5
+   },
+   "rank": 10,
+   "reasons": [
+    "The agent designs screens into one validated HTML file via a strict op CLI, and you review and comment on them in a live canvas tab inside the harness, with no app or account.",
+    "21,578 lines of its own code with 35 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 84.0,
+   "stars": 11,
+   "summary": "A design skill plus CLI that keeps UI designs as one validated HTML file edited by typed operations; the DSH plugin registers the skill, scans workspaces and opens a local canvas in the sidebar.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1335647083",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "4badc2743811d159e6c9e6a5051294b40f8ac68e",
+   "confidence": "reviewed",
+   "full_name": "rice-awa/dsh-lan-gateway",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 80.0,
+    "stage1": 77.0,
+    "substance": 95.0
+   },
+   "rank": 11,
+   "reasons": [
+    "Open your DSH web GUI from a phone or another machine safely: off by default, password required, sessions revocable, self-signed TLS built in.",
+    "4,522 lines of its own code with 13 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 83.2,
+   "stars": 9,
+   "summary": "Reverse proxy that exposes the loopback DSH web GUI to the LAN or internet behind a login, with HMAC session cookies, rate limiting, origin fencing for HTTP and WebSocket, optional TLS and a settings card.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1343303625",
+   "capabilities": [],
+   "commit": "86d7c5fc7bc524c01bacfa560e311d0868de58f8",
+   "confidence": "reviewed",
+   "full_name": "CaiZongyuan/dsh-ag-ui",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 78.8,
+    "stage1": 79.0,
+    "substance": 95.9
+   },
+   "rank": 12,
+   "reasons": [
+    "Lets any AG-UI frontend such as CopilotKit drive a DSH agent, including browser-side tools that resume the same turn when the result returns.",
+    "5,597 lines of its own code with 42 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 83.1,
+   "stars": 9,
+   "summary": "Exposes DSH agents over the AG-UI protocol through an authenticated HTTP and SSE gateway: thread-to-agent bindings, streamed tool events, browser-owned tools, file upload, shared state, plus an embeddable adapter and React cards.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1334252749",
+   "capabilities": [],
+   "commit": "977a1fc8b7fe0d37e304c81526774be1d5a64b7f",
+   "confidence": "reviewed",
+   "full_name": "yhlooo/dsh-bridges",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 80.0,
+    "stage1": 74.0,
+    "substance": 94.0
+   },
+   "rank": 13,
+   "reasons": [
+    "Open a project already set up for Claude Code, Codex or Cursor in DSH and its skills, memory, hooks and MCP servers just work, no migration.",
+    "17,559 lines of its own code with 76 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 82.3,
+   "stars": 10,
+   "summary": "Reads the project and user assets of seven other coding agents (Claude Code, CodeBuddy, OpenCode, Codex, Pi, Gemini CLI, Cursor) and exposes their skills, commands, memory, hooks, permissions and MCP servers inside DSH.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1394736901",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "99c24e30e7e5cef2f2906129658ef21f63fba57c",
+   "confidence": "reviewed",
+   "full_name": "hoyyang/dsh-smart-compact",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 86.2,
+    "stage1": 61.0,
+    "substance": 90.5
+   },
+   "rank": 14,
+   "reasons": [
+    "Context never degrades into a lossy summary: the old window stays searchable verbatim and the new one resumes from notes, at zero extra model cost.",
+    "3,881 lines of its own code with 12 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 82.2,
+   "stars": 9,
+   "summary": "Replaces summary compaction with a zero-model-call rollover: switches to a fresh window at a computed budget threshold, archives the old one verbatim, and hands over via notes and a mechanical anchor, with ctx_* tools.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1363593491",
+   "capabilities": [],
+   "commit": "94fd860c3ddfe53fe87418986e8a915822b28936",
+   "confidence": "reviewed",
+   "full_name": "aa2246740/dsh-notch",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 78.8,
+    "stage1": 71.0,
+    "substance": 97.2
+   },
+   "rank": 15,
+   "reasons": [
+    "Approve tool requests and answer agent questions from the macOS notch without switching back to the DSH window.",
+    "13,824 lines of its own code with 54 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 81.8,
+   "stars": 8,
+   "summary": "Host plugin plus native Swift macOS notch app: a local HTTP board tracks DSH sessions, approvals and model questions, and the notch lets you answer them and jump to the conversation.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1354857499",
+   "capabilities": [
+    "review",
+    "orchestration"
+   ],
+   "commit": "70c47959c75b4b263973409f480e1fc491690ed4",
+   "confidence": "reviewed",
+   "full_name": "linkbag/dsh-swarm-orchestrator",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 85.0,
+    "stage1": 64.0,
+    "substance": 88.4
+   },
+   "rank": 16,
+   "reasons": [
+    "One goal becomes a supervised agent team with per-role model pinning, review loops, machine-checked evidence contracts and a live kanban and flow chart tab in the web GUI.",
+    "11,440 lines of its own code with 42 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 81.7,
+   "stars": 10,
+   "summary": "In-process multi-agent orchestration: architect decomposes a goal into a task DAG, builders run in parallel as subagents, reviewers gate results, an integrator merges, with a duty table pinning models per role and a live web dashboard.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1299059971",
+   "capabilities": [
+    "security"
+   ],
+   "commit": "514746afe1d07889890737fda20d6107731c8a06",
+   "confidence": "reviewed",
+   "full_name": "onlyqzq/dsh-riskproof",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 88.8,
+    "stage1": 69.0,
+    "substance": 76.1
+   },
+   "rank": 17,
+   "reasons": [
+    "Deterministic taint tracking across tool calls: web content cannot silently drive a shell command and customer data cannot leave via another tool, with no extra LLM calls.",
+    "5,925 lines of its own code with 28 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 81.7,
+   "stars": 8,
+   "summary": "Pre/post tool-call guard that tags tool output with taint labels (secrets, PII, untrusted web) and runs deterministic rules to allow, ask or deny risky cross-tool flows. Records redacted proof receipts and a client panel.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1419420213",
+   "capabilities": [
+    "review"
+   ],
+   "commit": "688144b624fbee954ed94a20b20289c76dab4941",
+   "confidence": "reviewed",
+   "full_name": "LUgABeEEE/dsh-global-todo",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 76.2,
+    "stage1": 89.0,
+    "substance": 87.5
+   },
+   "rank": 18,
+   "reasons": [
+    "An agent can never close its own todo: it waits in Needs review for you, in a phone-friendly panel with one shared JSON file you can read and diff.",
+    "19,153 lines of its own code with 39 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 81.6,
+   "stars": 11,
+   "summary": "Cross-session todo list stored in one JSON file that both person and agent write; agent done lands in Needs review until a person confirms. Panel, 11 agent tools, dispatch to sessions, reminders, two-machine sync folder.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1339096594",
+   "capabilities": [],
+   "commit": "fcd0c15b86d1c56a8ddbe7b98900ced21753ccbb",
+   "confidence": "reviewed",
+   "full_name": "NelsonLongxiang/dsh-open-a2a-net",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 76.2,
+    "stage1": 96.0,
+    "substance": 81.0
+   },
+   "rank": 19,
+   "reasons": [
+    "Agents on different machines find each other with no central server and hand off tasks through signed cards, with a task-receipt ledger and sidebar panel.",
+    "38,511 lines of its own code with 273 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 81.4,
+   "stars": 8,
+   "summary": "Turns a DSH host into a node of a decentralized agent network: signed expiring agent cards, peer and zone discovery, direct routing and failover via model tools, joinable session nodes, receipts, and a sidebar control.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1349188988",
+   "capabilities": [],
+   "commit": "1e0164815c9af0ba429a59549ba3b033df2dd01f",
+   "confidence": "reviewed",
+   "full_name": "BaronCyrus/dsh-kimi-subscription",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 81.0,
+    "substance": 96.5
+   },
+   "rank": 20,
+   "reasons": [
+    "Use a Kimi Code subscription inside DSH with OAuth sign-in, visible remaining quota and optional Kimi-backed web search.",
+    "6,398 lines of its own code with 18 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.9,
+   "stars": 8,
+   "summary": "Adds a Kimi Code subscription model route to DSH with API key or device-code OAuth, region choice, optional Kimi web search, a quota readout beside the composer, and an in-settings update check.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1398206168",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "a943701ad5fcd93d70e05cf409206c14da325b44",
+   "confidence": "reviewed",
+   "full_name": "YunongDai2005/dsh-theone",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 75.0,
+    "stage1": 84.0,
+    "substance": 91.5
+   },
+   "rank": 21,
+   "reasons": [
+    "Talk in one chat; every message lands in the right topic session, so contexts stop mixing and several topics run in parallel.",
+    "26,087 lines of its own code with 141 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.9,
+   "stars": 8,
+   "summary": "Routes each chat message to a per-topic background DSH session with its own context and progress notes, via a cheap LLM routing call with rule fallback, a topic cluster UI, move/undo of misroutes, and optional Telegram, WeChat and iMessage",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1352103164",
+   "capabilities": [],
+   "commit": "8799d63790e2405b70271e1b90517e8e4634cdca",
+   "confidence": "reviewed",
+   "full_name": "Crosery/dsh-viewer",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 79.0,
+    "substance": 96.0
+   },
+   "rank": 22,
+   "reasons": [
+    "The agent can open a generated PDF, spreadsheet or video right in the chat instead of just printing a file path.",
+    "10,856 lines of its own code with 14 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.4,
+   "stars": 11,
+   "summary": "Adds a display_file tool that shows images, video, audio, PDF, HTML and converted Office documents inline in the DSH UI, served by a signed HTTP route with range support and LibreOffice conversion.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1441376356",
+   "capabilities": [
+    "memory",
+    "review",
+    "testing"
+   ],
+   "commit": "8c0677d24ea3d3ebeb578157b0ccc17d89cfd823",
+   "confidence": "reviewed",
+   "full_name": "dryw/dsh-egm",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 82.5,
+    "stage1": 72.0,
+    "substance": 82.0
+   },
+   "rank": 23,
+   "reasons": [
+    "Get design docs stress-tested by reviewers that cannot see your chat or write files, with isolation enforced by the harness, not by a prompt.",
+    "860 lines of its own code with 17 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.3,
+   "stars": 8,
+   "summary": "Port of Google's Elephant-Goldfish design workflow: brainstorm, draft and review skills plus an egm_reviewer tool that spawns fresh-context, read-only reviewer subagents enforced by a tool allowlist.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1387666072",
+   "capabilities": [],
+   "commit": "ce6460b06b2e1ad51a1636870020e426e705c4bf",
+   "confidence": "reviewed",
+   "full_name": "mengqi1436/dsh-db-tool",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 77.5,
+    "stage1": 79.0,
+    "substance": 87.5
+   },
+   "rank": 24,
+   "reasons": [
+    "Agent can query many database kinds, but destructive statements need a human confirmation token and each project only sees the connections it was granted.",
+    "17,232 lines of its own code with 74 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.3,
+   "stars": 8,
+   "summary": "Database admin tool for the agent and a sidebar: adapters for MySQL, Postgres, SQLite, Mongo, Redis, Oracle and more, per-project read-only or read-write grants, statement risk classification and one-time user confirmation.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1352490672",
+   "capabilities": [
+    "testing"
+   ],
+   "commit": "36b819203717641e104e75cfcafd06e7ec92edc9",
+   "confidence": "reviewed",
+   "full_name": "ZSeven-W/dsh-qa",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 76.2,
+    "stage1": 69.0,
+    "substance": 97.5
+   },
+   "rank": 25,
+   "reasons": [
+    "Explore-then-replay QA: the agent explores an app once and the recorded path becomes a deterministic regression scenario with evidence.",
+    "84,667 lines of its own code with 92 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.1,
+   "stars": 10,
+   "summary": "QA orchestrator: eight qa_* tools plus a skill that let an agent explore an app via browser, desktop or mobile drivers, record the path, then replay it deterministically with assertions and reports.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1398402279",
+   "capabilities": [],
+   "commit": "720f85a7facdc582111ead57e93e4fafb8af51a0",
+   "confidence": "reviewed",
+   "full_name": "joeseesun/qiaomu-reader-dsh",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 75.0,
+    "stage1": 69.0,
+    "substance": 99.9
+   },
+   "rank": 26,
+   "reasons": [
+    "A real EPUB and PDF reader with listening, word lookup and AI discussion built into the Harness sidebar.",
+    "15,489 lines of its own code with 26 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.0,
+   "stars": 10,
+   "summary": "Ebook reader inside DSH: EPUB, PDF, TXT, Markdown import, highlights, vocabulary book, text to speech (system, cloud and local Kokoro), free lookup translation, and AI companion chat over the page.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1346222428",
+   "capabilities": [],
+   "commit": "b56d77a062f9e02c71d2b080f92d04130690181b",
+   "confidence": "reviewed",
+   "full_name": "k-ying/dsh-vsceditor",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 72.5,
+    "stage1": 83.0,
+    "substance": 94.0
+   },
+   "rank": 27,
+   "reasons": [
+    "Watch your agent's edits land in a real VS Code editor with live diff follow and file locking, inside the DSH page.",
+    "4,983 lines of its own code with 4 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 80.0,
+   "stars": 10,
+   "summary": "Embeds a code-server VS Code panel (or drives local VS Code) next to DSH sessions, with a bundled bridge extension that follows agent edits as red/green diffs and locks files during writes.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1335623195",
+   "capabilities": [
+    "search"
+   ],
+   "commit": "9b8f54496294db471f3f657d59daa9adb6185098",
+   "confidence": "reviewed",
+   "full_name": "rogerdigital/dsh-searxng",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 77.0,
+    "substance": 95.4
+   },
+   "rank": 28,
+   "reasons": [
+    "Key-free web search for the agent via your own SearXNG, with a one-command managed Docker setup and a doctor/repair CLI.",
+    "9,148 lines of its own code with 25 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.8,
+   "stars": 11,
+   "summary": "Registers a SearXNG-backed web search provider (cache, pacing, failover URLs) plus a large CLI that sets up, repairs and updates a managed Docker SearXNG instance.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1343209811",
+   "capabilities": [],
+   "commit": "bf122209e3d5061211680308d72031af5481856e",
+   "confidence": "reviewed",
+   "full_name": "wldxiaobai/dsh-project-mcp-manager",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 85.0,
+    "substance": 89.0
+   },
+   "rank": 29,
+   "reasons": [
+    "Drop a .dsh/mcp.yml in a repo and its MCP servers mount only for sessions in that project, with live reload and per-tool allow/deny.",
+    "8,221 lines of its own code with 13 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.8,
+   "stars": 10,
+   "summary": "Loads MCP servers from per-project .dsh/mcp.yml or mcp.json (plus legacy .mcp.json), hot-reloads on file change, hides tools per session project, and ships a dsh-mcp CLI and a settings page service.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1334777465",
+   "capabilities": [],
+   "commit": "460219cf687733a9930c6fc2145fee33dde233b8",
+   "confidence": "reviewed",
+   "full_name": "PeterBon/dsh-hooks",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 88.0,
+    "substance": 97.0
+   },
+   "rank": 30,
+   "reasons": [
+    "Fire a command or a desktop, webhook or Feishu notification on turn end, tool call or approval request using only YAML, with dry-run and history.",
+    "14,297 lines of its own code with 19 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.7,
+   "stars": 8,
+   "summary": "Config-driven lifecycle hooks: declare event to command rules in the profile patch, with match filters, retries, debounce and failure events, plus built-in desktop, webhook and Feishu notifications and a settings GUI.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1378377907",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "aa70dfcf920c6321936a9514012e0052219f1a97",
+   "confidence": "reviewed",
+   "full_name": "DDDMUC/dsh-delete-turn",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 80.0,
+    "stage1": 66.0,
+    "substance": 88.6
+   },
+   "rank": 31,
+   "reasons": [
+    "Delete a bad message or whole turn from what the model sees without rewriting the append-only session log.",
+    "3,351 lines of its own code with 5 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.4,
+   "stars": 10,
+   "summary": "Adds per-message delete in the chat: removes a user message, reply step, whole reply or whole turn from the model context by appending one official surface-replace event, and hides it in the UI.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1336671463",
+   "capabilities": [],
+   "commit": "6069b26d38fc004ef31b26a7c5ee52488fa0a76a",
+   "confidence": "reviewed",
+   "full_name": "yu502950715yang/dsh-use-wallpaper",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 86.0,
+    "substance": 97.5
+   },
+   "rank": 32,
+   "reasons": [
+    "Your Steam Wallpaper Engine scenes, animated with particles and effects, running as the background of the DSH web UI.",
+    "55,866 lines of its own code with 149 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.4,
+   "stars": 11,
+   "summary": "Renders Wallpaper Engine scene wallpapers live behind the DSH web GUI using three.js, a PKG and texture unpacker, effect chains, puppet animation and a WASM particle sim; videos and web wallpapers play, others fall back.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1335800498",
+   "capabilities": [],
+   "commit": "6d81141a73b2da014b8eefd2d543d30c734241a3",
+   "confidence": "reviewed",
+   "full_name": "fan56/dsh-subagent-registry",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 75.0,
+    "stage1": 83.0,
+    "substance": 85.9
+   },
+   "rank": 33,
+   "reasons": [
+    "Write an agent as a markdown file with a model and persona, and the main model can delegate to it, resume it after an interruption, and follow up.",
+    "14,502 lines of its own code with 36 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.3,
+   "stars": 9,
+   "summary": "Turns markdown files in ~/.dsh/agents into callable subagents via use_agent and ask_agent tools, with resume of interrupted runs, background dispatch, a /registry-config command, and an opt-in codemode toolchain.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1411553473",
+   "capabilities": [
+    "orchestration"
+   ],
+   "commit": "1372e0f1007b73d627cbe7798527a0455a362eaf",
+   "confidence": "reviewed",
+   "full_name": "bloodarea/dsh-agent-team-presets",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 74.0,
+    "substance": 94.9
+   },
+   "rank": 34,
+   "reasons": [
+    "Define a named Team once, give each member its own model and tool policy and private skills, then summon it from the chat box.",
+    "112,996 lines of its own code with 72 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.1,
+   "stars": 10,
+   "summary": "Saves reusable multi-agent Team presets (captain plus members, each with own prompt, model, reasoning effort, tools and private skills) and lets you pick one or chat with one member from the composer.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1338542602",
+   "capabilities": [
+    "observability"
+   ],
+   "commit": "8d8c71ce67286399f27b628a5adb6bef51b26356",
+   "confidence": "reviewed",
+   "full_name": "wqy8593521/dsh-model-pro",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 80.0,
+    "stage1": 80.0,
+    "substance": 76.5
+   },
+   "rank": 35,
+   "reasons": [
+    "Smart routes that fail over to the next provider before any content reaches the chat, with a log showing which target served each turn and any reasoning-level downgrade.",
+    "14,015 lines of its own code with 13 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.1,
+   "stars": 8,
+   "summary": "Settings-page UI to manage llm-pi-ai providers: CRUD, enable/disable with restore on uninstall, model discovery, connectivity tests, smart routing with fallback, composites, health probes and request stats.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1369792827",
+   "capabilities": [],
+   "commit": "4e63542cdd85fe9c0abd8ca7f732127bf49c7c83",
+   "confidence": "reviewed",
+   "full_name": "LyaxZ/dsh-fonttune",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 81.0,
+    "substance": 100.0
+   },
+   "rank": 36,
+   "reasons": [
+    "Tune conversation typography live from a floating panel, with separate light and dark sets and a West/CJK font split.",
+    "34,819 lines of its own code with 16 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.0,
+   "stars": 8,
+   "summary": "Typography tuner for DSH: font, size, weight, line height, tracking and paragraph spacing for conversation, interface and code, with light and dark sets, presets and a floating tuning panel; injects first-paint CSS.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1431813153",
+   "capabilities": [],
+   "commit": "1c41bf19dab7054eb4f27f66d2d61f617941cea3",
+   "confidence": "reviewed",
+   "full_name": "regrevia/dsh-fast-mode",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 81.0,
+    "substance": 100.0
+   },
+   "rank": 37,
+   "reasons": [
+    "A lightning chip that trims agent narration and batches tool calls, backed by a paired benchmark claiming about half the wall time.",
+    "15,017 lines of its own code with 29 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 79.0,
+   "stars": 10,
+   "summary": "Per-conversation speed mode for DSH: a prompt-side guidance section plus a scheduler for parallel tool calls, a bounded shell-call timeout, stall guard and metrics journal; it does not change model, effort or request body.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1335606489",
+   "capabilities": [],
+   "commit": "ea07ae3e75d0eaeb5e1655bf26f0057b676823bb",
+   "confidence": "reviewed",
+   "full_name": "Lee-Hilex/dsh-mineru",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 73.8,
+    "stage1": 74.0,
+    "substance": 93.0
+   },
+   "rank": 38,
+   "reasons": [
+    "Lets a text-only model read papers and contracts as structured Markdown with page-and-block anchors it can cite.",
+    "5,377 lines of its own code with 17 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 78.6,
+   "stars": 9,
+   "summary": "Parses PDF, Office, HTML and images into Markdown through the MinerU cloud API, with page-range chunking, resume, a safe zip extractor, and optional page-anchored Markdown so the agent can cite pages.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1334298839",
+   "capabilities": [],
+   "commit": "31cf94f38ff4e1e961dfca51098967e861e49cc4",
+   "confidence": "reviewed",
+   "full_name": "jiezeng2004-design/dsh-requirements-alignment",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 75.0,
+    "stage1": 62.0,
+    "substance": 97.1
+   },
+   "rank": 39,
+   "reasons": [
+    "Stops a long-running agent from quietly widening scope or breaking your stated constraints by recording a baseline and asking once when direction would change.",
+    "7,520 lines of its own code with 28 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.9,
+   "stars": 8,
+   "summary": "Drift guard for long agent tasks: injects a policy plus a durable requirement baseline, adds establish_baseline and report_drift tools, a /align command and a status UI, so scope changes are put to the user.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1428140855",
+   "capabilities": [],
+   "commit": "503fbaebbee7ddc3b665a079a7d6462166653f9c",
+   "confidence": "reviewed",
+   "full_name": "AumiSatori/dsh-ui-beautify",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 82.0,
+    "substance": 99.5
+   },
+   "rank": 40,
+   "reasons": [
+    "A full theming studio for DSH with separate light and dark sets, background media and a preset market with hash-checked downloads.",
+    "13,441 lines of its own code with 115 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.7,
+   "stars": 9,
+   "summary": "Large web UI theming plugin: glass panels, custom backgrounds, chat bubbles, particles, a preset market, plus a small Windows-only host half for file rename, delete-to-recycle-bin and clipboard.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1418868622",
+   "capabilities": [],
+   "commit": "96163d52eff0c23cf4ad0b0dfdfd60f4ad53b660",
+   "confidence": "reviewed",
+   "full_name": "huanlin-labs/dsh-skill-cockpit",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 82.0,
+    "substance": 98.8
+   },
+   "rank": 41,
+   "reasons": [
+    "One page shows all skills the machine exposes and says exactly why a broken one is missing, with a one-click frontmatter repair that writes a backup first.",
+    "11,238 lines of its own code with 20 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.5,
+   "stars": 8,
+   "summary": "Skill management page for DSH: lists every skill root, explains why a skill is dropped, toggles skills by renaming the entry file, and adds backup, trash, vault, usage, presets and a doctor CLI.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1380851775",
+   "capabilities": [
+    "review"
+   ],
+   "commit": "1965d8421d61def71438e5ed344301060f1bb722",
+   "confidence": "reviewed",
+   "full_name": "XiangyuYue/boardwise",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 67.5,
+    "stage1": 86.0,
+    "substance": 92.5
+   },
+   "rank": 42,
+   "reasons": [
+    "Let an agent actually read an EasyEDA schematic and review it with 23 design rules, ERC and DRC, with findings tied to components, pins and nets.",
+    "229,653 lines of its own code with 500 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.5,
+   "stars": 11,
+   "summary": "DSH tools that spawn a local Python CLI to review EasyEDA Pro schematics and boards, mark findings, compile offline drawings and run diagnostics; judgement stays in Python, TypeScript is a thin argv and file adapter.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1413264040",
+   "capabilities": [],
+   "commit": "cbedaab86e4479f7985507004427b74512d39bcf",
+   "confidence": "reviewed",
+   "full_name": "Tranquillitatis-Lab/dsh-tool-activator",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 75.0,
+    "stage1": 70.0,
+    "substance": 88.6
+   },
+   "rank": 43,
+   "reasons": [
+    "Cuts the tool schemas sent every turn: the model starts with eight basics and activates bash, web or others only when needed.",
+    "4,334 lines of its own code with 19 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.4,
+   "stars": 11,
+   "summary": "Hides most tools from the model by default, showing only a configurable basic set plus an available-tools catalog, and adds an activate_tools tool so the agent loads others on demand, tracked per session.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1389945615",
+   "capabilities": [],
+   "commit": "ea255b8f210c5485cd610232c3df5ef8c9af31c2",
+   "confidence": "reviewed",
+   "full_name": "240xu/dsh-message-ops",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 72.5,
+    "stage1": 68.0,
+    "substance": 95.0
+   },
+   "rank": 44,
+   "reasons": [
+    "Roll back to any message, delete a single message, or undo that, which the official harness does not offer.",
+    "8,706 lines of its own code with 37 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.2,
+   "stars": 9,
+   "summary": "Adds message-level revert, delete, restore, fork and edit-and-resend to the DSH web UI, plus an agent tool, by writing append-only replace operations into session files through HTTP routes and a client panel.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1342165727",
+   "capabilities": [],
+   "commit": "cd1342270e2f15ca0a9cd51a44e81d38c54ec3f7",
+   "confidence": "reviewed",
+   "full_name": "ParticleLight/dsh-browser-plus",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 79.0,
+    "substance": 99.4
+   },
+   "rank": 45,
+   "reasons": [
+    "You watch the same real browser page the agent drives and can take control of a task, then hand it back, instead of a hidden headless session.",
+    "30,104 lines of its own code with 30 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.1,
+   "stars": 8,
+   "summary": "Electron-based visible browser for agents: one real window with an isolated view per session, CDP physical input, task manager and operation trail panels, human takeover and handback, write guard.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1377995490",
+   "capabilities": [
+    "search"
+   ],
+   "commit": "c1a7d5a222274e0ee77ffd3ab9b2e4e29fe6024b",
+   "confidence": "reviewed",
+   "full_name": "Ryuu-64/dsh-find-all",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 80.0,
+    "substance": 93.2
+   },
+   "rank": 46,
+   "reasons": [
+    "Search the titles and saved text of every conversation in all workspaces and jump back to the one you half remember.",
+    "18,632 lines of its own code with 25 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 77.1,
+   "stars": 9,
+   "summary": "Fork of dsh-find-bar that adds cross-conversation full-text search: a host route reads saved transcripts in batches and returns snippets, alongside Ctrl+F find-in-conversation with highlight.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1335235250",
+   "capabilities": [],
+   "commit": "e725fc7560d2175b9a34bc0b76869f7d2ae5227f",
+   "confidence": "reviewed",
+   "full_name": "bruc3van/safer-dsh-market",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 76.0,
+    "substance": 94.3
+   },
+   "rank": 47,
+   "reasons": [
+    "Browse and install DSH plugins in-app, then ask the agent to security-review what you installed before trusting it.",
+    "9,202 lines of its own code with 16 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 76.6,
+   "stars": 9,
+   "summary": "Plugin marketplace sidebar that reads a community catalog feed from a CDN, installs via the official plugin manager, uninstalls via pnpm remove, and stages an AI security-review prompt for installed plugins.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1336211031",
+   "capabilities": [
+    "observability"
+   ],
+   "commit": "12b743594aee77674fd116a78ab52a51ac7236b7",
+   "confidence": "reviewed",
+   "full_name": "PerryLink/dsh-budget",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 87.0,
+    "substance": 85.3
+   },
+   "rank": 48,
+   "reasons": [
+    "Set a session, daily and monthly spend cap and have the harness warn you, or stop model calls, before the bill surprises you.",
+    "4,276 lines of its own code with 14 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 76.6,
+   "stars": 10,
+   "summary": "Meters token cost per model, session and day, enforces session, daily and monthly caps with alerts and block or degrade policies, estimates carbon, tracks latency, and adds a settings tab and a budget command.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1356868140",
+   "capabilities": [],
+   "commit": "b42397d1c1698d2b5f3fd8245256e44ebaeac37b",
+   "confidence": "reviewed",
+   "full_name": "mokuyoaxis/dsh-iris",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 75.0,
+    "substance": 94.0
+   },
+   "rank": 49,
+   "reasons": [
+    "One install gives an agent image/video/audio generation with restart-safe task tracking and a local workbench UI, also reachable from other agents over MCP.",
+    "44,273 lines of its own code with 448 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 76.3,
+   "stars": 11,
+   "summary": "Media workspace for agents: image, video, music, speech and vision tools with model pools, durable background tasks, ComfyUI, a loopback web UI with bearer auth, an MCP server and a standalone CLI.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1408716998",
+   "capabilities": [],
+   "commit": "2cd40d762a0ee742af3655a7b4711b65e4f81689",
+   "confidence": "reviewed",
+   "full_name": "xuhao1/whalesong-studio",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 71.2,
+    "stage1": 78.0,
+    "substance": 86.0
+   },
+   "rank": 50,
+   "reasons": [
+    "Write a novel with a crew of agents that keeps characters and plot consistent over hundreds of thousands of words, then publish it as an illustrated, narrated website.",
+    "90,858 lines of its own code with 102 test files",
+    "Only 8 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 76.3,
+   "stars": 8,
+   "summary": "Long-form fiction studio: a showrunner agent plus continuity, planning, directing and post-production crew agents, story bible and cast tracking, with pipelines for illustration, audio drama, video and publishing a book site.",
+   "verdict": "gem"
+  },
+  {
+   "artifact_id": "github:1341363840",
+   "capabilities": [
+    "search"
+   ],
+   "commit": "32f062a85e625198197b20528357e43fe4537d09",
+   "confidence": "reviewed",
+   "full_name": "lemonxiny55/dsh-code-index",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 85.0,
+    "substance": 84.5
+   },
+   "rank": 51,
+   "reasons": [
+    "Before an agent edits, see which callers, imports and test leads a diff may affect, with each link clickable to its real source line.",
+    "10,335 lines of its own code with 35 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 76.0,
+   "stars": 9,
+   "summary": "Tree-sitter symbol and call-graph index of the workspace exposed as agent tools (search, symbols, repo map, refs, change context, context pack, optional health), plus a repo map prompt section and an Impact X-Ray panel.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1334065375",
+   "capabilities": [
+    "orchestration"
+   ],
+   "commit": "86ace1f8ad84eaa7079bd0d36f17b37645a8a903",
+   "confidence": "reviewed",
+   "full_name": "Saktawdi/dsh-ha-orchestrator",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 66.0,
+    "substance": 99.4
+   },
+   "rank": 52,
+   "reasons": [
+    "Long sessions survive model outages, and the model can split work across parallel subagents on its own.",
+    "13,109 lines of its own code with 6 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 75.9,
+   "stars": 9,
+   "summary": "Retries failed model calls on backup models with cooldowns, burst windows and provider circuit breakers, and adds an orchestrate tool that runs subagents in fanout, pipeline, supervisor, map-reduce or router modes.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1398493081",
+   "capabilities": [],
+   "commit": "1e9b69d4b94b536343f1037b24c7aa90b666ef6a",
+   "confidence": "reviewed",
+   "full_name": "viztor/dsh-opencode-patch",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 63.7,
+    "stage1": 97.0,
+    "substance": 86.0
+   },
+   "rank": 53,
+   "reasons": [
+    "Connect the whole OpenCode catalog with real names, prices and context windows, correct per-model endpoints, stable session affinity, and a live quota meter.",
+    "21,868 lines of its own code with 120 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 75.9,
+   "stars": 9,
+   "summary": "Fetch-layer patch that makes OpenCode Zen/Go models work in DSH: derives stable session ids, restores CLI user-agent and origin headers, routes each model to its API shape, enriches the model catalog, shows Go quota.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1333451113",
+   "capabilities": [],
+   "commit": "f456f9d05d21b5a45507b13295ba407dac21d800",
+   "confidence": "reviewed",
+   "full_name": "Max-Samson/dsh-usage-chart",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 84.0,
+    "substance": 87.3
+   },
+   "rank": 54,
+   "reasons": [
+    "See tokens, estimated cost, peak versus off-peak billing tier and account balance live under the input box, with a per-round cost chart.",
+    "5,791 lines of its own code with 8 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 75.0,
+   "stars": 9,
+   "summary": "Adds a usage indicator under the composer and an SVG dashboard of per-turn tokens, cost, cache hit, context pressure and compaction events, with list-price costing, pricing.json override and DeepSeek balance lookup.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1334801751",
+   "capabilities": [],
+   "commit": "e44c4c90c96b2c2e85828e96db8c7e9b222b2f67",
+   "confidence": "reviewed",
+   "full_name": "siegfly/dsh-deepseek-vision",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 74.0,
+    "substance": 89.1
+   },
+   "rank": 55,
+   "reasons": [
+    "Paste a screenshot to a text-only DeepSeek model and have it described transparently, with per-image caching so retries are not billed twice.",
+    "5,820 lines of its own code with 15 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 74.9,
+   "stars": 10,
+   "summary": "Registers a DeepSeek provider route that claims image input; images pasted or returned by tools are described by a configurable vision-language model (Qwen-VL by default) before the text-only wire.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1422961392",
+   "capabilities": [],
+   "commit": "7aed21192d9c8749cff14a0ff640a17b050abdf2",
+   "confidence": "reviewed",
+   "full_name": "kinggod899/dsh-reply-forge-v3",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 67.5,
+    "stage1": 66.0,
+    "substance": 97.0
+   },
+   "rank": 56,
+   "reasons": [
+    "Edit what the model remembers, including thinking blocks, and have it take effect immediately without restart.",
+    "13,239 lines of its own code with 21 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 74.6,
+   "stars": 10,
+   "summary": "Adds a Forge button to assistant replies to rewrite them, or hidden thinking blocks, in a live session through a message projection, so the model reads your edit next turn; falls back to rewriting the log on disk.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1358542017",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "82703d80c5225bba87ce134da4fe4ed208e8d3ee",
+   "confidence": "reviewed",
+   "full_name": "drscrewdriver/dsh-context-compression-improved",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 73.0,
+    "substance": 94.0
+   },
+   "rank": 57,
+   "reasons": [
+    "Shrinks bloated tool output with exact DeepSeek token counts and shows net savings per session in a monitor panel, falling back to the original on any doubt.",
+    "42,440 lines of its own code with 83 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 74.5,
+   "stars": 10,
+   "summary": "Tool-result context compressor for DSH: selectable profiles, tokenizer-measured reducers, a code-skeleton gate for big source reads, a savings monitor panel with SQLite stats, and an optional LLM relevance side channel.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1345874826",
+   "capabilities": [],
+   "commit": "64aca5b3175dd1e74ed434ef5d36a63632ee8c5c",
+   "confidence": "reviewed",
+   "full_name": "merenguesL/dsh-tool-normalizer",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 67.5,
+    "stage1": 65.0,
+    "substance": 96.1
+   },
+   "rank": 58,
+   "reasons": [
+    "Fewer wasted retry round-trips from malformed tool calls, with a dashboard of what was healed.",
+    "11,466 lines of its own code with 12 test files",
+    "Only 9 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 74.2,
+   "stars": 9,
+   "summary": "Intercepts tool calls to repair common model mistakes (missing description, markdown fences in code, relative paths, bad ranges), retries safe cases through the host pipeline, and shows healing stats in a dashboard.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1352247306",
+   "capabilities": [
+    "memory"
+   ],
+   "commit": "74a2c72b31abef95adf7afa53ec45d7dcb0ba47e",
+   "confidence": "reviewed",
+   "full_name": "QuantumKuba/dsh-graphify-plugin",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 66.2,
+    "stage1": 66.0,
+    "substance": 98.5
+   },
+   "rank": 59,
+   "reasons": [
+    "Gives the agent a graph-backed map of the repo with stale-graph detection, including a compact tool mode for small local models.",
+    "10,401 lines of its own code with 24 test files",
+    "Only 10 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 74.2,
+   "stars": 10,
+   "summary": "Connects the external Graphify code knowledge graph to DSH over MCP: tools for symbol and dependency queries, a freshness check that can run incremental updates, a /graphify command and a status tool.",
+   "verdict": "solid"
+  },
+  {
+   "artifact_id": "github:1334222248",
+   "capabilities": [],
+   "commit": "aee5085a8d371e2c7143816fd099e95bc28c7316",
+   "confidence": "reviewed",
+   "full_name": "Cassius0924/dsh-usage-dashboard",
+   "parts": {
+    "copy_overlap": 0.0,
+    "review": 68.8,
+    "stage1": 73.0,
+    "substance": 85.4
+   },
+   "rank": 60,
+   "reasons": [
+    "Answers how many days the balance lasts and how much moving work to off-peak hours would save, from session logs plus the balance API.",
+    "7,266 lines of its own code with 15 test files",
+    "Only 11 stars so far"
+   ],
+   "review_source": "claude-session",
+   "score": 73.8,
+   "stars": 11,
+   "summary": "Usage dashboard: balance runway, today and month spend, per-model and per-session cost, cache savings, image-token cost, and a peak-versus-off-peak savings estimate, in a floating widget and a tab.",
+   "verdict": "solid"
+  }
+ ],
+ "policy": "dsh-forge.gems/two-stage-v1",
+ "schema": "dsh-forge.gem-picks/v1"
+}

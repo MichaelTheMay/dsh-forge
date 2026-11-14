@@ -1,0 +1,20 @@
+{
+ "commit": "02bd3f9e8bd1323a04a478c4fd4ed49d142c08ac",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "qwe225380/dsh-omni-router",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "A preset that keeps simple tasks fast but forces plan-and-verify on risky ones, tracking acceptance criteria and evidence until done.",
+ "source": "claude-session",
+ "summary": "Installs an agent preset that classifies each task by complexity and risk, routes complex ones into plan mode, builds a task contract with evidence checks and recovery hints, and can propose installing missing capabilities.",
+ "verdict": "solid"
+}

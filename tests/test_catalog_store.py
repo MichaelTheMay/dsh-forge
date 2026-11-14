@@ -132,6 +132,28 @@ class CatalogStoreTests(unittest.TestCase):
         found = store.get(expected["artifact_id"])
         self.assertEqual(found, expected)
 
+    def test_discover_resolves_the_new_and_best_shelves(self):
+        snapshot = seed_snapshot()
+        plugins = [entry for entry in snapshot["supplemental_entries"] if entry.get("artifact_type") == "plugin"][:3]
+        snapshot["discovery_shelves"] = {
+            "new": [plugins[0]["artifact_id"], "github:does-not-exist", 7],
+            "new_window_days": 7,
+            "best": [
+                {"capability": "memory", "artifact_id": plugins[1]["artifact_id"]},
+                {"capability": "testing", "artifact_id": "github:does-not-exist"},
+                {"capability": 5, "artifact_id": plugins[2]["artifact_id"]},
+                "nonsense",
+            ],
+        }
+        shelves = self.store(snapshot).discover()["shelves"]
+        self.assertEqual([item["artifact_id"] for item in shelves["new"]], [plugins[0]["artifact_id"]])
+        self.assertEqual(shelves["new_window_days"], 7)
+        self.assertEqual([(entry["capability"], entry["artifact"]["artifact_id"]) for entry in shelves["best"]],
+                         [("memory", plugins[1]["artifact_id"])])
+        # A registry from before shelves existed simply has none.
+        empty = self.store(seed_snapshot()).discover()["shelves"]
+        self.assertEqual(empty, {"new": [], "new_window_days": 30, "best": []})
+
     def test_free_text_search_matches_across_names_topics_and_packages(self):
         store = self.store()
         found = store.search(query="agent teams")
