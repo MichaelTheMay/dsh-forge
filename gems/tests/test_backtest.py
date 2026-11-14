@@ -55,6 +55,20 @@ class OutcomeTests(unittest.TestCase):
 
 
 class CollectTests(unittest.TestCase):
+    def test_a_holdout_leaves_out_repositories_used_before(self):
+        def fetch(name, commit, destination):
+            root = Path(destination)
+            root.mkdir(parents=True)
+            (root / "index.js").write_text("const a = 1;\n" * 50, encoding="utf-8")
+            return root
+
+        with tempfile.TemporaryDirectory() as root:
+            then = registry(root, "then.json.gz", [record("a/one", 1), record("b/two", 1), record("c/three", 1)], "2026-10-15T00:00:00Z")
+            now = registry(root, "now.json.gz", [record("a/one", 9), record("b/two", 1), record("c/three", 1)], "2026-11-10T00:00:00Z")
+            dataset = backtest.collect(then, now, Path(root) / "work", exclude=["A/One", "c/three"], fetch=fetch)
+        self.assertEqual([row["full_name"] for row in dataset["rows"]], ["b/two"])
+        self.assertEqual((dataset["excluded"], dataset["population"]), (2, 1))
+
     def test_measures_the_older_code_and_scores_it(self):
         fetched = []
 
@@ -79,6 +93,7 @@ class CollectTests(unittest.TestCase):
             self.assertEqual(list((Path(root) / "work").glob("*")), [])
         self.assertEqual((dataset["then"], dataset["now"]), ("2026-10-15", "2026-11-10"))
         self.assertEqual((dataset["population"], dataset["population_took_off"]), (3, 1))
+        self.assertEqual(dataset["excluded"], 0)
         self.assertEqual([row["full_name"] for row in dataset["rows"]], ["a/big", "b/small"])
         # The code is fetched as it was then, not as it is now.
         self.assertIn(("a/big", "1" * 40), fetched)
