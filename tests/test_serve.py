@@ -687,6 +687,49 @@ class LauncherServer(LauncherFixture):
         self.assertEqual(started["id"], "cell_web")
         self.assertNotIn("path", launch.call_args.args[0])
 
+    def test_comparison_endpoints_start_show_and_choose(self):
+        cookie, _ = self.establish_session()
+        with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
+            saved_id = json.load(response)["saved_versions"][0]["id"]
+        identities = []
+        for name in ("One", "Two"):
+            with self.request(
+                "/api/v1/configurations", {"name": name, "version_id": saved_id, "launch": {"profile": "web"}}, cookie=cookie,
+            ) as response:
+                identities.append(json.load(response)["id"])
+        launched = iter(["cell_aaaaaaaaaa", "cell_bbbbbbbbbb"])
+        with mock.patch.object(self.launcher, "launch", side_effect=lambda raw: {"id": next(launched)}) as launch:
+            with self.request(
+                "/api/v1/comparisons", {"configuration_ids": identities, "task": "compare this"}, cookie=cookie,
+            ) as response:
+                self.assertEqual(response.status, 201)
+                started = json.load(response)
+        # Each run is headless with the task, and no path or command came from the request.
+        for call in launch.call_args_list:
+            self.assertEqual((call.args[0]["surface"], call.args[0]["task"]), ("headless", "compare this"))
+            self.assertNotIn("path", call.args[0])
+        self.assertEqual([run["cell_id"] for run in started["runs"]], ["cell_aaaaaaaaaa", "cell_bbbbbbbbbb"])
+        request = urllib.request.Request(self.url + "/api/v1/comparisons/" + started["id"], headers={"Cookie": cookie})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            self.assertEqual(json.load(response)["task"], "compare this")
+        with self.request(
+            "/api/v1/comparisons/" + started["id"] + "/choose", {"cell_id": "cell_bbbbbbbbbb"}, cookie=cookie,
+        ) as response:
+            self.assertEqual(json.load(response)["chosen_cell_id"], "cell_bbbbbbbbbb")
+        for path, body in [
+            ("/api/v1/comparisons", {"configuration_ids": identities[:1], "task": "x"}),
+            ("/api/v1/comparisons/" + started["id"] + "/choose", {"cell_id": "cell_cccccccccc"}),
+        ]:
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request(path, body, cookie=cookie)
+            self.assertEqual(caught.exception.code, 400)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(self.url + "/api/v1/comparisons/" + started["id"], timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        status = urllib.request.Request(self.url + "/api/v1/status", headers={"Cookie": cookie})
+        with urllib.request.urlopen(status, timeout=3) as response:
+            self.assertEqual(json.load(response)["comparisons"][0]["id"], started["id"])
+
     def test_assistant_endpoint_passes_only_saved_version_identity(self):
         cookie, _ = self.establish_session()
         with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:

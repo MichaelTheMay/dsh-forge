@@ -1825,6 +1825,10 @@ class Component extends DCLogic {
       artifactOpenCell: null,
       instanceTabs: [],
       activeInstanceId: null,
+      comparisons: {},
+      compareTask: '',
+      compareSelected: [],
+      compareBusy: false,
       configurationBusy: false,
       catalogStore: { available: false },
       storeArtifacts: [],
@@ -2080,7 +2084,7 @@ class Component extends DCLogic {
       .filter(cell => cell.agent_state !== 'exited' && cell.process !== 'exited')
       .map(cell => cell.id));
     for (const tab of this.openInstanceTabs()) {
-      if (!live.has(tab.id)) this.closeInstanceTab(tab.id);
+      if (tab.kind !== 'compare' && !live.has(tab.id)) this.closeInstanceTab(tab.id);
     }
   }
 
@@ -2089,7 +2093,7 @@ class Component extends DCLogic {
   persistInstanceTabs(tabs = this.state.instanceTabs) {
     try {
       window.localStorage.setItem('dsh-forge.instance-tabs', JSON.stringify(
-        tabs.filter(tab => !tab.closed).map(tab => ({ id: tab.id, title: tab.title }))
+        tabs.filter(tab => !tab.closed && tab.kind !== 'compare').map(tab => ({ id: tab.id, title: tab.title }))
       ));
     } catch {
       // storage is optional
@@ -2112,6 +2116,81 @@ class Component extends DCLogic {
       const tab = { id: cell.id, port: cell.port, title: String(item.title || this.instanceTabTitle(cell)).slice(0, 60), url: '', loading: true };
       this.setState({ instanceTabs: [...this.state.instanceTabs, tab] });
       this.connectInstanceTab(cell);
+    }
+  }
+
+  // ---- Comparisons: one task on several configurations, side by side -----------
+
+  toggleCompareConfiguration(id) {
+    const selected = this.state.compareSelected.includes(id)
+      ? this.state.compareSelected.filter(item => item !== id)
+      : [...this.state.compareSelected, id].slice(0, 4);
+    this.setState({ compareSelected: selected });
+  }
+
+  async startComparison() {
+    const task = this.state.compareTask.trim();
+    const ids = this.state.compareSelected;
+    if (!task || ids.length < 2 || this.state.compareBusy) return;
+    this.setState({ compareBusy: true });
+    try {
+      const comparison = await this.api('/api/v1/comparisons', {
+        method: 'POST', body: JSON.stringify({ configuration_ids: ids, task })
+      });
+      this.openComparison(comparison);
+      await this.refreshStatus(true);
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ compareBusy: false });
+    }
+  }
+
+  // A comparison opens as a tab next to the session tabs.
+  openComparison(comparison) {
+    if (!comparison || !comparison.id) return;
+    const exists = this.openInstanceTabs().some(tab => tab.id === comparison.id);
+    const short = String(comparison.task || '').replace(/\s+/g, ' ').trim();
+    const tab = { id: comparison.id, kind: 'compare', title: 'Compare · ' + (short.length > 28 ? short.slice(0, 27) + '…' : short) };
+    this.setState({
+      comparisons: { ...this.state.comparisons, [comparison.id]: comparison },
+      instanceTabs: exists ? this.state.instanceTabs : [...this.state.instanceTabs, tab],
+      activeInstanceId: comparison.id,
+      view: 'instance'
+    });
+  }
+
+  async showComparison(id) {
+    try {
+      this.openComparison(await this.api('/api/v1/comparisons/' + encodeURIComponent(id)));
+    } catch (error) {
+      this.flash(error.message);
+    }
+  }
+
+  // Unfinished comparisons that are open are refreshed along with the status poll.
+  async refreshComparisons() {
+    const pending = this.openInstanceTabs()
+      .filter(tab => tab.kind === 'compare' && !(this.state.comparisons[tab.id] || {}).done);
+    for (const tab of pending) {
+      try {
+        const comparison = await this.api('/api/v1/comparisons/' + encodeURIComponent(tab.id));
+        this.setState({ comparisons: { ...this.state.comparisons, [tab.id]: comparison } });
+      } catch {
+        // Try again on the next poll.
+      }
+    }
+  }
+
+  async chooseComparisonRun(id, cellId) {
+    try {
+      const comparison = await this.api('/api/v1/comparisons/' + encodeURIComponent(id) + '/choose', {
+        method: 'POST', body: JSON.stringify({ cell_id: cellId })
+      });
+      this.setState({ comparisons: { ...this.state.comparisons, [id]: comparison } });
+      this.flash('Marked as your pick');
+    } catch (error) {
+      this.flash(error.message);
     }
   }
 
@@ -2976,6 +3055,7 @@ class Component extends DCLogic {
     const artifactOpenCell = openedCell && openedCell.agent_state !== 'exited' && openedCell.process !== 'exited'
       ? opened : null;
     this.setState({
+      recentComparisons: Array.isArray(status.comparisons) ? status.comparisons : [],
       sidecarConnected: true, trees, treeId: current, cells, artifactOpenCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
@@ -3011,6 +3091,7 @@ class Component extends DCLogic {
       const status = await this.api('/api/v1/status');
       this.applyStatus(status);
       this.loadRecommendations();
+      this.refreshComparisons();
       await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
@@ -3714,19 +3795,46 @@ class Component extends DCLogic {
           title: tab.title,
           className: active ? 'tab itab tab-on' : 'tab itab',
           current: active ? 'page' : 'false',
-          dotColor: tab.loading ? WARN : (tab.url ? OK : BAD),
+          dotColor: tab.kind === 'compare'
+            ? ((s.comparisons[tab.id] || {}).done ? OK : WARN)
+            : (tab.loading ? WARN : (tab.url ? OK : BAD)),
           select: () => this.activateInstanceTab(tab.id),
           close: event => { if (event && event.stopPropagation) event.stopPropagation(); this.closeInstanceTab(tab.id); },
-          closeLabel: 'Close the ' + tab.title + ' tab (the session keeps running)'
+          closeLabel: tab.kind === 'compare'
+            ? 'Close this comparison tab (you can reopen it from the Local tab)'
+            : 'Close the ' + tab.title + ' tab (the session keeps running)'
         };
       }),
       // One slot per tab ever opened in this window, closed ones left empty, so
       // every frame keeps its position and none reloads when another tab closes.
       instanceSlots: s.instanceTabs.map(tab => {
         const active = s.view === 'instance' && s.activeInstanceId === tab.id;
+        if (!tab.closed && tab.kind === 'compare') {
+          const comparison = s.comparisons[tab.id] || { runs: [], task: '' };
+          const labels = { running: 'Running…', finished: 'Finished', failed: 'Did not start', gone: 'No longer available' };
+          const colors = { running: WARN, finished: OK, failed: BAD, gone: MUTED };
+          return {
+            id: tab.id, open: true, isCompare: true, isSession: false, ready: false, waiting: false,
+            title: tab.title, className: active ? 'instance-pane' : 'instance-pane pane-hidden',
+            task: comparison.task || '',
+            summary: comparison.done ? 'All runs have finished. Read them side by side and pick one.' : 'Running. Results appear as each one prints.',
+            runs: (comparison.runs || []).map(run => ({
+              name: run.name || 'Configuration',
+              stateLabel: labels[run.state] || run.state,
+              stateColor: colors[run.state] || MUTED,
+              output: run.error || (run.output || []).join('\n') || (run.state === 'running' ? 'Waiting for output…' : 'No output.'),
+              canPick: !!run.cell_id && run.state !== 'failed' && !run.chosen,
+              picked: !!run.chosen,
+              className: run.chosen ? 'compare-col compare-picked' : 'compare-col',
+              pick: () => this.chooseComparisonRun(tab.id, run.cell_id)
+            }))
+          };
+        }
         return {
           id: tab.id,
           open: !tab.closed,
+          isCompare: false,
+          isSession: !tab.closed,
           title: tab.title || '',
           url: tab.url || '',
           ready: !tab.closed && !!tab.url,
@@ -4045,6 +4153,36 @@ class Component extends DCLogic {
         runLabel: (configuration.runtime || {}).runnable ? 'Run' : 'Not ready'
       })),
       noConfigurations: s.configurations.length === 0,
+      ...(() => {
+        const options = s.configurations.map(configuration => {
+          const runnable = !!(configuration.runtime || {}).runnable;
+          const selected = s.compareSelected.includes(configuration.id);
+          return {
+            id: configuration.id, name: configuration.name, selected,
+            disabled: !runnable || (!selected && s.compareSelected.length >= 4),
+            note: runnable ? '' : 'Not ready to run',
+            toggle: () => this.toggleCompareConfiguration(configuration.id)
+          };
+        });
+        const count = s.compareSelected.length;
+        const ready = count >= 2 && !!s.compareTask.trim() && !s.compareBusy;
+        return {
+          showCompare: !!s.sidecarConnected && s.configurations.length >= 2,
+          compareOptions: options,
+          compareTask: s.compareTask,
+          setCompareTask: event => this.setState({ compareTask: String(event.target.value).slice(0, 20000) }),
+          compareDisabled: !ready,
+          compareLabel: s.compareBusy ? 'Starting…' : (count >= 2 ? 'Run on ' + count + ' configurations' : 'Choose at least two'),
+          startComparison: () => this.startComparison(),
+          recentComparisons: (s.recentComparisons || []).slice(0, 5).map(item => ({
+            id: item.id,
+            task: String(item.task || ''),
+            meta: item.runs + ' runs' + (item.chosen ? ' · picked' : ''),
+            open: () => this.showComparison(item.id)
+          })),
+          hasRecentComparisons: (s.recentComparisons || []).length > 0
+        };
+      })(),
 
       artifactRunConfirmationOpen: !!s.artifactRunConfirmation,
       artifactRunBusy: s.artifactRunBusy,

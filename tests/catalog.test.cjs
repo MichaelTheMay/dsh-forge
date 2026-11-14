@@ -479,6 +479,108 @@ test('Discover shows what is new and the best plugin for each job', async () => 
   assert.match(html, /Best in each category/);
 });
 
+// ---- Comparisons ----
+function compareApp() {
+  const c = embedded();
+  const configuration = (id, name, runnable = true) => ({
+    id, name, version_id: 'v', status: 'ready', selections: [], runtime: { runnable, reason: runnable ? 'Ready' : 'Needs setup' }
+  });
+  c.applyStatus({
+    ...statusWith([]),
+    configurations: [configuration('config_a', 'Fast'), configuration('config_b', 'Careful'), configuration('config_c', 'Broken', false)],
+    comparisons: [{ id: 'cmp_0000000000000001', task: 'older task', runs: 2, chosen: true }]
+  });
+  return c;
+}
+const comparisonView = (done, chosen = null) => ({
+  id: 'cmp_00000000000000aa', task: 'Summarise the repository in three bullet points', done, chosen_cell_id: chosen,
+  runs: [
+    { name: 'Fast', cell_id: 'cell_aaaaaaaaaa', state: done ? 'finished' : 'running', output: done ? ['one', 'two'] : [], error: '', chosen: chosen === 'cell_aaaaaaaaaa' },
+    { name: 'Careful', cell_id: null, state: 'failed', output: [], error: 'No free port', chosen: false }
+  ]
+});
+
+test('comparing needs a task and at least two ready configurations', () => {
+  const c = compareApp();
+  let values = c.renderVals();
+  assert.equal(values.showCompare, true);
+  assert.deepEqual(values.compareOptions.map(option => [option.name, option.disabled, option.note]),
+    [['Fast', false, ''], ['Careful', false, ''], ['Broken', true, 'Not ready to run']]);
+  assert.equal(values.compareDisabled, true);
+  assert.equal(values.compareLabel, 'Choose at least two');
+  values.compareOptions[0].toggle();
+  c.renderVals().compareOptions[1].toggle();
+  values = c.renderVals();
+  assert.equal(values.compareDisabled, true); // still no task
+  values.setCompareTask({ target: { value: '  compare this  ' } });
+  values = c.renderVals();
+  assert.equal(values.compareDisabled, false);
+  assert.equal(values.compareLabel, 'Run on 2 configurations');
+  // Unticking drops back below two.
+  values.compareOptions[0].toggle();
+  assert.equal(c.renderVals().compareDisabled, true);
+  // With fewer than two saved configurations the section is not shown at all.
+  const empty = embedded();
+  assert.equal(empty.renderVals().showCompare, false);
+  assert.deepEqual(values.recentComparisons.map(item => [item.task, item.meta]), [['older task', '2 runs · picked']]);
+});
+
+test('a comparison opens as a tab with one column per configuration', async () => {
+  const c = compareApp();
+  c.setState({ compareSelected: ['config_a', 'config_b'], compareTask: 'Summarise the repository in three bullet points' });
+  const calls = [];
+  c.refreshStatus = async () => {};
+  c.api = async (url, options) => {
+    calls.push([url, options && options.body]);
+    return comparisonView(false);
+  };
+  await c.renderVals().startComparison();
+  assert.deepEqual(calls[0], ['/api/v1/comparisons', JSON.stringify({ configuration_ids: ['config_a', 'config_b'], task: 'Summarise the repository in three bullet points' })]);
+  assert.equal(c.state.view, 'instance');
+  let values = c.renderVals();
+  assert.deepEqual(values.instanceTabs.map(tab => tab.title), ['Compare · Summarise the repository in…']);
+  let pane = values.instanceSlots[0];
+  assert.equal(pane.isCompare, true);
+  assert.equal(pane.isSession, false);
+  assert.deepEqual(pane.runs.map(run => [run.name, run.stateLabel, run.output, run.canPick]), [
+    ['Fast', 'Running…', 'Waiting for output…', true],
+    ['Careful', 'Did not start', 'No free port', false]
+  ]);
+
+  // The status poll refreshes an unfinished comparison, then leaves a finished one alone.
+  c.api = async url => { calls.push([url]); return comparisonView(true); };
+  await c.refreshComparisons();
+  pane = c.renderVals().instanceSlots[0];
+  assert.equal(pane.runs[0].output, 'one\ntwo');
+  assert.match(pane.summary, /All runs have finished/);
+  const before = calls.length;
+  await c.refreshComparisons();
+  assert.equal(calls.length, before);
+
+  // Picking marks that run and removes its button.
+  c.api = async (url, options) => { calls.push([url, options.body]); return comparisonView(true, 'cell_aaaaaaaaaa'); };
+  await pane.runs[0].pick();
+  assert.deepEqual(calls.at(-1), ['/api/v1/comparisons/cmp_00000000000000aa/choose', '{"cell_id":"cell_aaaaaaaaaa"}']);
+  pane = c.renderVals().instanceSlots[0];
+  assert.deepEqual([pane.runs[0].picked, pane.runs[0].canPick, pane.runs[0].className], [true, false, 'compare-col compare-picked']);
+});
+
+test('a comparison tab survives status updates and is not remembered as a session', async () => {
+  const c = compareApp();
+  c.openComparison(comparisonView(true));
+  // No live session has this id, but a comparison tab is not a session tab.
+  c.applyStatus(statusWith([]));
+  assert.equal(c.renderVals().instanceTabs.length, 1);
+  assert.equal(stored.get('dsh-forge.instance-tabs') || '[]', '[]');
+  // Reopening the same comparison does not add a second tab.
+  c.openComparison(comparisonView(true));
+  assert.equal(c.state.instanceTabs.length, 1);
+  c.closeInstanceTab('cmp_00000000000000aa');
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  // Output is plain text in a pre block, never markup.
+  assert.match(html, /<pre class="compare-output">\{\{ r\.output \}\}<\/pre>/);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);

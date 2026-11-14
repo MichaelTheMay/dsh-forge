@@ -60,6 +60,21 @@
   .instance-pane .empty { margin: auto; border: 0; }
   .instance-bar { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 16px; border-bottom: 1px solid oklch(0.3 0.012 255); color: oklch(0.7 0.012 255); font-size: 12px; }
   .pane-hidden { visibility: hidden; pointer-events: none; }
+  /* Comparisons */
+  .compare { margin-top: 34px; }
+  .compare-form { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; margin-bottom: 12px; }
+  .compare-options { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+  .compare-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: oklch(0.9 0.008 255); }
+  .compare-actions { display: flex; align-items: center; gap: 14px; }
+  .compare-task { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+  .compare-pane { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; padding: 18px 22px; gap: 14px; overflow: auto; }
+  .compare-task-text { margin: 4px 0 6px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  .compare-cols { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 1fr); gap: 14px; flex: 1 1 auto; min-height: 240px; overflow-x: auto; }
+  .compare-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid oklch(0.31 0.013 255); border-radius: 12px; background: oklch(0.205 0.01 255); }
+  .compare-picked { border-color: oklch(0.6 0.13 150); }
+  .compare-col-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid oklch(0.3 0.012 255); }
+  .compare-name { font-weight: 600; font-size: 13px; }
+  .compare-output { flex: 1 1 auto; margin: 0; padding: 12px 14px; overflow: auto; font: 12px/1.55 'IBM Plex Mono', monospace; white-space: pre-wrap; word-break: break-word; color: oklch(0.86 0.008 255); }
   .tab-fork.tab-on { border-bottom-color: oklch(0.78 0.11 300); }
   .status-pill { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid oklch(0.32 0.012 255); border-radius: 999px; font-size: 11.5px; color: oklch(0.7 0.012 255); white-space: nowrap; }
   .update-link { font: 500 11.5px 'IBM Plex Mono', monospace; white-space: nowrap; }
@@ -686,6 +701,19 @@
           <sc-if value="{{ p.waiting }}" hint-placeholder-val="{{ false }}">
             <div class="empty"><h2>{{ p.title }}</h2><p>{{ p.waitingLabel }}</p><sc-if value="{{ p.canRetry }}" hint-placeholder-val="{{ false }}"><button class="btn" onClick="{{ p.retry }}">Try again</button></sc-if></div>
           </sc-if>
+          <sc-if value="{{ p.isCompare }}" hint-placeholder-val="{{ false }}">
+            <div class="compare-pane">
+              <div class="compare-head"><span class="label">The task</span><p class="compare-task-text">{{ p.task }}</p><p class="note">{{ p.summary }}</p></div>
+              <div class="compare-cols">
+                <sc-for list="{{ p.runs }}" as="r" hint-placeholder-count="0">
+                  <article class="{{ r.className }}">
+                    <header class="compare-col-head"><span class="compare-name">{{ r.name }}</span><span class="note"><span class="dot" style="display: inline-block; margin-right: 6px; background: {{ r.stateColor }};"></span>{{ r.stateLabel }}</span><span class="spacer"></span><sc-if value="{{ r.picked }}" hint-placeholder-val="{{ false }}"><span class="tag tag-ok">Your pick</span></sc-if><sc-if value="{{ r.canPick }}" hint-placeholder-val="{{ false }}"><button class="btn btn-sm" onClick="{{ r.pick }}">Pick this one</button></sc-if></header>
+                    <pre class="compare-output">{{ r.output }}</pre>
+                  </article>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
         </div>
       </sc-if>
     </sc-for>
@@ -855,6 +883,28 @@
           </div>
         </sc-if>
       </section>
+
+      <sc-if value="{{ showCompare }}" hint-placeholder-val="{{ false }}">
+      <section class="compare" aria-label="Compare configurations">
+        <div class="section-head"><h2 class="h2">Compare configurations</h2><span class="note">Give the same task to up to four saved configurations and read the results side by side.</span></div>
+        <div class="panel compare-form">
+          <div class="compare-options">
+            <sc-for list="{{ compareOptions }}" as="o" hint-placeholder-count="2">
+              <label class="compare-option"><input type="checkbox" checked="{{ o.selected }}" disabled="{{ o.disabled }}" onChange="{{ o.toggle }}" /><span>{{ o.name }}</span><sc-if value="{{ o.note }}" hint-placeholder-val="{{ false }}"><span class="note">{{ o.note }}</span></sc-if></label>
+            </sc-for>
+          </div>
+          <textarea class="ptask" value="{{ compareTask }}" onChange="{{ setCompareTask }}" placeholder="The task to give each configuration" aria-label="Task to compare"></textarea>
+          <div class="compare-actions"><button class="btn btn-go" onClick="{{ startComparison }}" disabled="{{ compareDisabled }}">{{ compareLabel }}</button><span class="note">Each one runs in its own isolated container and uses its own model calls.</span></div>
+        </div>
+        <sc-if value="{{ hasRecentComparisons }}" hint-placeholder-val="{{ false }}">
+          <div class="panel">
+            <sc-for list="{{ recentComparisons }}" as="k" hint-placeholder-count="0">
+              <div class="prow"><span class="pname compare-task">{{ k.task }}</span><span class="note">{{ k.meta }}</span><span class="spacer"></span><button class="btn btn-sm" onClick="{{ k.open }}">Open</button></div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </section>
+      </sc-if>
 
     </div>
   </main>
