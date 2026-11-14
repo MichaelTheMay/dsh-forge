@@ -25,7 +25,7 @@ jobs:
       - name: Check whitespace and Python syntax
         run: |
           git diff --check
-          python3 -m compileall -q dsh_forge scripts tests
+          python3 -m compileall -q dsh_forge scripts tests gems
       - name: Validate the embedded metadata
         run: |
           python3 scripts/ingest_package_catalog.py --check
@@ -35,5 +35,7 @@ jobs:
         run: node --test tests/catalog.test.cjs tests/auth.test.mjs tests/likes.test.mjs
       - name: Test metadata safety and the launcher sidecar
         run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Test the hidden-gem system
+        run: python3 -m unittest discover -s gems/tests -t . -p 'test_*.py'
       - name: Produce the portable preview
         run: python3 scripts/package_preview.py dist/DSH_Forge_Launcher_Preview.html

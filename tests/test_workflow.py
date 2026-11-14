@@ -65,13 +65,18 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("scripts/analyze_registry.py", workflow)
         self.assertIn("scripts/build_catalog_feed.py", workflow)
         self.assertIn("scripts/enrich_registry.py", workflow)
-        # Index → evidence → fork analysis → ranking, each reading the previous step's output.
+        # Index → evidence → fork analysis → ranking → gem picks → fold picks in,
+        # each reading the previous step's output.
         order = [
             "--snapshot dist/registry-raw.json",
             "--output dist/registry-evidence.json",
             "--snapshot dist/registry-evidence.json",
             "--snapshot dist/registry-analyzed.json",
+            "python3 -m gems build",
+            "--output dist/gem-picks.json",
+            "scripts/apply_gem_picks.py",
             "--annotate dist/registry.json",
+            "scripts/build_catalog_feed.py",
         ]
         positions = [workflow.index(step) for step in order]
         self.assertEqual(positions, sorted(positions))
