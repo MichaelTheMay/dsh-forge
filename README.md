@@ -63,19 +63,30 @@ expanded feed digests before serving bounded search pages. Local detection,
 installation, and launch controls remain disabled until the loopback sidecar
 below is running.
 
-The release pipeline produces a signed Windows installer. Public binaries are
-published only after the required Windows signing credentials are configured
-and the packaged app passes its smoke test. Until then, use the source launch
-command below. See [Windows desktop application](docs/windows-desktop.md) for
-the platform security boundary, build steps, and trusted signing setup.
-
-Python 3.9+ is sufficient to serve the app. There is no frontend dependency
-installation or build step, and no API key is needed to browse local metadata.
-
-Open the desktop window from an existing checkout:
+### Install on Linux
 
 ```bash
-cd ~/dsh-forge
+git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh
+dsh-forge
+```
+
+`scripts/install.sh` needs Python 3.9+ and nothing system-wide. It prepares the
+isolated container that plugins and forks run in (when
+[Apptainer](https://apptainer.org) is installed), records the container image's
+checksum, and creates a `dsh-forge` command and a desktop menu entry. Without
+Apptainer it sets up browsing only and prints the command to install it.
+`./scripts/install.sh --dry-run` shows what it would do without changing
+anything.
+
+Windows and macOS can browse the catalog on the website today. Installing and
+running needs the isolated container, which is Linux-only for now. A Windows
+installer exists in the release pipeline but has never been published; see
+[Windows desktop application](docs/windows-desktop.md).
+
+There is no frontend dependency installation or build step, and no API key is
+needed to browse. To start the app straight from a checkout without installing:
+
+```bash
 python3 scripts/serve.py --desktop --sync-catalog
 ```
 

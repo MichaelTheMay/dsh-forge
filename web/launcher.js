@@ -1725,7 +1725,7 @@ function cautionNotes(artifact) {
 }
 
 const VISITOR_KEY = 'dsh-forge:visitor:v1';
-const SOURCE_INSTALL_COMMAND = 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog';
+const SOURCE_INSTALL_COMMAND = 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh';
 
 function storedVisitor() {
   try {

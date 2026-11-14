@@ -651,10 +651,13 @@ test('public root presents the product site and routes into the working applicat
     assert.equal(landing.showAppShell, false);
     assert.match(html, /Every plugin\. <span>Every fork\. One launcher\.<\/span>/);
     assert.doesNotMatch(html, /Apple silicon and Intel|macOS releases/);
-    assert.match(html, /Windows 10 and 11/);
     assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
     await landing.landingCopyInstall();
-    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog');
+    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh');
+    // The site only offers what exists: a Linux install, and other systems marked as later.
+    assert.match(html, /Install on Linux/);
+    assert.match(html, /Windows and macOS<\/span><h3>Coming later/);
+    assert(!/Download for Windows/.test(html));
     // The hero leads to the Discover page, not to a launcher preview.
     assert(!('landingOpenLauncher' in landing));
     landing.landingCommunity();
