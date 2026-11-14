@@ -204,6 +204,10 @@ def _fork(
     }
 
 
+# A child fork's page that answers with one of these is treated as gone, not as a failure.
+UNAVAILABLE_STATUSES = frozenset({404, 410, 451})
+
+
 def fetch_github_fork_network(
     upstream: str = DEFAULT_UPSTREAM,
     *,
@@ -241,6 +245,7 @@ def fetch_github_fork_network(
     pages = 0
     last_headers: dict[str, str | None] = {}
     expanded_parents = 0
+    unavailable_parents: list[dict[str, Any]] = []
     unfinished_page: str | None = None
     while frontier and pages < max_pages:
         parent, expected_children, next_page = frontier.pop(0)
@@ -251,7 +256,19 @@ def fetch_github_fork_network(
             if next_page in seen_pages:
                 raise RegistryError("GitHub pagination returned a cycle")
             seen_pages.add(next_page)
-            payload, last_headers = _github_json(next_page, token=token, opener=opener)
+            try:
+                payload, last_headers = _github_json(next_page, token=token, opener=opener)
+            except RegistryError as error:
+                # A fork can be deleted, made private or blocked between being listed
+                # and having its own forks read. That loses only its descendants, so
+                # it is recorded and the crawl goes on. The root failing still stops.
+                status = getattr(error.__cause__, "code", None)
+                if parent == upstream or status not in UNAVAILABLE_STATUSES:
+                    raise
+                unavailable_parents.append({"repository": parent, "status": status})
+                next_page = None
+                parent_seen = -1
+                break
             if not isinstance(payload, list) or len(payload) > 100:
                 raise RegistryError("GitHub fork page is not a bounded list")
             for item in payload:
@@ -282,6 +299,8 @@ def fetch_github_fork_network(
         if next_page:
             unfinished_page = next_page
             break
+        if parent_seen < 0:
+            continue
         if expected_children is not None and parent_seen != expected_children:
             parent_mismatches.append({"repository": parent, "reported": expected_children, "discovered": parent_seen})
 
@@ -293,7 +312,10 @@ def fetch_github_fork_network(
         raise RegistryError("GitHub root default branch changed while indexing")
     expected_after = _count(root_after)
     stable = expected_before == expected_after
-    complete = not truncated and stable and len(direct_ids) == expected_after and not parent_mismatches
+    complete = (
+        not truncated and stable and len(direct_ids) == expected_after
+        and not parent_mismatches and not unavailable_parents
+    )
     reasons = []
     if truncated:
         reasons.append("page budget exhausted")
@@ -303,6 +325,8 @@ def fetch_github_fork_network(
         reasons.append("direct visible count does not reconcile with GitHub root fork count")
     if parent_mismatches:
         reasons.append("one or more child-fork pages did not reconcile with their reported counts")
+    if unavailable_parents:
+        reasons.append("one or more forks became unavailable before their own forks could be read")
     fetched_at = _timestamp(end_headers.get("date") or root_headers.get("date"))
     digest_input = "\n".join(str(value) for value in sorted(records)).encode("ascii")
     digest = hashlib.sha256(digest_input).hexdigest()[:16]
@@ -318,6 +342,7 @@ def fetch_github_fork_network(
         "descendant_count": len(records) - len(direct_ids),
         "expanded_parents": expanded_parents,
         "parent_count_mismatches": parent_mismatches[:100],
+        "unavailable_parents": unavailable_parents[:100],
         "pages": pages,
         "truncated": truncated,
         "incomplete_reasons": reasons,

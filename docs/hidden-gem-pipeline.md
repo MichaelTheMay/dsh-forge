@@ -37,7 +37,7 @@ that is **built like projects that get noticed, but hasn't been noticed yet**.
    identities are reduced to two numbers before publication: endorsements
    (stars from upstream Harness contributors or authors of plugins with 50+
    stars) and stars in the last 30 days. If evidence would push the published
-   registry past 60 MB, the least promising records lose theirs first.
+   registry past 120 MB, the least promising records lose theirs first.
 2. **How well it's built.** An equal-weight craft index over the same
    creator-controlled practices (tests, CI, README depth, docs, changelog,
    releases, license, commit volume, recent commits, freshness), so a good

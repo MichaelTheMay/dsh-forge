@@ -38,9 +38,11 @@ DEFAULT_BATCH_SIZE = 25
 DEFAULT_MAX_REPOSITORIES = 3_000
 DEFAULT_MAX_POINTS = 900
 DEFAULT_DEADLINE_SECONDS = 20 * 60
-# The previously deployed public API rejects registries over 64 MB expanded, so the
-# published registry keeps a margin below that whatever evidence accumulates.
-MAX_PUBLISHED_REGISTRY_BYTES = 60 * 1024 * 1024
+# The public API (api/catalog.mjs) and the local catalog store both reject registries
+# over 128 MiB expanded, so the published registry keeps a margin below that whatever
+# evidence accumulates. The registry alone passed 75 MiB in November 2026: a cap below
+# its own size strips every evidence record and silently disables evidence ranking.
+MAX_PUBLISHED_REGISTRY_BYTES = 120 * 1024 * 1024
 REUSE_DAYS = 14
 RECENT_DAYS = 90
 STARGAZER_SAMPLE = 10

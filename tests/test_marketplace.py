@@ -98,6 +98,21 @@ class MarketplaceTests(unittest.TestCase):
         with self.assertRaisesRegex(MarketplaceError, "integrity digest"):
             normalize_catalog(catalog, "https://catalog.example/plugins.json")
 
+    def test_accepts_a_package_that_never_wrote_a_description(self):
+        catalog = sample_catalog()
+        catalog["entries"][0]["package"]["description"] = ""
+        catalog["integrity"]["digest"] = catalog_digest(catalog)
+        snapshot = normalize_catalog(catalog, "https://catalog.example/plugins.json")
+        self.assertEqual(
+            snapshot["supplemental_entries"][0]["description"],
+            "No plugin description was provided.",
+        )
+
+        catalog["entries"][0]["package"]["name"] = ""
+        catalog["integrity"]["digest"] = catalog_digest(catalog)
+        with self.assertRaisesRegex(MarketplaceError, "invalid package name"):
+            normalize_catalog(catalog, "https://catalog.example/plugins.json")
+
     def test_fetch_requires_https_and_rechecks_redirect(self):
         with self.assertRaisesRegex(MarketplaceError, "credential-free HTTPS"):
             fetch_catalog("http://catalog.example/plugins.json")
