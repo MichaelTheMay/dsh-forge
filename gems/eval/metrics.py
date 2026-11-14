@@ -59,17 +59,3 @@ def spearman(left: Sequence[float], right: Sequence[float]) -> float | None:
         return None
     return round(cov / (var_a * var_b) ** 0.5, 3)
 
-
-def top_share_lift(scores: Sequence[float], outcomes: Sequence[float], share: float = 0.2) -> float | None:
-    """Mean outcome of the top-scored ``share`` divided by the mean outcome overall.
-
-    1.0 means the top of the ranking did no better than picking at random.
-    """
-    if len(scores) != len(outcomes) or len(scores) < 5:
-        return None
-    overall = sum(outcomes) / len(outcomes)
-    if overall <= 0:
-        return None
-    count = max(1, int(round(len(scores) * share)))
-    top = sorted(range(len(scores)), key=lambda index: -scores[index])[:count]
-    return round((sum(outcomes[index] for index in top) / count) / overall, 3)

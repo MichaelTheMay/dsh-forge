@@ -1,6 +1,6 @@
 import unittest
 
-from gems.eval.metrics import pairwise_agreement, precision_at_k, spearman, top_share_lift
+from gems.eval.metrics import pairwise_agreement, precision_at_k, spearman
 
 
 class MetricsTests(unittest.TestCase):
@@ -25,14 +25,6 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(spearman([1, 2, 3, 4], [4, 3, 2, 1]), -1.0)
         self.assertIsNone(spearman([1, 1, 1], [1, 2, 3]))
         self.assertIsNone(spearman([1, 2], [1, 2]))
-
-    def test_top_share_lift(self):
-        scores = [9, 8, 1, 1, 1, 1, 1, 1, 1, 1]
-        outcomes = [10, 10, 0, 0, 0, 0, 0, 0, 0, 0]
-        self.assertEqual(top_share_lift(scores, outcomes, 0.2), 5.0)
-        self.assertEqual(top_share_lift(scores[::-1], outcomes, 0.2), 0.0)
-        self.assertIsNone(top_share_lift([1, 2], [1, 2]))
-        self.assertIsNone(top_share_lift([1] * 6, [0] * 6))
 
 
 if __name__ == "__main__":
