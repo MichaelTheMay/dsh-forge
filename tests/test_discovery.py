@@ -268,6 +268,51 @@ class PackTests(unittest.TestCase):
         self.assertEqual(discovery.primary_capabilities(named)[0], "memory")
 
 
+class ShelfTests(unittest.TestCase):
+    def shelves(self, extra):
+        records = population() + extra
+        reports, _validation = discovery.score_records(records, NOW)
+        return discovery.compose_shelves(records, reports, NOW), {record["artifact_id"]: record for record in records}
+
+    def test_new_shelf_holds_well_built_plugins_created_this_week(self):
+        extra = [
+            plugin(900, quality=0.95, stars=2, created_at=iso(3)),
+            plugin(901, quality=0.9, stars=1, created_at=iso(5)),
+            plugin(902, quality=0.85, stars=0, created_at=iso(6)),
+            plugin(903, quality=0.9, stars=1, created_at=iso(6), owner="owner900"),  # same owner as 900
+            plugin(904, quality=0.9, stars=1, created_at=iso(20)),  # outside the week
+            plugin(905, quality=0.9, stars=1, created_at=iso(2), license=None),  # fails a gate
+        ]
+        extra[-1]["license"] = {}
+        shelves, _records = self.shelves(extra)
+        self.assertEqual(shelves["new"], ["github:900", "github:901", "github:902"])
+        self.assertEqual(shelves["new_window_days"], 7)
+
+    def test_new_shelf_widens_to_a_month_and_is_empty_rather_than_thin(self):
+        month = [plugin(900 + index, quality=0.9, stars=1, created_at=iso(12 + index)) for index in range(3)]
+        shelves, _records = self.shelves(month)
+        self.assertEqual((len(shelves["new"]), shelves["new_window_days"]), (3, 30))
+        shelves, _records = self.shelves(month[:2])
+        self.assertEqual(shelves["new"], [])
+
+    def test_best_shelf_takes_the_best_built_plugin_per_category_even_if_popular(self):
+        extra = [
+            plugin(900, quality=0.99, stars=4000, name="dsh-memory-palace"),
+            plugin(901, quality=0.7, stars=1, name="dsh-memory-lite"),
+            plugin(902, quality=0.95, stars=3, name="dsh-test-runner"),
+            # Mentions memory in passing; its main purpose is something else.
+            plugin(903, quality=1.0, stars=1, name="dsh-theme", description="A colourful theme plugin that will remember your memory of colours"),
+        ]
+        shelves, records = self.shelves(extra)
+        best = {entry["capability"]: entry["artifact_id"] for entry in shelves["best"]}
+        self.assertEqual(best["memory"], "github:900")
+        self.assertEqual(best["testing"], "github:902")
+        self.assertNotIn("github:903", best.values())
+        # One entry per category, and no plugin fills two.
+        self.assertEqual(len(best), len(shelves["best"]))
+        self.assertEqual(len(set(best.values())), len(best))
+
+
 class QueueTests(unittest.TestCase):
     def test_queue_publishes_v3_candidates_with_reasons_and_annotates_the_registry(self):
         records = population()
@@ -290,6 +335,17 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(snap["discovery_policy"], discovery.POLICY)
         marked = [record for record in records if "discovery" in record]
         self.assertEqual(len(marked), annotated)
+
+    def test_queue_carries_shelves_and_the_registry_annotation_keeps_them(self):
+        records = population() + [plugin(900 + index, quality=0.9, stars=1, created_at=iso(2 + index)) for index in range(3)]
+        registry = snapshot(records)
+        queue = discovery.discovery_queue(registry)
+        self.assertEqual(len(queue["shelves"]["new"]), 3)
+        discovery.annotate(registry, queue)
+        self.assertEqual(registry["discovery_shelves"], queue["shelves"])
+        # Whole numbers and strings only: signed snapshots reject floats.
+        self.assertTrue(all(isinstance(item, str) for item in queue["shelves"]["new"]))
+        self.assertIsInstance(queue["shelves"]["new_window_days"], int)
 
     def test_without_evidence_the_queue_falls_back_to_the_metadata_policy(self):
         records = population(size=60)
