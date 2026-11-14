@@ -1,0 +1,20 @@
+{
+ "commit": "713ef1440a26744f3767d91eb928277c1dcc4c67",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "kuun993/dsh-loop-engine",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Run one chat on Codex and another on Claude Code or Kimi inside the same DSH, switchable from the composer.",
+ "source": "claude-session",
+ "summary": "Per-session choice of agent loop: built-in, or hosted Claude Code, Codex, Pi or Kimi Code drivers, with a routing factory, composer selector, header badge and a managed block in the profile patch file.",
+ "verdict": "gem"
+}

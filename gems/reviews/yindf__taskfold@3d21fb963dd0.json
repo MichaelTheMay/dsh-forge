@@ -1,0 +1,20 @@
+{
+ "commit": "3d21fb963dd0e27db0832b46094d18d03cc01de1",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "yindf/taskfold",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "Finished work collapses into one short titled summary that reuses the provider prefix cache, with the exact original always recoverable, so long sessions stay cheap.",
+ "source": "claude-session",
+ "summary": "Task_begin and task_end tools let the agent wrap work in named tasks; on close the span is summarised by a subclassed compaction engine, the original saved to a file, and fold_recall can restore it. Adds task bar UI and savings stats.",
+ "verdict": "gem"
+}

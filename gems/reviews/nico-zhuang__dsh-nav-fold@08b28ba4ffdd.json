@@ -1,0 +1,20 @@
+{
+ "commit": "08b28ba4ffdd4f7b0418aa6c4694f46565743049",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "nico-zhuang/dsh-nav-fold",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "One click folds the DSH sidebar nav to a compact icon row, with keyboard-driven session navigation and an optional three-tab workspace view.",
+ "source": "claude-session",
+ "summary": "Browser-side DSH sidebar tweaks: collapse the nav panel list into an icon row with drag ordering, optional workspace/activity/favorites tabs, shortcut-driven focus navigation, and a macOS logo hide.",
+ "verdict": "solid"
+}

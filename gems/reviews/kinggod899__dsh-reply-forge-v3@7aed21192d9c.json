@@ -1,0 +1,20 @@
+{
+ "commit": "7aed21192d9c8749cff14a0ff640a17b050abdf2",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "kinggod899/dsh-reply-forge-v3",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "Edit what the model remembers, including thinking blocks, and have it take effect immediately without restart.",
+ "source": "claude-session",
+ "summary": "Adds a Forge button to assistant replies to rewrite them, or hidden thinking blocks, in a live session through a message projection, so the model reads your edit next turn; falls back to rewriting the log on disk.",
+ "verdict": "solid"
+}

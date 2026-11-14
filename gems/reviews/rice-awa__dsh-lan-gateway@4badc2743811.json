@@ -1,0 +1,20 @@
+{
+ "commit": "4badc2743811d159e6c9e6a5051294b40f8ac68e",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "rice-awa/dsh-lan-gateway",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Open your DSH web GUI from a phone or another machine safely: off by default, password required, sessions revocable, self-signed TLS built in.",
+ "source": "claude-session",
+ "summary": "Reverse proxy that exposes the loopback DSH web GUI to the LAN or internet behind a login, with HMAC session cookies, rate limiting, origin fencing for HTTP and WebSocket, optional TLS and a settings card.",
+ "verdict": "gem"
+}

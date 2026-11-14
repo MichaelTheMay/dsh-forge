@@ -1,0 +1,20 @@
+{
+ "commit": "1a9135b1cbfacb3c0c070302db3854132e221d8e",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "meyaomiao/dsh-server-deck",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "A card dashboard for all your servers with trend charts and a click-through terminal, plus agent tools to run commands on them.",
+ "source": "claude-session",
+ "summary": "Dashboard of SSH hosts with CPU, memory, disk and network trends, an xterm terminal over SSH, ssh config import, and two agent tools to list hosts and run non-interactive commands.",
+ "verdict": "solid"
+}

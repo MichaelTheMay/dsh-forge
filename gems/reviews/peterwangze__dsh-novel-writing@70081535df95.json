@@ -1,0 +1,20 @@
+{
+ "commit": "70081535df958a06fb6b83405b2531427a0b7e7f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "peterwangze/dsh-novel-writing",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "A stateful, human-gated pipeline for serial fiction from topic research to publishing export, with an in-browser manuscript editor.",
+ "source": "claude-session",
+ "summary": "Novel-writing workbench: manages books and chapters, tools for gate checks, reviews, publishing exports and data ingestion, plus a bundled 16-agent, 29-skill workflow preset and a web writing desk.",
+ "verdict": "solid"
+}

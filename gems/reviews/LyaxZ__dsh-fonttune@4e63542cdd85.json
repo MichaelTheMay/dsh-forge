@@ -1,0 +1,20 @@
+{
+ "commit": "4e63542cdd85fe9c0abd8ca7f732127bf49c7c83",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "LyaxZ/dsh-fonttune",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 5,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Tune conversation typography live from a floating panel, with separate light and dark sets and a West/CJK font split.",
+ "source": "claude-session",
+ "summary": "Typography tuner for DSH: font, size, weight, line height, tracking and paragraph spacing for conversation, interface and code, with light and dark sets, presets and a floating tuning panel; injects first-paint CSS.",
+ "verdict": "solid"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "ca7bc47cc9ae589d361d57248e10e8fc4f3220d0",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Zephinel/dsh-intelligent-ui",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Ask for a two-day trip plan and get a clickable page with map, checklist and budget that updates locally without another model call.",
+ "source": "claude-session",
+ "summary": "Port of Open Intelligent UI to DSH: a render_ui tool lets the model answer with an OpenUI Lang program that the browser renders as an interactive page with charts, maps, forms, drawings and export.",
+ "verdict": "solid"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "1e9b69d4b94b536343f1037b24c7aa90b666ef6a",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "viztor/dsh-opencode-patch",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Connect the whole OpenCode catalog with real names, prices and context windows, correct per-model endpoints, stable session affinity, and a live quota meter.",
+ "source": "claude-session",
+ "summary": "Fetch-layer patch that makes OpenCode Zen/Go models work in DSH: derives stable session ids, restores CLI user-agent and origin headers, routes each model to its API shape, enriches the model catalog, shows Go quota.",
+ "verdict": "solid"
+}

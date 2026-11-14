@@ -1,0 +1,20 @@
+{
+ "commit": "aa70dfcf920c6321936a9514012e0052219f1a97",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "DDDMUC/dsh-delete-turn",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Delete a bad message or whole turn from what the model sees without rewriting the append-only session log.",
+ "source": "claude-session",
+ "summary": "Adds per-message delete in the chat: removes a user message, reply step, whole reply or whole turn from the model context by appending one official surface-replace event, and hides it in the UI.",
+ "verdict": "gem"
+}

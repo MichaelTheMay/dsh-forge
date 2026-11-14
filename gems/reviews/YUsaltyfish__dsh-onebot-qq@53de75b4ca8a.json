@@ -1,0 +1,20 @@
+{
+ "commit": "53de75b4ca8af6991e3d39af79263d2ed79e5dc7",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "YUsaltyfish/dsh-onebot-qq",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Turns a DSH agent into a QQ group or private chat bot with a console, persona files, group memory and a built-in preset that strips shell and file tools.",
+ "source": "claude-session",
+ "summary": "QQ chat bot over OneBot v11 running inside DSH: wake-word gating, per-chat serial turns, a single outbound path with redaction, 12 sub-plugins, an admin console, and a trimmed chat-only agent preset.",
+ "verdict": "solid"
+}

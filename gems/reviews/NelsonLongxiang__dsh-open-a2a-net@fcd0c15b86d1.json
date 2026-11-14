@@ -1,0 +1,20 @@
+{
+ "commit": "fcd0c15b86d1c56a8ddbe7b98900ced21753ccbb",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "NelsonLongxiang/dsh-open-a2a-net",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Agents on different machines find each other with no central server and hand off tasks through signed cards, with a task-receipt ledger and sidebar panel.",
+ "source": "claude-session",
+ "summary": "Turns a DSH host into a node of a decentralized agent network: signed expiring agent cards, peer and zone discovery, direct routing and failover via model tools, joinable session nodes, receipts, and a sidebar control.",
+ "verdict": "gem"
+}

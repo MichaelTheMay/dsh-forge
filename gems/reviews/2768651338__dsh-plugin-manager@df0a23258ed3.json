@@ -1,0 +1,20 @@
+{
+ "commit": "df0a23258ed3761bcce12ad20958ba2c2a647a4c",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "2768651338/dsh-plugin-manager",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Gives every plugin a plain-language name and one-click enable or disable inside DSH, with notes you can edit.",
+ "source": "claude-session",
+ "summary": "Settings tab that lists loaded plugins with Chinese and English names and descriptions from a built-in catalog, toggles them by rewriting the global cordis.patch.yml, and offers backup and restore.",
+ "verdict": "solid"
+}

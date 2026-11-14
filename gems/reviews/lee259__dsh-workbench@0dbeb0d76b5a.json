@@ -1,0 +1,20 @@
+{
+ "commit": "0dbeb0d76b5a6a50983ee087b1a442c2c81ea9c0",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "lee259/dsh-workbench",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "A Codex-style review pane showing exactly what each turn changed, with diffs linked from the conversation's file references.",
+ "source": "claude-session",
+ "summary": "Right-side review and file workspace for DSH Web: per-turn change summaries with git and captured diffs, changed-file navigation, tool-call file links, tree, search, preview tabs and guarded editing.",
+ "verdict": "solid"
+}

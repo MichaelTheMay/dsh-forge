@@ -1,0 +1,20 @@
+{
+ "commit": "c418f2d6c92a8615e1c35c56b599435cc6e25197",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "EliteOtaku/dsh-opendesign-go",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 2,
+  "trust": 3,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "Not featured.",
+ "source": "claude-session",
+ "summary": "Reviewed and not featured.",
+ "verdict": "skip"
+}

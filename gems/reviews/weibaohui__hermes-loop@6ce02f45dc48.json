@@ -1,0 +1,20 @@
+{
+ "commit": "6ce02f45dc489a9fad4ab71f55d488b01ac294ed",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "weibaohui/hermes-loop",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "A self-improving loop: past conversations get distilled into reusable skills and persistent memory without the user writing anything.",
+ "source": "claude-session",
+ "summary": "After enough turns or tool calls, runs a zero-tool review agent over the transcript and writes distilled skills and cross-session memory files to disk, with approval and log-only modes and a skill archive (never delete).",
+ "verdict": "solid"
+}

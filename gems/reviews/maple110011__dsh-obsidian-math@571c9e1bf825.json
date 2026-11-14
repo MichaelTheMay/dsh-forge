@@ -1,0 +1,20 @@
+{
+ "commit": "571c9e1bf825a032873dc1bdbd8a195a79d4e91a",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "maple110011/dsh-obsidian-math",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "A math-notes assistant that remembers across sessions in plain markdown you can read and correct, with every reply linking back to the memory cards it used.",
+ "source": "claude-session",
+ "summary": "Obsidian sidebar assistant plus DSH preset that keeps layered markdown memory in the vault (profile, cards, idea memos, episodes), with note search, create and backlink tools, a unified recall tool and a memory review panel.",
+ "verdict": "solid"
+}

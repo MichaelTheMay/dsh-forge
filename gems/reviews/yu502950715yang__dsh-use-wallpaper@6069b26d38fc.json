@@ -1,0 +1,20 @@
+{
+ "commit": "6069b26d38fc004ef31b26a7c5ee52488fa0a76a",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "yu502950715yang/dsh-use-wallpaper",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "Your Steam Wallpaper Engine scenes, animated with particles and effects, running as the background of the DSH web UI.",
+ "source": "claude-session",
+ "summary": "Renders Wallpaper Engine scene wallpapers live behind the DSH web GUI using three.js, a PKG and texture unpacker, effect chains, puppet animation and a WASM particle sim; videos and web wallpapers play, others fall back.",
+ "verdict": "solid"
+}

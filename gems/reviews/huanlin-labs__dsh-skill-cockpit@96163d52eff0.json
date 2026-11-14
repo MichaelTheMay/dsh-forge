@@ -1,0 +1,20 @@
+{
+ "commit": "96163d52eff0c23cf4ad0b0dfdfd60f4ad53b660",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "huanlin-labs/dsh-skill-cockpit",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "One page shows all skills the machine exposes and says exactly why a broken one is missing, with a one-click frontmatter repair that writes a backup first.",
+ "source": "claude-session",
+ "summary": "Skill management page for DSH: lists every skill root, explains why a skill is dropped, toggles skills by renaming the entry file, and adds backup, trash, vault, usage, presets and a doctor CLI.",
+ "verdict": "solid"
+}

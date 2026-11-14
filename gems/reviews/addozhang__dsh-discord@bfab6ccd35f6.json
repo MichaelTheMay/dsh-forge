@@ -1,0 +1,20 @@
+{
+ "commit": "bfab6ccd35f62820dbe960469a0631836a001351",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "addozhang/dsh-discord",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Approve tool calls and answer agent questions from your phone in Discord, with the first surface to answer (Discord or web) winning and the other retiring.",
+ "source": "claude-session",
+ "summary": "Discord bot adapter that runs on the dsh web profile: an @mention opens a thread, creates a DSH session, streams the answer, and turns approvals and questions into buttons mirrored with the web panel.",
+ "verdict": "gem"
+}

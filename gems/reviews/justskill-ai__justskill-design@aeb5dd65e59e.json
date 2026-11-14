@@ -1,0 +1,20 @@
+{
+ "commit": "aeb5dd65e59e55d56e25200d444bbcecba69934c",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "justskill-ai/justskill-design",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "The agent designs screens into one validated HTML file via a strict op CLI, and you review and comment on them in a live canvas tab inside the harness, with no app or account.",
+ "source": "claude-session",
+ "summary": "A design skill plus CLI that keeps UI designs as one validated HTML file edited by typed operations; the DSH plugin registers the skill, scans workspaces and opens a local canvas in the sidebar.",
+ "verdict": "gem"
+}

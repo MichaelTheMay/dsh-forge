@@ -1,0 +1,20 @@
+{
+ "commit": "8c0677d24ea3d3ebeb578157b0ccc17d89cfd823",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "dryw/dsh-egm",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 5,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Get design docs stress-tested by reviewers that cannot see your chat or write files, with isolation enforced by the harness, not by a prompt.",
+ "source": "claude-session",
+ "summary": "Port of Google's Elephant-Goldfish design workflow: brainstorm, draft and review skills plus an egm_reviewer tool that spawns fresh-context, read-only reviewer subagents enforced by a tool allowlist.",
+ "verdict": "gem"
+}

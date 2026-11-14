@@ -1,0 +1,20 @@
+{
+ "commit": "ea255b8f210c5485cd610232c3df5ef8c9af31c2",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "240xu/dsh-message-ops",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Roll back to any message, delete a single message, or undo that, which the official harness does not offer.",
+ "source": "claude-session",
+ "summary": "Adds message-level revert, delete, restore, fork and edit-and-resend to the DSH web UI, plus an agent tool, by writing append-only replace operations into session files through HTTP routes and a client panel.",
+ "verdict": "solid"
+}

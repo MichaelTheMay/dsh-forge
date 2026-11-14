@@ -1,0 +1,20 @@
+{
+ "commit": "ea07ae3e75d0eaeb5e1655bf26f0057b676823bb",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Lee-Hilex/dsh-mineru",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Lets a text-only model read papers and contracts as structured Markdown with page-and-block anchors it can cite.",
+ "source": "claude-session",
+ "summary": "Parses PDF, Office, HTML and images into Markdown through the MinerU cloud API, with page-range chunking, resume, a safe zip extractor, and optional page-anchored Markdown so the agent can cite pages.",
+ "verdict": "solid"
+}

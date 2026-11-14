@@ -1,0 +1,20 @@
+{
+ "commit": "71343f97437fd3b7f1c80f91bfdb589b9c2136fe",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Wine-Red/dsh-codex-timeline",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Search the full session and jump to any turn, star turns, or branch a new session from one turn on top of the built-in navigator.",
+ "source": "claude-session",
+ "summary": "Adds search over a whole conversation, favorite turns, branching from a chosen turn and layout tuning to DSH's native turn navigator, with settings persisted through the host settings service.",
+ "verdict": "solid"
+}

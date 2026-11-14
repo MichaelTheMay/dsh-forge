@@ -1,0 +1,20 @@
+{
+ "commit": "a943701ad5fcd93d70e05cf409206c14da325b44",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "YunongDai2005/dsh-theone",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "Talk in one chat; every message lands in the right topic session, so contexts stop mixing and several topics run in parallel.",
+ "source": "claude-session",
+ "summary": "Routes each chat message to a per-topic background DSH session with its own context and progress notes, via a cheap LLM routing call with rule fallback, a topic cluster UI, move/undo of misroutes, and optional Telegram, WeChat and iMessage links.",
+ "verdict": "solid"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "8d8c71ce67286399f27b628a5adb6bef51b26356",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "wqy8593521/dsh-model-pro",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Smart routes that fail over to the next provider before any content reaches the chat, with a log showing which target served each turn and any reasoning-level downgrade.",
+ "source": "claude-session",
+ "summary": "Settings-page UI to manage llm-pi-ai providers: CRUD, enable/disable with restore on uninstall, model discovery, connectivity tests, smart routing with fallback, composites, health probes and request stats.",
+ "verdict": "gem"
+}

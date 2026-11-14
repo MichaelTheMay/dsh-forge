@@ -1,0 +1,20 @@
+{
+ "commit": "ddc64f5cb7fb3631f473775506a2bd9512fba0cd",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "a903067276-rgb/dsh-hud",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 2,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "A sidebar tab with live multi-repo git status, expandable diffs and balance, folding clean repos so only dirty ones show.",
+ "source": "claude-session",
+ "summary": "Sidebar or floating HUD panel showing git status with diffs and history across repos, MCP servers, skills, version, token usage and account balance with presets for several providers.",
+ "verdict": "solid"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "c1a7d5a222274e0ee77ffd3ab9b2e4e29fe6024b",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Ryuu-64/dsh-find-all",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Search the titles and saved text of every conversation in all workspaces and jump back to the one you half remember.",
+ "source": "claude-session",
+ "summary": "Fork of dsh-find-bar that adds cross-conversation full-text search: a host route reads saved transcripts in batches and returns snippets, alongside Ctrl+F find-in-conversation with highlight.",
+ "verdict": "solid"
+}
