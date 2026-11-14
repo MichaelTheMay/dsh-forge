@@ -110,6 +110,9 @@ test('a plugin page leads with what the code reviewer found', () => {
   assert.equal(values.gemSummary, 'Keeps a searchable memory.');
   assert.equal(values.gemReadLabel, 'We read the code');
   assert.deepEqual(values.whyGemReasons, ['Worth a look.', '900 lines of its own code']);
+  // The install caution no longer claims the code was not looked at.
+  assert(values.detailCautions.some(note => /read this project’s code, but nothing was run/.test(note)));
+  assert(!values.detailCautions.some(note => /not their code/.test(note)));
   values = open({ ...report, gem: { confidence: 'reviewed at an earlier version', summary: 'Older read.' } });
   assert.equal(values.gemReadLabel, 'We read an earlier version of the code');
   assert.equal(values.hasGemSummary, true);
@@ -117,6 +120,7 @@ test('a plugin page leads with what the code reviewer found', () => {
   values = open({ ...report, gem: { confidence: 'measured', verdict: null, summary: 'Catalog text', reasons: [] } });
   assert.equal(values.hasGemSummary, false);
   assert.equal(values.gemReadLabel, 'Measured from the code, not yet read');
+  assert(values.detailCautions.some(note => /not their code/.test(note)));
   // No gem block at all: nothing new appears.
   values = open(report);
   assert.equal(values.hasGemReadLabel, false);

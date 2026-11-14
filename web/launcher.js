@@ -3468,7 +3468,9 @@ class Component extends DCLogic {
     const detailCautions = detail.id && !detail.catalogPackage ? [
       ...cautionNotes(detail),
       ...(detail.licenseOk ? [] : ['No license reported, so reuse terms are unclear']),
-      'DSH Forge checks public information about projects, not their code'
+      detail.hiddenGem && detail.hiddenGem.gem && /^reviewed/.test(String(detail.hiddenGem.gem.confidence))
+        ? 'A reviewer read this project’s code, but nothing was run. Reading is not a safety guarantee'
+        : 'DSH Forge checks public information about projects, not their code'
     ] : [];
     const spotlightSource = discoverData.plugins[0] || null;
     const landingSpotlight = spotlightSource ? {
