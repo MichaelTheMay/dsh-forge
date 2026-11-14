@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             print(RUBRIC)
             return 0
         return eval_cli.dispatch(args)
-    except (CandidateError, OSError, ValueError) as error:
+    except (CandidateError, OSError, ValueError, RuntimeError) as error:
         _say(f"error: {error}")
         return 1
 
