@@ -29,9 +29,9 @@ python3 -m gems label --picks gems/eval/data/gem-picks-2026-11-13.json
 Open the address it prints, look at about 30 picks, and click "Gem" or "Not a gem" for each. Then:
 
 ```bash
+python3 -m gems backtest-score --dataset gems/eval/data/backtest-2026-10-15.json --output /tmp/backtest-scored.json
 python3 -m gems eval --picks gems/eval/data/gem-picks-2026-11-13.json \
-  --backtest <(python3 -m gems backtest-score --dataset gems/eval/data/backtest-2026-10-15.json --output /dev/stdout) \
-  --note "first human labels"
+  --backtest /tmp/backtest-scored.json --note "first human labels"
 ```
 
 - [ ] Decide whether to publish the reviewers' critical notes. They are in `gems/reviews-private/` on the build machine only, because they criticise named third-party projects after a quick read.
