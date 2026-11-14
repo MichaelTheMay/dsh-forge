@@ -2832,9 +2832,19 @@ class Launcher:
             if not cell:
                 raise LauncherError("Unknown cell")
             self._refresh_cell(cell)
+            if cell.get("process") != "alive" or cell.get("state") not in {"starting", "running"}:
+                raise LauncherError("The cell is not running; start it again before opening")
             value = cell.get("open_url")
             if not value:
                 raise LauncherError("The authenticated DSH Web URL is not ready yet; check logs and try again")
+            parsed = urlsplit(str(value))
+            if (
+                parsed.scheme != "http"
+                or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or parsed.port != cell.get("port")
+            ):
+                cell.pop("open_url", None)
+                raise LauncherError("The authenticated DSH Web URL failed loopback validation")
             return str(value)
 
     def artifacts(self, cell_id: str, limit: int = 100) -> list[dict[str, Any]]:

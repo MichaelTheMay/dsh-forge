@@ -871,6 +871,15 @@
             <aside class="card" aria-label="Actions">
               <sc-if value="{{ isPluginDetail }}" hint-placeholder-val="{{ true }}">
                 <div class="card-head"><span class="label">Install and run</span><span class="{{ executionPillClass }}">{{ executionPill }}</span></div>
+                <div class="checks" aria-label="Run readiness">
+                  <sc-for list="{{ artifactReadiness }}" as="item" hint-placeholder-count="4">
+                    <div class="check">
+                      <sc-if value="{{ item.ready }}" hint-placeholder-val="true"><span class="check-icon check-ok" aria-hidden="true">✓</span></sc-if>
+                      <sc-if value="{{ item.blocked }}" hint-placeholder-val="false"><span class="check-icon check-warn" aria-hidden="true">!</span></sc-if>
+                      <span class="check-version">{{ item.label }}</span><span class="check-label">{{ item.detail }}</span>
+                    </div>
+                  </sc-for>
+                </div>
                 <label class="field" for="artifact-version">Harness version
                   <select id="artifact-version" class="select" value="{{ selectedPackageVersion }}" onChange="{{ setPackageVersion }}" disabled="{{ noPackageVersions }}">
                     <sc-for list="{{ packageVersions }}" as="version" hint-placeholder-count="1"><option value="{{ version.id }}">{{ version.label }}</option></sc-for>
@@ -888,6 +897,15 @@
               </sc-if>
               <sc-if value="{{ isForkDetail }}" hint-placeholder-val="{{ false }}">
                 <div class="card-head"><span class="label">Install fork</span><span class="{{ forkInstallPillClass }}">{{ forkInstallPill }}</span></div>
+                <div class="checks" aria-label="Run readiness">
+                  <sc-for list="{{ artifactReadiness }}" as="item" hint-placeholder-count="4">
+                    <div class="check">
+                      <sc-if value="{{ item.ready }}" hint-placeholder-val="true"><span class="check-icon check-ok" aria-hidden="true">✓</span></sc-if>
+                      <sc-if value="{{ item.blocked }}" hint-placeholder-val="false"><span class="check-icon check-warn" aria-hidden="true">!</span></sc-if>
+                      <span class="check-version">{{ item.label }}</span><span class="check-label">{{ item.detail }}</span>
+                    </div>
+                  </sc-for>
+                </div>
                 <p class="prose">{{ forkInstallText }}</p>
                 <sc-if value="{{ forkInstallActive }}" hint-placeholder-val="{{ false }}"><div class="progress" role="progressbar" aria-label="Installation progress"><span style="{{ forkProgressStyle }}"></span></div></sc-if>
                 <sc-if value="{{ forkShowLog }}" hint-placeholder-val="{{ false }}"><div class="logbox logbox-sm" aria-live="polite"><sc-for list="{{ forkLogLines }}" as="line" hint-placeholder-count="4"><div class="log-msg">{{ line.text }}</div></sc-for></div></sc-if>

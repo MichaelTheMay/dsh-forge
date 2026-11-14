@@ -76,6 +76,27 @@ test('assistant iframe is inert in source and accepts only an explicit loopback 
   }
 });
 
+test('cell open URLs require the requested cell and exact loopback port', () => {
+  const c = instance();
+  const cell = { id: 'cell_safe', port: 3200 };
+  assert.equal(
+    c.validatedCellOpenUrl({ cell_id: cell.id, url: 'http://127.0.0.1:3200/?token=secret' }, cell),
+    'http://127.0.0.1:3200/?token=secret'
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: 'cell_other', url: 'http://127.0.0.1:3200/' }, cell),
+    /cell identity/
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: cell.id, url: 'https://example.com:3200/' }, cell),
+    /loopback HTTP/
+  );
+  assert.throws(
+    () => c.validatedCellOpenUrl({ cell_id: cell.id, url: 'http://127.0.0.1:9999/' }, cell),
+    /cell port/
+  );
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -466,7 +487,7 @@ test('plugin detail never exposes a host install command', () => {
   assert(!/Copy exact-version install command/.test(html));
 });
 
-test('eligible plugin requires a large risk confirmation before the stable-ID install-run request', async () => {
+test('eligible plugin requires confirmation, stays on its detail page, and opens the verified cell', async () => {
   const c = instance();
   const saved = {
     id: 'version_123456789abc', path: '~/dsh', state: 'ready', tree_ids: ['tree_123456789abc'],
@@ -479,37 +500,58 @@ test('eligible plugin requires a large risk confirmation before the stable-ID in
   });
   const plugin = CATALOG.find(item => item.type === 'plugin');
   c.setState({
+    view: 'catalog',
+    catalogType: 'plugin',
     detailOpen: true,
     artifactId: plugin.id,
     detailArtifact: {
       ...plugin,
       execution: {
         eligible: true, reason: 'Exact signed recipe is ready for sandbox installation',
-        recipe_slug: 'single-vet', recipe_name: 'Single vet', reviewer: 'Release curator'
+        recipe_slug: 'single-vet', recipe_name: 'Single vet', reviewer: 'Release curator',
+        exact_package: true, exact_repository_commit: true
       }
     }
   });
   let values = c.renderVals();
   assert.equal(values.installAndRunDisabled, false);
+  assert.deepEqual(values.artifactReadiness.map(item => [item.label, item.ready]), [
+    ['Launcher connected', true],
+    ['Exact signed recipe', true],
+    ['Harness target selected', true],
+    ['Apptainer isolation', true]
+  ]);
   values.installAndRun();
   values = c.renderVals();
   assert.equal(values.artifactRunConfirmationOpen, true);
   assert.equal(values.artifactRunConfirmDisabled, true);
   values.toggleArtifactRisk({ target: { checked: true } });
   let request;
+  const pendingWindow = { location: { replace() {} }, close() {} };
+  const opened = [];
+  const previousOpen = windowStub.open;
+  windowStub.open = (...args) => { opened.push(args); return pendingWindow; };
   c.api = async (url, options) => {
     request = { url, body: JSON.parse(options.body) };
-    return { cell: { id: 'cell_plugin' } };
+    return { cell: { id: 'cell_plugin', port: 3200 } };
   };
   c.refreshStatus = async () => {};
-  await c.renderVals().startArtifactRun();
+  let openRequest;
+  c.openCell = async (cell, target) => { openRequest = { cell, target }; return true; };
+  try {
+    await c.renderVals().startArtifactRun();
+  } finally {
+    windowStub.open = previousOpen;
+  }
   assert.deepEqual(request, {
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  // The new session opens on the Local tab with its startup logs showing.
-  assert.equal(c.state.view, 'launch');
-  assert.equal(c.state.logCell, 'cell_plugin');
+  assert.deepEqual(opened, [['about:blank', '_blank', 'noopener']]);
+  assert.deepEqual(openRequest, { cell: { id: 'cell_plugin', port: 3200 }, target: pendingWindow });
+  assert.equal(c.state.view, 'catalog');
+  assert.equal(c.state.detailOpen, true);
+  assert.equal(c.state.artifactId, plugin.id);
   assert.equal(c.state.artifactRunConfirmation, null);
   assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
   assert.match(html, /Apptainer shares the host kernel/);
@@ -1253,6 +1295,12 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
   let values = c.renderVals();
   assert.equal(values.forkInstallLabel, 'Launch in sandbox…');
   assert.equal(values.forkInstallPill, 'Installed');
+  assert.deepEqual(values.artifactReadiness.map(item => [item.label, item.ready]), [
+    ['Launcher connected', true],
+    ['Pinned fork installed', true],
+    ['Launch-ready fork tree', true],
+    ['Apptainer isolation', true]
+  ]);
   assert.deepEqual(values.packageVersions.map(item => item.id), ['version_bbbbbbbbbbbb']);
   assert.equal(c.defaultHostVersionId(), 'version_bbbbbbbbbbbb');
 
@@ -1261,17 +1309,30 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
   assert.equal(local.buttonLabel, 'Launch…');
   let launched;
   c.api = async (url, options) => { launched = { url, body: JSON.parse(options.body) }; return { id: 'cell_x', port: 3200 }; };
-  c.inspectCell = async () => {};
-  local.launch();
+  let openRequest;
+  c.openCell = async (cell, target) => { openRequest = { cell, target }; return true; };
+  const pendingWindow = { location: { replace() {} }, close() {} };
+  const previousOpen = windowStub.open;
+  windowStub.open = () => pendingWindow;
+  values.forkInstallAction();
   values = c.renderVals();
   assert.equal(values.communityLaunchOpen, true);
   assert.equal(values.communityLaunchDisabled, true);
   values.toggleCommunityRisk({ target: { checked: true } });
-  await c.renderVals().confirmCommunityLaunch();
+  try {
+    await c.renderVals().confirmCommunityLaunch();
+  } finally {
+    windowStub.open = previousOpen;
+  }
   assert.equal(launched.url, '/api/v1/cells');
   assert.equal(launched.body.tree_id, tree.id);
   assert.equal(launched.body.acknowledge_risk, true);
   assert.equal(launched.body.home_mode, 'fresh');
+  assert.equal(launched.body.open_browser, true);
+  assert.deepEqual(openRequest, { cell: { id: 'cell_x', port: 3200 }, target: pendingWindow });
+  assert.equal(c.state.view, 'catalog');
+  assert.equal(c.state.detailOpen, true);
+  assert.equal(c.state.artifactId, FORK_ID);
 
   const forks = instance({}, '#forks');
   forks.setState({ forkInstallations: [{ artifact_id: FORK_ID, state: 'building' }] });

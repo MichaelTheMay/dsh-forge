@@ -418,6 +418,8 @@ class ScannerAndRunner(LauncherFixture):
             self.assertNotIn("token=test-capability", rendered_logs)
             self.assertIn("authenticated URL redacted", rendered_logs)
             self.launcher.stop(cell["id"])
+            with self.assertRaisesRegex(serve.LauncherError, "not running"):
+                self.launcher.open_url(cell["id"])
 
     def test_host_home_and_existing_workspace_are_rejected(self):
         with self.assertRaisesRegex(serve.LauncherError, "host DSH home is never mounted"):

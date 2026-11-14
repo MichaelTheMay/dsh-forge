@@ -277,7 +277,8 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
         if match:
             if self._api_guard() and self._session_ok():
                 try:
-                    self._json({"url": self.server.launcher.open_url(match.group(1))})
+                    cell_id = match.group(1)
+                    self._json({"cell_id": cell_id, "url": self.server.launcher.open_url(cell_id)})
                 except LauncherError as error:
                     self._json({"error": str(error)}, HTTPStatus.CONFLICT)
             elif self._loopback_host():

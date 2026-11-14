@@ -1754,6 +1754,7 @@ class Component extends DCLogic {
       artifactRunBusy: false,
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
+      artifactOpenCell: null,
       configurationBusy: false,
       catalogStore: { available: false },
       storeArtifacts: [],
@@ -1973,6 +1974,7 @@ class Component extends DCLogic {
     const detail = this.state.artifactRunConfirmation;
     const versionId = this.state.packageVersionId || this.defaultHostVersionId();
     if (!detail || !versionId || !this.state.artifactRiskAcknowledged || this.state.artifactRunBusy) return;
+    const pendingWindow = this.reserveOpenWindow();
     this.setState({ artifactRunBusy: true });
     try {
       const result = await this.api('/api/v1/catalog/install-run', {
@@ -1984,13 +1986,14 @@ class Component extends DCLogic {
         artifactRunBusy: false,
         artifactRunConfirmation: null,
         artifactRiskAcknowledged: false,
-        view: 'launch',
-        logCell: result.cell.id,
-        inspectorTab: 'logs'
+        artifactOpenCell: { artifactId: detail.id, cell: result.cell }
       });
-      if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Plugin verified, installed, and started in a disposable cell');
+      const opened = await this.openCell(result.cell, pendingWindow);
+      this.flash(opened
+        ? 'Plugin verified, installed, started, and opened'
+        : 'Plugin started; choose Open now when the authenticated URL is ready');
     } catch (error) {
+      if (pendingWindow) pendingWindow.close();
       await this.refreshStatus(true);
       this.setState({ artifactRunBusy: false });
       this.flash(error.message);
@@ -2357,9 +2360,16 @@ class Component extends DCLogic {
   async launchCommunity() {
     const version = this.state.communityLaunch;
     if (!version || !this.state.communityRiskAcknowledged) return;
+    const artifactId = this.state.artifactId;
+    const pendingWindow = this.reserveOpenWindow();
     this.setState({ communityLaunch: null, communityRiskAcknowledged: false });
-    if (typeof window !== 'undefined' && this.state.view !== 'launch') window.location.hash = 'launch';
-    await this.quickLaunch(version, { acknowledgeRisk: true });
+    const cell = await this.quickLaunch(version, {
+      acknowledgeRisk: true,
+      forceOpen: true,
+      preserveContext: true,
+      pendingWindow
+    });
+    if (cell && artifactId) this.setState({ artifactOpenCell: { artifactId, cell } });
   }
 
   setCatalogLayout(layout) {
@@ -2614,21 +2624,35 @@ class Component extends DCLogic {
     return h > 0 ? h + 'h ' + pad(m) + 'm ' + pad(s % 60) + 's' : m + 'm ' + pad(s % 60) + 's';
   }
 
-  async quickLaunch(version, { acknowledgeRisk = false } = {}) {
-    if (!this.state.sidecarConnected) return this.flash('Start scripts/serve.py to launch a real cell');
-    if (!version.treeId) return this.flash('That version is not available on this machine');
+  async quickLaunch(version, {
+    acknowledgeRisk = false,
+    forceOpen = false,
+    preserveContext = false,
+    pendingWindow = null
+  } = {}) {
+    if (!this.state.sidecarConnected) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash('Start scripts/serve.py to launch a real cell');
+      return null;
+    }
+    if (!version.treeId) {
+      if (pendingWindow) pendingWindow.close();
+      this.flash('That version is not available on this machine');
+      return null;
+    }
     const launch = version.launchSettings || {
       surface: 'web', profile: 'tui-min', port: 'auto', open_browser: false,
       home_mode: 'fresh', workspace: 'managed', network: 'host', resources: { gpu: 'none' }
     };
-    const pendingWindow = launch.open_browser ? window.open('about:blank', '_blank') : null;
+    const shouldOpen = forceOpen || !!launch.open_browser;
+    const target = pendingWindow || (shouldOpen ? this.reserveOpenWindow() : null);
     try {
       const cell = await this.api('/api/v1/cells', { method: 'POST', body: JSON.stringify({
         tree_id: version.treeId,
         surface: 'web',
         profile: launch.profile || 'tui-min',
         port: 'auto',
-        open_browser: !!launch.open_browser,
+        open_browser: shouldOpen,
         home_mode: 'fresh',
         workspace: 'managed',
         network: 'host',
@@ -2636,12 +2660,16 @@ class Component extends DCLogic {
         ...(acknowledgeRisk ? { acknowledge_risk: true } : {})
       }) });
       await this.refreshStatus(true);
-      await this.inspectCell(cell, 'logs');
-      this.flash('Launched ' + version.version + ' on port ' + cell.port);
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (!preserveContext) await this.inspectCell(cell, 'logs');
+      const opened = target ? await this.openCell(cell, target) : false;
+      this.flash(opened
+        ? 'Launched and opened ' + version.version + ' on port ' + cell.port
+        : 'Launched ' + version.version + ' on port ' + cell.port);
+      return cell;
     } catch (error) {
-      if (pendingWindow) pendingWindow.close();
+      if (target) target.close();
       this.flash(error.message);
+      return null;
     }
   }
 
@@ -2658,19 +2686,57 @@ class Component extends DCLogic {
     } catch (error) { this.flash(error.message); }
   }
 
+  reserveOpenWindow() {
+    if (typeof window === 'undefined' || typeof window.open !== 'function') return null;
+    try {
+      return window.open('about:blank', '_blank', 'noopener');
+    } catch {
+      return null;
+    }
+  }
+
+  validatedCellOpenUrl(payload, cell) {
+    if (!payload || payload.cell_id !== cell.id) throw new Error('Open URL cell identity does not match the launched cell');
+    if (typeof payload.url !== 'string' || !payload.url) throw new Error('Open URL is missing');
+    let parsed;
+    try {
+      parsed = new URL(payload.url);
+    } catch {
+      throw new Error('Open URL is invalid');
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'http:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(hostname) || !parsed.port) {
+      throw new Error('Open URL must use loopback HTTP with an explicit port');
+    }
+    if (Number.isInteger(cell.port) && Number(parsed.port) !== cell.port) {
+      throw new Error('Open URL does not match the launched cell port');
+    }
+    return parsed.href;
+  }
+
   async openCell(cell, existingWindow = null) {
-    const target = existingWindow || window.open('about:blank', '_blank');
+    const target = existingWindow || this.reserveOpenWindow();
     for (let attempt = 0; attempt < 30; attempt++) {
+      let payload;
       try {
-        const payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-        if (target) target.location.replace(payload.url);
-        return;
+        payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
       } catch {
         await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      try {
+        const url = this.validatedCellOpenUrl(payload, cell);
+        if (target) target.location.replace(url);
+        return true;
+      } catch (error) {
+        if (target) target.close();
+        this.flash(error.message);
+        return false;
       }
     }
     if (target) target.close();
     this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
+    return false;
   }
 
   async inspectCell(cell, tab = 'logs') {
@@ -2866,6 +2932,9 @@ class Component extends DCLogic {
     const detail = !s.detailOpen ? {}
       : ((s.detailArtifact && s.detailArtifact.id === s.artifactId ? s.detailArtifact : null) ||
         CATALOG.find(a => a.id === s.artifactId) || s.storeArtifacts.find(a => a.id === s.artifactId) || {});
+    const activeArtifactCell = s.artifactOpenCell && s.artifactOpenCell.artifactId === detail.id
+      ? s.artifactOpenCell.cell
+      : null;
     const hostVersions = s.savedVersions.filter(item => item.state === 'ready' && !(item.primary_tree && item.primary_tree.trust === 'community'));
     const packageVersions = hostVersions.map(item => ({
       id: item.id,
@@ -2916,7 +2985,12 @@ class Component extends DCLogic {
     const forkReady = forkState === 'ready' && !!forkInstall.tree_id;
     const forkTree = forkReady ? s.trees.find(tree => tree.id === forkInstall.tree_id) : null;
     const forkLaunchable = !!(forkTree && forkTree.trust === 'community' && forkTree.launchability === 'ready');
-    const forkCopy = !s.sidecarConnected
+    const forkCopy = activeArtifactCell
+      ? {
+          pill: 'Running', label: 'Open now', disabled: false,
+          text: 'The verified local cell is running on port ' + activeArtifactCell.port + '. Open uses its authenticated loopback URL.'
+        }
+      : (!s.sidecarConnected
       ? {
           pill: 'Desktop only', label: 'Install in the desktop launcher', disabled: true,
           text: 'Forks install through the local launcher: Forge fetches one pinned commit and builds and runs it only inside the Apptainer sandbox.'
@@ -2937,7 +3011,22 @@ class Component extends DCLogic {
                 text: forkState === 'failed'
                   ? forkInstall.detail
                   : 'Fetch one pinned commit, build it inside Apptainer, and add it to Local. Nothing runs on your host.'
-              })));
+              }))));
+    const artifactReadiness = detail.type === 'plugin'
+      ? [
+          { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
+          { label: 'Exact signed recipe', ready: !!(artifactExecution.exact_package && artifactExecution.exact_repository_commit), detail: artifactExecution.reason || 'No matching recipe' },
+          { label: 'Harness target selected', ready: !!selectedPackageVersion, detail: selectedPackageVersion ? 'Launch-ready official or personal version' : 'Add a launch-ready version on Local' },
+          { label: 'Apptainer isolation', ready: !!sandbox.ready, detail: sandbox.ready ? 'Isolation is ready' : (sandbox.reason || 'Configure the pinned image') }
+        ]
+      : (detail.type === 'fork'
+        ? [
+            { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
+            { label: 'Pinned fork installed', ready: forkReady, detail: forkReady ? String(forkInstall.commit).slice(0, 12) : 'Review and install one exact commit' },
+            { label: 'Launch-ready fork tree', ready: forkLaunchable, detail: forkLaunchable ? forkTree.version : 'Complete the isolated build and registration' },
+            { label: 'Apptainer isolation', ready: !!sandbox.ready, detail: sandbox.ready ? 'Isolation is ready' : (sandbox.reason || 'Configure the pinned image') }
+          ]
+        : []);
     const forkPlan = s.forkPlan;
     const forkLayout = s.catalogLayout.fork === 'list' ? 'list' : 'grid';
     const pluginLayout = s.catalogLayout.plugin === 'list' ? 'list' : 'grid';
@@ -3259,14 +3348,22 @@ class Component extends DCLogic {
       forkFiles: divergence ? Number(divergence.listed_file_count || 0).toLocaleString('en-US') + (divergence.files_truncated ? '+' : '') : '',
       forkSurfaces: (detail.compatibility && detail.compatibility.changed_surfaces) || [],
       hasForkSurfaces: !!(detail.compatibility && (detail.compatibility.changed_surfaces || []).length),
-      executionPill: artifactExecution.eligible ? 'Signed recipe' : 'Browse only',
-      executionPillClass: artifactExecution.eligible ? 'pill pill-ok' : 'pill',
-      installAndRunDisabled: !artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy,
-      installAndRunLabel: s.artifactRunBusy
-        ? 'Installing and testing…'
-        : (artifactExecution.eligible ? 'Install and run…' : 'Sandbox recipe required'),
-      installAndRunReason: artifactExecution.reason,
-      installAndRun: () => detail.id ? this.confirmArtifactRun(detail) : undefined,
+      artifactReadiness: artifactReadiness.map(item => ({ ...item, blocked: !item.ready })),
+      hasArtifactReadiness: artifactReadiness.length > 0,
+      executionPill: activeArtifactCell ? 'Running' : (artifactExecution.eligible ? 'Signed recipe' : 'Browse only'),
+      executionPillClass: (activeArtifactCell || artifactExecution.eligible) ? 'pill pill-ok' : 'pill',
+      installAndRunDisabled: activeArtifactCell ? false : (!artifactExecution.eligible || !selectedPackageVersion || s.artifactRunBusy),
+      installAndRunLabel: activeArtifactCell
+        ? 'Open now'
+        : (s.artifactRunBusy
+          ? 'Installing and testing…'
+          : (artifactExecution.eligible ? 'Review, install & run…' : 'Sandbox recipe required')),
+      installAndRunReason: activeArtifactCell
+        ? 'The verified local cell is running on port ' + activeArtifactCell.port
+        : artifactExecution.reason,
+      installAndRun: () => activeArtifactCell
+        ? this.openCell(activeArtifactCell)
+        : (detail.id ? this.confirmArtifactRun(detail) : undefined),
       packageComponents: detail.catalogPackage ? detail.components.map(component => ({
         ...component,
         name: component.package.name,
@@ -3302,12 +3399,13 @@ class Component extends DCLogic {
       copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
       forkInstallPill: forkCopy.pill,
-      forkInstallPillClass: forkReady ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
+      forkInstallPillClass: (activeArtifactCell || forkReady) ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
       forkInstallText: forkCopy.text,
       forkInstallLabel: forkCopy.label,
       forkInstallDisabled: forkCopy.disabled,
       forkInstallAction: () => {
         if (!detail.id) return undefined;
+        if (activeArtifactCell) return this.openCell(activeArtifactCell);
         if (forkReady && forkTree) {
           return this.confirmCommunityLaunch({
             version: forkTree.version, treeId: forkTree.id, launchSettings: null, community: forkTree.community || {}
