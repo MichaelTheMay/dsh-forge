@@ -141,7 +141,8 @@ def rank(
             read = None
             share = weights.substance + weights.stage1
             score = (weights.substance * substance + weights.stage1 * stage1) / share
-            score = min(score, weights.unreviewed_ceiling)
+            # Scaled, not clipped, so unread repositories keep their order among themselves.
+            score *= weights.unreviewed_ceiling / 100
             confidence = "measured"
         picks.append({
             "artifact_id": candidate.get("artifact_id", ""),

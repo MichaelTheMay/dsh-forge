@@ -67,6 +67,13 @@ class RankTests(unittest.TestCase):
         self.assertLessEqual(picks[1]["score"], Weights().unreviewed_ceiling)
         self.assertEqual(picks[0]["rank"], 1)
 
+    def test_unread_repositories_keep_their_order_under_the_ceiling(self):
+        candidates = [candidate("a/weaker", score=70), candidate("b/stronger", score=99)]
+        picks = rank(candidates, {"a/weaker": inspection(), "b/stronger": inspection()}, {}, {})
+        self.assertEqual([pick["full_name"] for pick in picks], ["b/stronger", "a/weaker"])
+        self.assertLess(picks[1]["score"], picks[0]["score"])
+        self.assertLessEqual(picks[0]["score"], Weights().unreviewed_ceiling)
+
     def test_skips_copies_and_uninspected_repositories_are_left_out(self):
         candidates = [candidate("a/skip"), candidate("b/copy"), candidate("c/unseen"), candidate("d/ok")]
         inspections = {"a/skip": inspection(), "b/copy": inspection(), "d/ok": inspection()}
