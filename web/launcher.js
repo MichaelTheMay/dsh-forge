@@ -3870,6 +3870,10 @@ class Component extends DCLogic {
       updateLabel: 'Update ' + (update.latest_version || ''),
       updateUrl: update.release_url || 'https://github.com/MichaelTheMay/dsh-forge/releases/latest',
       showPlatformNotice: application.platform === 'windows' && !nativeSandbox.available,
+      // Without the isolated container nothing can run, so say how to set it up
+      // instead of leaving a disabled button to guess at.
+      showContainerSetup: !!s.sidecarConnected && !sandbox.ready && application.platform !== 'windows',
+      containerSetupCommand: './scripts/install.sh',
       platformNotice: nativeSandbox.message || '',
       sidecarTitle: s.sidecarConnected ? 'Launcher connected' : 'Start the local launcher to manage versions',
       sidecarDot: s.sidecarConnected ? OK : WARN,

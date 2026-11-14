@@ -581,6 +581,20 @@ test('a comparison tab survives status updates and is not remembered as a sessio
   assert.match(html, /<pre class="compare-output">\{\{ r\.output \}\}<\/pre>/);
 });
 
+test('when nothing can run yet, the Local page says how to finish setup', () => {
+  const c = instance();
+  assert.equal(c.renderVals().showContainerSetup, false); // not connected: nothing to set up from here
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: false, reason: 'internal detail' } });
+  let values = c.renderVals();
+  assert.equal(values.showContainerSetup, true);
+  assert.equal(values.containerSetupCommand, './scripts/install.sh');
+  assert.match(html, /One more step before you can run things/);
+  // The explanation is in plain words and does not leak the internal reason.
+  assert(!/internal detail/.test(JSON.stringify([values.sandboxReason, values.sandboxTitle])));
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: true } });
+  assert.equal(c.renderVals().showContainerSetup, false);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
