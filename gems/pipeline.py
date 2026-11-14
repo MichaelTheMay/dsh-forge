@@ -21,7 +21,7 @@ from . import INSPECTION_SCHEMA
 from .candidates import DEFAULT_LIMIT, load_queue, select
 from .fetch import FetchError, fetch_commit
 from .inspection import copy_overlap, inspect_tree
-from .rank import DEFAULT_WEIGHTS, Weights, picks_document, rank
+from .rank import DEFAULT_WEIGHTS, Weights, not_featured, picks_document, rank
 from .review import load_reviews
 
 
@@ -105,7 +105,8 @@ def build_picks(
         if isinstance(entry, Mapping) and isinstance(entry.get("inspection"), Mapping)
     }
     reviews, problems = load_reviews(reviews_directory)
-    picks = rank(candidates, measured, reviews, copy_overlap(measured), weights=weights, limit=pick_limit)
+    overlap = copy_overlap(measured)
+    picks = rank(candidates, measured, reviews, overlap, weights=weights, limit=pick_limit)
     moment = (now or dt.datetime.now(dt.timezone.utc)).replace(microsecond=0)
     document = picks_document(
         picks,
@@ -113,6 +114,7 @@ def build_picks(
         queue=queue,
         considered=len(candidates),
         inspected=sum(1 for candidate in candidates if candidate["full_name"] in measured),
+        excluded=not_featured(candidates, reviews, overlap, weights=weights),
     )
     return document, problems
 

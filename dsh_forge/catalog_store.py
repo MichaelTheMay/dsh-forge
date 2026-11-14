@@ -378,6 +378,10 @@ def build(
                         [pack for pack in snapshot.get("discovery_packs") or [] if isinstance(pack, Mapping)][:20],
                         sort_keys=True,
                     ),
+                    "shelves": json.dumps(
+                        snapshot.get("discovery_shelves") if isinstance(snapshot.get("discovery_shelves"), Mapping) else {},
+                        sort_keys=True,
+                    ),
                 }
                 connection.executemany(
                     "INSERT INTO meta (key, value) VALUES (?, ?)", sorted(recorded.items())
@@ -483,6 +487,7 @@ class CatalogStore:
             "signature": json.loads(values.get("signature", '{"verified": false}')),
             "research_policy": values.get("research_policy", ""),
             "packs": json.loads(values.get("packs", "[]")),
+            "shelves": json.loads(values.get("shelves", "{}")),
         }
 
     def status(self) -> dict[str, Any]:
@@ -622,8 +627,29 @@ class CatalogStore:
         return {
             "gems": {"plugins": gems("plugin", plugins), "forks": gems("fork", forks)},
             "packs": packs,
+            "shelves": self._shelves(meta.get("shelves")),
             "policy": meta.get("research_policy", ""),
         }
+
+    def _shelves(self, shelves: Any) -> dict[str, Any]:
+        """Resolve the published shelf ids to full records; unknown ids are dropped."""
+        shelves = shelves if isinstance(shelves, Mapping) else {}
+
+        def record(identity: Any) -> dict[str, Any] | None:
+            if not isinstance(identity, str) or len(identity) > 160:
+                return None
+            found = self.get(identity)
+            return {**found, "hidden_gem": self.get_research(identity)} if found else None
+
+        new = [item for item in (record(identity) for identity in (shelves.get("new") or [])[:12]) if item]
+        best = []
+        for entry in (shelves.get("best") or [])[:12]:
+            if isinstance(entry, Mapping) and isinstance(entry.get("capability"), str):
+                found = record(entry.get("artifact_id"))
+                if found:
+                    best.append({"capability": entry["capability"][:40], "artifact": found})
+        days = shelves.get("new_window_days")
+        return {"new": new, "new_window_days": days if isinstance(days, int) and not isinstance(days, bool) else 30, "best": best}
 
     def get(self, artifact_id: str) -> dict[str, Any] | None:
         connection = self._open()

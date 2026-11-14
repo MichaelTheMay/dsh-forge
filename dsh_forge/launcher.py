@@ -1501,7 +1501,7 @@ class Launcher:
             "environment_keys": sorted(environment),
             "credential_keys": [name for name in SECRET_NAMES if environment.get(name)],
             "notes": [
-                "This is an existing local profile, so it runs directly on the host rather than inside Apptainer.",
+                "This is one of your own setups, so it runs directly on this computer rather than in the isolated container.",
                 "The selected profile and its installed plugins can read the user account and inherited credential keys.",
                 "Forge passes an exact argv without a shell and records the process identity before managing it.",
             ],
@@ -2164,7 +2164,7 @@ class Launcher:
         installer.update(
             install_id,
             state="building",
-            detail="Installing dependencies and building inside Apptainer",
+            detail="Installing what it needs and building it inside the isolated container",
             build={"manager": build["manager"], "steps": [" ".join(step) for step in build["steps"]], "note": build["reason"]},
         )
         log = Path(str(record["log_path"]))

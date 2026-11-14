@@ -83,6 +83,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(document["counts"], {"considered": 3, "inspected": 2, "reviewed": 1, "picks": 2})
         self.assertEqual(document["based_on"], {"snapshot_id": "snap", "stage1_policy": "v3"})
         self.assertEqual(len(problems), 1)
+        self.assertEqual(document["not_featured"], [])
+        # A project reviewed as "skip" is named so the app can keep it off every shelf.
+        skipped = json.loads((reviews / "beta.json").read_text(encoding="utf-8"))
+        skipped["verdict"] = "skip"
+        (reviews / "beta.json").write_text(json.dumps(skipped), encoding="utf-8")
+        document, _problems = pipeline.build_picks(self.queue, inspections, reviews)
+        self.assertEqual([pick["full_name"] for pick in document["picks"]], ["alpha/one"])
+        self.assertEqual(document["not_featured"], ["github:beta/two"])
 
     def test_write_json_is_atomic_and_readable(self):
         target = self.root / "nested" / "out.json"

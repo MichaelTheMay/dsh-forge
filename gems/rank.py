@@ -164,6 +164,28 @@ def rank(
     return picks[:limit]
 
 
+def not_featured(
+    candidates: Sequence[Mapping[str, Any]],
+    reviews: Mapping[str, Mapping[str, Any]],
+    overlap: Mapping[str, float],
+    *,
+    weights: Weights = DEFAULT_WEIGHTS,
+) -> list[str]:
+    """Artifact ids that must not be featured anywhere: reviewed as ``skip``, or mostly copied.
+
+    Being absent from the picks only means "not a gem". This list is stronger: the
+    app also keeps these out of packs and the other shelves.
+    """
+    excluded = []
+    for candidate in candidates:
+        review = reviews.get(candidate["full_name"].casefold())
+        skipped = bool(review) and review["verdict"] == "skip"
+        copied = float(overlap.get(candidate["full_name"], 0.0)) > weights.max_copy_overlap
+        if (skipped or copied) and candidate.get("artifact_id"):
+            excluded.append(str(candidate["artifact_id"]))
+    return sorted(set(excluded))
+
+
 def picks_document(
     picks: Sequence[Mapping[str, Any]],
     *,
@@ -171,6 +193,7 @@ def picks_document(
     queue: Mapping[str, Any],
     considered: int,
     inspected: int,
+    excluded: Sequence[str] = (),
 ) -> dict[str, Any]:
     """The file the app reads."""
     return {
@@ -189,4 +212,5 @@ def picks_document(
         },
         "claims": {"executed": False, "security_verified": False},
         "picks": list(picks),
+        "not_featured": list(excluded),
     }

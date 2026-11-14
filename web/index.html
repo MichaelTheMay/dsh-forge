@@ -699,7 +699,7 @@
       <div class="page-head">
         <div>
           <h1 class="page-title">Local versions</h1>
-          <p class="page-lede">Harness checkouts found on this machine. Every launch gets its own port, home, and workspace.</p>
+          <p class="page-lede">Harness versions found on this computer. Each run gets its own separate space, so runs never interfere with each other or with your own setup.</p>
         </div>
         <div class="head-actions">
           <span class="sandbox-status" title="{{ sandboxReason }}"><span class="dot" style="background: {{ sandboxColor }};"></span>{{ sandboxTitle }}</span>
@@ -837,7 +837,7 @@
       <section class="section" aria-label="Installed profiles">
         <div class="section-head">
           <h2 class="h2">Installed profiles</h2>
-          <span class="note">{{ profileCountLabel }} in $DSH_HOME/profiles. These run directly on the host, not in Apptainer.</span>
+          <span class="note">{{ profileCountLabel }} in your Harness folder. These are your own setups, so they run directly on this computer rather than in the isolated container.</span>
         </div>
         <sc-if value="{{ noLocalProfiles }}" hint-placeholder-val="{{ true }}"><div class="empty empty-sm">No installed profile manifests found.</div></sc-if>
         <sc-if value="{{ hasLocalProfiles }}" hint-placeholder-val="{{ false }}">
@@ -978,6 +978,46 @@
                     </span>
                   </sc-if>
                 </span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasBestShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>Best in each category</h2><span class="shelf-note">The best-built plugin for each job, popular or not.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ bestShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNewShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>{{ newShelfTitle }}</h2><span class="shelf-note">Well-built plugins that just appeared.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ newShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
               </div>
             </sc-for>
           </div>
@@ -1516,7 +1556,7 @@
         </select>
       </label>
       <button class="btn btn-primary btn-lg btn-block" onClick="{{ startAssistant }}" disabled="{{ assistantStartDisabled }}">{{ assistantStartLabel }}</button>
-      <p class="note">Requires a saved local Harness, the MCP client plugin in that Harness, and a passing pinned Apptainer capability probe. There is no host fallback.</p>
+      <p class="note">Needs a saved Harness version that includes the MCP client plugin, and the isolated container set up on the Local tab.</p>
       <div class="divider"></div>
       <h2 class="h2">Saved configurations</h2>
       <sc-if value="{{ noConfigurations }}" hint-placeholder-val="{{ true }}"><p class="note">Save a package or catalog selection to see it here and run it later from the CLI.</p></sc-if>
@@ -1531,7 +1571,7 @@
     </aside>
     <section class="assistant-frame">
       <sc-if value="{{ assistantReady }}" hint-placeholder-val="{{ false }}"><iframe data-assistant-url="{{ assistantUrl }}" title="Isolated DeepSeek Harness Forge Assistant"></iframe></sc-if>
-      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="empty"><h2>Start the isolated assistant</h2><p>The embedded Harness appears here once its authenticated loopback URL is ready.</p></div></sc-if>
+      <sc-if value="{{ assistantEmpty }}" hint-placeholder-val="{{ true }}"><div class="empty"><h2>Start the isolated assistant</h2><p>The assistant appears here once it has started.</p></div></sc-if>
     </section>
   </main>
   </sc-if>
@@ -1545,8 +1585,8 @@
           <p class="note">Recipe: {{ artifactRunRecipe }}. Reviewed by {{ artifactRunReviewer }}.</p>
         </header>
         <div class="modal-body">
-          <p class="prose">This executes third-party code. Forge will verify the signature and exact bytes, inspect the archive, disable package scripts, install without network access, smoke-test in Apptainer, then clone the tested profile into a disposable cell.</p>
-          <div class="warn-box">Sandboxing reduces risk but does not eliminate it. Apptainer shares the host kernel, and the running web surface uses host networking for its loopback port. Forge does not mount your host DSH home or forward launcher secrets.</div>
+          <p class="prose">This runs code written by someone else. Before it starts, DSH Forge checks that the package is exactly the one that was reviewed, installs it with no network access and with its install scripts switched off, tries it inside the isolated container, and only then starts your session from that tested copy.</p>
+          <div class="warn-box">The isolated container lowers the risk but does not remove it. It shares this computer’s operating system core, and the running session can use your network. Your own Harness folder and DSH Forge’s keys are never shared with it.</div>
           <label class="ack"><input type="checkbox" checked="{{ artifactRiskAcknowledged }}" onChange="{{ toggleArtifactRisk }}" /><span>I understand that this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelArtifactRun }}" disabled="{{ artifactRunBusy }}">Cancel</button><button class="btn btn-go" onClick="{{ startArtifactRun }}" disabled="{{ artifactRunConfirmDisabled }}">{{ artifactRunConfirmLabel }}</button></footer>
@@ -1564,11 +1604,11 @@
         </header>
         <div class="modal-body">
           <div class="codebox">
-            <div class="code-row"><span class="code-k">commit</span><span class="code-v" style="color: oklch(0.86 0.11 300);">{{ forkPlanCommit }}</span></div>
+            <div class="code-row"><span class="code-k">exact version</span><span class="code-v" style="color: oklch(0.86 0.11 300);">{{ forkPlanCommit }}</span></div>
             <div class="code-row"><span class="code-k">into</span><span class="code-v">{{ forkPlanDestination }}</span></div>
           </div>
           <ol class="notes"><sc-for list="{{ forkPlanSteps }}" as="step" hint-placeholder-count="3"><li>{{ step }}</li></sc-for></ol>
-          <div class="warn-box">This builds and runs third-party code. Apptainer shares the host kernel, dependency installation and web cells use host networking, and isolation reduces risk without eliminating it. Forge never mounts your DSH home or forwards launcher secrets.</div>
+          <div class="warn-box">This builds and runs code written by someone else. The isolated container lowers the risk but does not remove it: it shares this computer’s operating system core, and building and running can use your network. Your own Harness folder and DSH Forge’s keys are never shared with it.</div>
           <label class="ack"><input type="checkbox" checked="{{ forkRiskAcknowledged }}" onChange="{{ toggleForkRisk }}" /><span>I understand this is community code and that isolation is not a guarantee of safety.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelForkPlan }}">Cancel</button><button class="btn btn-fork" onClick="{{ confirmForkInstall }}" disabled="{{ forkInstallConfirmDisabled }}">{{ forkInstallConfirmLabel }}</button></footer>
@@ -1585,7 +1625,7 @@
           <p class="note mono">commit {{ communityLaunchCommit }} · fresh home · managed workspace</p>
         </header>
         <div class="modal-body">
-          <p class="prose">The fork starts in its own Apptainer cell on a free loopback port. Its web surface uses host networking so you can open it.</p>
+          <p class="prose">The fork starts in its own isolated container. It can use your network, which is how you are able to open it.</p>
           <label class="ack"><input type="checkbox" checked="{{ communityRiskAcknowledged }}" onChange="{{ toggleCommunityRisk }}" /><span>Run this community fork in the sandbox.</span></label>
         </div>
         <footer class="modal-foot"><button class="btn" onClick="{{ cancelCommunityLaunch }}">Cancel</button><button class="btn btn-go" onClick="{{ confirmCommunityLaunch }}" disabled="{{ communityLaunchDisabled }}">Launch</button></footer>
