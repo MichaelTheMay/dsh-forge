@@ -393,8 +393,9 @@ python3 -m dsh_forge catalog install-run github:ARTIFACT_ID \
 ```
 
 Neither route accepts a download URL, command, key path, or sandbox override.
-Fork execution remains out of scope for V1 because it needs a separate signed
-build and Harness-compatibility policy.
+Forks have their own route: they are installed from a fork's page at one exact
+commit and built and run only inside the sandbox, as described under "Forks are
+installable" above.
 
 ## Configurations and Forge Assistant
 
