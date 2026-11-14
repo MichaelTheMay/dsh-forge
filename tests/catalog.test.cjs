@@ -581,6 +581,20 @@ test('a comparison tab survives status updates and is not remembered as a sessio
   assert.match(html, /<pre class="compare-output">\{\{ r\.output \}\}<\/pre>/);
 });
 
+test('when nothing can run yet, the Local page says how to finish setup', () => {
+  const c = instance();
+  assert.equal(c.renderVals().showContainerSetup, false); // not connected: nothing to set up from here
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: false, reason: 'internal detail' } });
+  let values = c.renderVals();
+  assert.equal(values.showContainerSetup, true);
+  assert.equal(values.containerSetupCommand, './scripts/install.sh');
+  assert.match(html, /One more step before you can run things/);
+  // The explanation is in plain words and does not leak the internal reason.
+  assert(!/internal detail/.test(JSON.stringify([values.sandboxReason, values.sandboxTitle])));
+  c.applyStatus({ ...statusWith([]), sandbox: { ready: true } });
+  assert.equal(c.renderVals().showContainerSetup, false);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -651,10 +665,13 @@ test('public root presents the product site and routes into the working applicat
     assert.equal(landing.showAppShell, false);
     assert.match(html, /Every plugin\. <span>Every fork\. One launcher\.<\/span>/);
     assert.doesNotMatch(html, /Apple silicon and Intel|macOS releases/);
-    assert.match(html, /Windows 10 and 11/);
     assert.doesNotMatch(html, /curl\s+-fsSL\s+dshforge\.dev/);
     await landing.landingCopyInstall();
-    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && python3 scripts/serve.py --desktop --sync-catalog');
+    assert.equal(clipboard.at(-1), 'git clone https://github.com/MichaelTheMay/dsh-forge && cd dsh-forge && ./scripts/install.sh');
+    // The site only offers what exists: a Linux install, and other systems marked as later.
+    assert.match(html, /Install on Linux/);
+    assert.match(html, /Windows and macOS<\/span><h3>Coming later/);
+    assert(!/Download for Windows/.test(html));
     // The hero leads to the Discover page, not to a launcher preview.
     assert(!('landingOpenLauncher' in landing));
     landing.landingCommunity();

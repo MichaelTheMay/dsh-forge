@@ -468,6 +468,10 @@
   .rcard .pcard-head { margin-top: 0; align-items: center; }
   .rcard .tag { margin-left: auto; align-self: flex-start; white-space: nowrap; }
   .recs-empty { margin: 0; }
+  .setup-note { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin: 4px 0 22px; padding: 16px 22px; border: 1px solid oklch(0.42 0.07 85); border-radius: 14px; background: oklch(0.225 0.025 85); }
+  .setup-note h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .setup-note p { max-width: 700px; font-size: 13px; line-height: 1.55; color: oklch(0.82 0.012 255); }
+  .setup-command { margin-left: auto; padding: 9px 14px; border: 1px solid oklch(0.36 0.012 255); border-radius: 8px; background: oklch(0.17 0.008 255); font: 13px 'IBM Plex Mono', monospace; color: oklch(0.92 0.008 255); white-space: nowrap; user-select: all; }
   .gem-read { margin-left: 10px; vertical-align: middle; font-weight: 500; }
   .gem-summary { margin: 8px 0 4px; font-size: 13.5px; line-height: 1.6; color: oklch(0.88 0.008 255); }
   .skeleton { display: block; height: 260px; border-radius: 14px; background: linear-gradient(90deg, oklch(0.21 0.01 255), oklch(0.25 0.012 255), oklch(0.21 0.01 255)); background-size: 200% 100%; animation: dshshimmer 1.4s linear infinite; }
@@ -637,7 +641,7 @@
 
     <section class="landing-section" id="landing-downloads">
       <span class="landing-kicker">Desktop app</span><h2>Run them on your own machine.</h2><p class="landing-section-lede">The desktop app finds the DeepSeek Harness versions on your computer, installs plugins and forks, and launches each one in its own session.</p>
-      <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>A signed installer with a Start Menu shortcut. The app tells you when an update is available.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Download for Windows</a></article><article class="landing-download"><span class="platform">Linux and macOS</span><h3>Run from source</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article></div>
+      <div class="landing-downloads"><article class="landing-download"><span class="platform">Linux</span><h3>Install on Linux</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal, then start the app with <b>dsh-forge</b>:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article><article class="landing-download"><span class="platform">Windows and macOS</span><h3>Coming later</h3><p>You can browse everything on this site today from any computer. Installing and running plugins needs an isolated container that only works on Linux for now.</p><button class="landing-cta landing-cta-secondary" onClick="{{ goDiscover }}">Browse the catalog</button></article></div>
     </section>
 
     <footer class="landing-footer"><span>DSH Forge · open source</span><span>Top picks are read by a reviewer. Nothing is run, and a pick is not a safety guarantee.</span></footer>
@@ -772,6 +776,16 @@
             <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}"><p class="note recs-empty">{{ recsEmptyText }}</p></sc-if>
           </sc-if>
         </section>
+      </sc-if>
+
+      <sc-if value="{{ showContainerSetup }}" hint-placeholder-val="{{ false }}">
+        <aside class="setup-note" aria-label="Finish setup to run things">
+          <div>
+            <h2>One more step before you can run things</h2>
+            <p>You can browse now. Plugins and forks only run inside an isolated container, which is not set up on this computer yet. In a terminal, go to the DSH Forge folder and run the command on the right. It sets the container up, or tells you what to install first. Then start DSH Forge again.</p>
+          </div>
+          <code class="setup-command">{{ containerSetupCommand }}</code>
+        </aside>
       </sc-if>
 
       <sc-if value="{{ showPlatformNotice }}" hint-placeholder-val="{{ false }}">
