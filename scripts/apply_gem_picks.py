@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dsh_forge.catalog_store import MAX_SNAPSHOT_BYTES
 from dsh_forge.discovery import annotate
-from dsh_forge.gem_picks import GemPicksError, apply_picks, load_picks
+from dsh_forge.gem_picks import GemPicksError, apply_exclusions, apply_picks, load_document
 from dsh_forge.packages import read_json, write_json
 
 
@@ -25,19 +25,24 @@ def main() -> int:
     args = parser.parse_args()
 
     queue = read_json(args.queue, max_bytes=MAX_SNAPSHOT_BYTES)
+    excluded: set[str] = set()
     try:
-        picks = load_picks(args.picks)
+        picks, excluded = load_document(args.picks)
     except GemPicksError as error:
         # The daily catalog must still publish when the gem stage has a bad day:
         # the queue keeps its statistics-only order.
         print(f"Gem picks not applied: {error}", file=sys.stderr)
         picks = {}
     matched = apply_picks(queue, picks)
+    removed = apply_exclusions(queue, excluded)
     write_json(args.queue, queue, force=True, compact=True)
     snapshot = read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES)
     annotated = annotate(snapshot, queue)
     write_json(args.annotate, snapshot, force=True, compact=True)
-    print(json.dumps({"picks": len(picks), "applied": matched, "annotated": annotated}, separators=(",", ":")))
+    print(json.dumps({
+        "picks": len(picks), "applied": matched, "not_featured": len(excluded), "removed_from_features": removed,
+        "annotated": annotated,
+    }, separators=(",", ":")))
     return 0
 
 

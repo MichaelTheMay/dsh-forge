@@ -38,6 +38,11 @@ def _text(value: Any, limit: int) -> str:
 
 def load_picks(path: str | Path) -> dict[str, dict[str, Any]]:
     """Return {artifact_id: validated pick}, in rank order."""
+    return load_document(path)[0]
+
+
+def load_document(path: str | Path) -> tuple[dict[str, dict[str, Any]], set[str]]:
+    """Return (picks in rank order, artifact ids that must not be featured anywhere)."""
     source = Path(path).expanduser()
     try:
         if source.stat().st_size > MAX_PICKS_BYTES:
@@ -77,7 +82,49 @@ def load_picks(path: str | Path) -> dict[str, dict[str, Any]]:
             "summary": _text(entry.get("summary"), 240),
             "reasons": [text for text in (_text(reason, 200) for reason in reasons) if text],
         }
-    return picks
+    excluded = document.get("not_featured", [])
+    if not isinstance(excluded, list) or len(excluded) > 2000 or any(
+        not isinstance(item, str) or not item or len(item) > 160 for item in excluded
+    ):
+        raise GemPicksError("Gem picks exclusion list is invalid")
+    return picks, set(excluded) - set(picks)
+
+
+def apply_exclusions(queue: dict[str, Any], excluded: set[str]) -> int:
+    """Keep reviewed-out projects off every featured surface, in place.
+
+    They stop being gem candidates, leave the new and best shelves, and leave any
+    pack; a pack left with fewer than three members is dropped. Returns how many
+    places were changed. The projects stay searchable in the catalog.
+    """
+    if not excluded:
+        return 0
+    changed = 0
+    for item in queue.get("candidates") or []:
+        research = item.get("research") if isinstance(item, Mapping) else None
+        if isinstance(research, dict) and str(research.get("artifact_id")) in excluded and research.get("candidate") is not False:
+            research["candidate"] = False
+            research["gaps"] = [*(research.get("gaps") or []), "not featured after code review"][:12]
+            changed += 1
+    shelves = queue.get("shelves")
+    if isinstance(shelves, dict):
+        for key, identity in (("new", lambda entry: entry), ("best", lambda entry: entry.get("artifact_id") if isinstance(entry, Mapping) else None)):
+            entries = shelves.get(key) if isinstance(shelves.get(key), list) else []
+            kept = [entry for entry in entries if identity(entry) not in excluded]
+            changed += len(entries) - len(kept)
+            shelves[key] = kept
+    packs = []
+    for pack in queue.get("packs") or []:
+        if not isinstance(pack, dict):
+            continue
+        members = [member for member in pack.get("members") or [] if isinstance(member, Mapping)]
+        kept = [member for member in members if str(member.get("artifact_id")) not in excluded]
+        changed += len(members) - len(kept)
+        if len(kept) >= 3:
+            packs.append({**pack, "members": kept})
+    if "packs" in queue:
+        queue["packs"] = packs
+    return changed
 
 
 def apply_picks(queue: dict[str, Any], picks: Mapping[str, Mapping[str, Any]]) -> int:

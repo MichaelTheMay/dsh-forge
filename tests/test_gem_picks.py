@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from dsh_forge.gem_picks import GemPicksError, apply_picks, load_picks
+from dsh_forge.gem_picks import GemPicksError, apply_exclusions, apply_picks, load_document, load_picks
 
 
 def pick(identity, **changes):
@@ -95,6 +95,46 @@ class ApplyPicksTests(unittest.TestCase):
         self.assertEqual(apply_picks(queue, {}), 0)
         self.assertEqual([item["research"]["rank"] for item in queue["candidates"]], [1, 2])
         self.assertNotIn("gem", queue["candidates"][0]["research"])
+
+
+class ExclusionTests(unittest.TestCase):
+    def load(self, value):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "gem-picks.json"
+            path.write_text(json.dumps(value), encoding="utf-8")
+            return load_document(path)
+
+    def test_loads_the_exclusion_list_and_tolerates_its_absence(self):
+        picks, excluded = self.load(document([pick("github:1")], not_featured=["github:9", "github:1"]))
+        # A pick cannot also be excluded; the pick wins.
+        self.assertEqual((list(picks), excluded), (["github:1"], {"github:9"}))
+        self.assertEqual(self.load(document([pick("github:1")]))[1], set())
+        for bad in ("github:9", [5], [""], ["x" * 200]):
+            with self.subTest(bad=bad), self.assertRaises(GemPicksError):
+                self.load(document([], not_featured=bad))
+
+    def test_reviewed_out_projects_leave_every_featured_surface(self):
+        member = lambda identity: {"artifact_id": identity, "role": "r", "why": "w"}
+        queue = {
+            "candidates": [candidate("bad", 1), candidate("good", 2)],
+            "shelves": {"new": ["bad", "good"], "new_window_days": 7,
+                        "best": [{"capability": "memory", "artifact_id": "bad"}, {"capability": "testing", "artifact_id": "good"}]},
+            "packs": [
+                {"id": "keeps", "members": [member("a"), member("b"), member("c"), member("bad")]},
+                {"id": "drops", "members": [member("a"), member("b"), member("bad")]},
+            ],
+        }
+        self.assertEqual(apply_exclusions(queue, {"bad"}), 5)
+        by_id = {item["research"]["artifact_id"]: item["research"] for item in queue["candidates"]}
+        self.assertFalse(by_id["bad"]["candidate"])
+        self.assertIn("not featured after code review", by_id["bad"]["gaps"])
+        self.assertNotIn("candidate", by_id["good"])
+        self.assertEqual(queue["shelves"]["new"], ["good"])
+        self.assertEqual(queue["shelves"]["best"], [{"capability": "testing", "artifact_id": "good"}])
+        self.assertEqual([(pack["id"], len(pack["members"])) for pack in queue["packs"]], [("keeps", 3)])
+        # Applying it again changes nothing, and no exclusions is a no-op.
+        self.assertEqual(apply_exclusions(queue, {"bad"}), 0)
+        self.assertEqual(apply_exclusions({"candidates": []}, set()), 0)
 
 
 if __name__ == "__main__":
