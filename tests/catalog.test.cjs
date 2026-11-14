@@ -440,6 +440,45 @@ test('a plugin page leads with what the code reviewer found', () => {
   assert.equal(values.hasGemReadLabel, false);
 });
 
+test('Discover shows what is new and the best plugin for each job', async () => {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  c.state.catalogStore = { available: true };
+  const record = (id, name, extra = {}) => ({
+    artifact_id: id, artifact_type: 'plugin', full_name: 'owner/' + name, owner: 'owner', name,
+    description: 'Does ' + name, github_stars: 2, topics: [], license: { spdx: 'MIT' }, package: { name },
+    pushed_at: new Date(Date.now() - 2 * 86400000).toISOString(), ...extra
+  });
+  c.api = async () => ({
+    gems: { plugins: [], forks: [] }, packs: [], policy: 'p',
+    shelves: {
+      new: [record('github:1', 'fresh-one')], new_window_days: 7,
+      best: [
+        { capability: 'memory', artifact: record('github:2', 'dsh-memory', { hidden_gem: { policy: 'p', candidate: true, rank: 1, reasons: ['Recalls last week.'] } }) },
+        { capability: 'testing' }
+      ]
+    }
+  });
+  c.loadMostLiked = () => {};
+  await c.loadDiscover();
+  let values = c.renderVals();
+  assert.equal(values.hasNewShelf, true);
+  assert.equal(values.newShelfTitle, 'New this week');
+  assert.deepEqual(values.newShelf.map(item => [item.name, item.label]), [['fresh-one', 'Updated 2 days ago']]);
+  assert.deepEqual(values.bestShelf.map(item => [item.name, item.label, item.reason]), [['dsh-memory', 'Best for memory', 'Recalls last week.']]);
+  values.bestShelf[0].select();
+  assert.equal(c.state.artifactId, 'github:2');
+  // A month-wide window is named honestly, and missing shelves show nothing.
+  c.setState({ discover: { ...c.state.discover, shelves: { new: c.state.discover.shelves.new, newWindowDays: 30, best: [] } } });
+  values = c.renderVals();
+  assert.equal(values.newShelfTitle, 'New this month');
+  assert.equal(values.hasBestShelf, false);
+  c.setState({ discover: { plugins: [], forks: [], packs: [] } });
+  values = c.renderVals();
+  assert.equal(values.hasNewShelf, false);
+  assert.match(html, /Best in each category/);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -1089,6 +1128,22 @@ test('public discover view returns ranked gems per type, resolved packs, and rec
   assert.deepEqual(view.packs.map(pack => pack.id), ['memory-and-context']);
   assert.deepEqual(view.packs[0].members.map(member => [member.role, member.artifact.artifact_id]), [['R1', 'github:1'], ['R2', 'github:2'], ['R3', 'github:3']]);
   assert.equal(view.packs[0].members[1].artifact.hidden_gem.candidate, false);
+  // A queue from before shelves existed has none.
+  assert.deepEqual(view.shelves, { new: [], new_window_days: 30, best: [] });
+
+  const shelved = endpoint.discoverView(endpoint.validateCatalog(feed, registry, {
+    ...research,
+    shelves: {
+      new: ['github:4', 'github:404', 7, 'github:1'], new_window_days: 7,
+      best: [{ capability: 'memory', artifact_id: 'github:2' }, { capability: 'testing', artifact_id: 'github:404' }, { capability: 5, artifact_id: 'github:1' }, null]
+    }
+  }));
+  assert.deepEqual(shelved.shelves.new.map(item => item.artifact_id), ['github:4', 'github:1']);
+  assert.equal(shelved.shelves.new_window_days, 7);
+  assert.deepEqual(shelved.shelves.best.map(entry => [entry.capability, entry.artifact.artifact_id]), [['memory', 'github:2']]);
+  // Shelf entries carry their gem report when they have one.
+  assert.equal(shelved.shelves.new[1].hidden_gem.reasons[0], 'Reason 1');
+  assert.equal(shelved.shelves.new[0].hidden_gem, null);
 });
 
 test('without an imported store the browser still reads the embedded snapshot', () => {

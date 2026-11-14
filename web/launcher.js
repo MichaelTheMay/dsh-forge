@@ -2762,6 +2762,13 @@ class Component extends DCLogic {
             ...pack,
             members: (pack.members || []).map(member => ({ ...member, artifact: map(member.artifact) }))
           })),
+          shelves: {
+            new: ((page.shelves && page.shelves.new) || []).map(map),
+            newWindowDays: page.shelves && Number.isInteger(page.shelves.new_window_days) ? page.shelves.new_window_days : 30,
+            best: ((page.shelves && page.shelves.best) || [])
+              .filter(entry => entry && entry.artifact)
+              .map(entry => ({ capability: String(entry.capability || ''), artifact: map(entry.artifact) }))
+          },
           policy: page.policy || ''
         };
         this.setState({
@@ -4116,6 +4123,29 @@ class Component extends DCLogic {
       hasDiscoverError: !!s.discoverError && !s.discover,
       discoverError: s.discoverError,
       retryDiscover: () => this.loadDiscover(),
+      ...(() => {
+        const shelves = (s.discover && s.discover.shelves) || { new: [], newWindowDays: 30, best: [] };
+        const compact = (artifact, label) => {
+          const card = cardView(artifact, { badge: false });
+          return {
+            id: card.id, name: card.name, owner: card.owner, description: card.description,
+            avatarStyle: card.avatarStyle, initials: card.initials, label,
+            reason: card.topReason || card.activity || '',
+            accessibleLabel: 'Open ' + card.slug,
+            select: () => this.selectCatalogArtifact(artifact)
+          };
+        };
+        const fresh = shelves.new.map(artifact => compact(artifact, artifact.created_at || artifact.pushed_at
+          ? 'Updated ' + relativeTime(artifact.pushed_at || artifact.created_at) : 'New'));
+        const best = shelves.best.map(entry => compact(entry.artifact, 'Best for ' + entry.capability));
+        return {
+          newShelf: fresh,
+          hasNewShelf: fresh.length > 0,
+          newShelfTitle: shelves.newWindowDays <= 7 ? 'New this week' : 'New this month',
+          bestShelf: best,
+          hasBestShelf: best.length > 0
+        };
+      })(),
       ...(() => {
         const recs = s.recommendations;
         const local = !!s.sidecarConnected && !this.isPublicWeb();

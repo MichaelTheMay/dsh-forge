@@ -983,6 +983,46 @@
           </div>
         </sc-if>
 
+        <sc-if value="{{ hasBestShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>Best in each category</h2><span class="shelf-note">The best-built plugin for each job, popular or not.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ bestShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasNewShelf }}" hint-placeholder-val="{{ false }}">
+          <div class="shelf-head"><h2>{{ newShelfTitle }}</h2><span class="shelf-note">Well-built plugins that just appeared.</span></div>
+          <div class="rgrid">
+            <sc-for list="{{ newShelf }}" as="r" hint-placeholder-count="0">
+              <div class="rcard" onClick="{{ r.select }}">
+                <span class="pcard-head">
+                  <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                  <span class="pcard-title">
+                    <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                    <span class="iowner">{{ r.owner }}</span>
+                  </span>
+                  <span class="tag">{{ r.label }}</span>
+                </span>
+                <span class="desc2">{{ r.description }}</span>
+                <sc-if value="{{ r.reason }}" hint-placeholder-val="{{ false }}"><span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.reason }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
         <sc-if value="{{ hasDiscoverPacks }}" hint-placeholder-val="{{ true }}">
           <div class="shelf-head"><h2>Packs</h2><span class="shelf-note">Plugins that work well together, one for each job.</span></div>
           <div class="packs">
