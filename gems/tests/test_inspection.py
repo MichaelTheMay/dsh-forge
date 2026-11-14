@@ -79,6 +79,8 @@ class InspectTreeTests(unittest.TestCase):
         result = inspect_tree(self.root)
         self.assertEqual(result["code"]["generated_files"], 1)
         self.assertEqual(result["risk_hints"], {"remote_shell": 1})
+        write(self.root, "lib/float.ts", "export const key = 'minimumReleaseAgeExclude:'\n" + source(5, "f"))
+        self.assertEqual(inspect_tree(self.root)["risk_hints"], {"remote_shell": 1, "weakens_install_checks": 1})
 
     def test_does_not_follow_links_out_of_the_tree(self):
         self.plugin()

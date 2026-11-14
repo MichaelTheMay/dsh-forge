@@ -39,6 +39,9 @@ _RISK_PATTERNS = {
     "remote_shell": re.compile(rb"(curl|wget)[^\n|]{0,200}\|\s*(ba)?sh"),
     "encoded_eval": re.compile(rb"eval\s*\(\s*(atob|Buffer\.from)\s*\("),
     "reads_credentials": re.compile(rb"\.ssh/id_|\.aws/credentials|\.npmrc|GITHUB_TOKEN|OPENAI_API_KEY"),
+    # Found by a reviewer: a plugin that exempts itself from the package manager's
+    # new-release waiting period so it can update itself without that check.
+    "weakens_install_checks": re.compile(rb"minimumReleaseAgeExclude|minimum-release-age-exclude"),
 }
 
 
