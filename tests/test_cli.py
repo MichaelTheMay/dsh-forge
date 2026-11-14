@@ -396,6 +396,15 @@ class LocalCellCliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(stopped_again["data"]["state"], "stopped")
 
+    def test_recommendations_are_off_until_enabled_and_can_be_switched_off(self):
+        code, payload = self.invoke("recommendations", "show")
+        self.assertEqual((code, payload["data"]["consent"], payload["data"]["state"]), (0, "unasked", "off"))
+        code, payload = self.invoke("recommendations", "enable")
+        self.assertEqual((code, payload["data"]["consent"]), (0, "on"))
+        self.assertIn(payload["data"]["state"], {"ready", "unavailable"})
+        code, payload = self.invoke("recommendations", "disable")
+        self.assertEqual((code, payload["data"]["consent"], payload["data"]["items"]), (0, "off", []))
+
     def test_clone_records_lineage(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="cli-test-birth"):
             _, started = self.invoke(

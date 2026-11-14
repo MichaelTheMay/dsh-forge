@@ -270,3 +270,129 @@ def recommend(
                 "evidence": str(need.get("evidence") or ""),
             })
     return chosen
+
+
+# --------------------------------------------------------------------- service
+
+PREFERENCE_NAME = "recommendations.json"
+SCAN_BUDGET_SECONDS = 2.0
+MAX_SCAN_ROUNDS = 200
+RESCAN_AFTER_SECONDS = 60.0
+
+
+class RecommendationService:
+    """Consent, background scanning and the final list, for the local app.
+
+    Nothing is read until the user says yes. Saying no afterwards deletes the cache.
+    Scanning runs on a background thread in short rounds so it never delays the app,
+    and partial results are shown while it works.
+    """
+
+    def __init__(
+        self,
+        state_root: str | Path,
+        homes: Callable[[], Iterable[str | Path]],
+        plugins: Callable[[], Sequence[Mapping[str, Any]]],
+        installed: Callable[[], Iterable[str]],
+    ):
+        import threading
+
+        self._state_root = Path(state_root).expanduser()
+        self._homes = homes
+        self._plugins = plugins
+        self._installed = installed
+        self._index = SessionIndex(self._state_root)
+        self._preference = self._state_root / PREFERENCE_NAME
+        self._lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._waiting = 0
+        self._scanned_at: float | None = None
+        self._threading = threading
+
+    # -- consent ---------------------------------------------------------------
+
+    def consent(self) -> str:
+        """``unasked``, ``on`` or ``off``."""
+        try:
+            value = json.loads(self._preference.read_text(encoding="utf-8")).get("enabled")
+        except (OSError, ValueError, AttributeError):
+            return "unasked"
+        return "on" if value is True else ("off" if value is False else "unasked")
+
+    def set_consent(self, enabled: bool) -> dict[str, Any]:
+        if not isinstance(enabled, bool):
+            raise ValueError("enabled must be true or false")
+        self._state_root.mkdir(parents=True, exist_ok=True)
+        temporary = self._preference.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"enabled": enabled}), encoding="utf-8")
+        os.replace(temporary, self._preference)
+        if enabled:
+            self._start_scan()
+        else:
+            # Saying no removes what was derived from the user's history.
+            self._index.clear()
+        return self.status()
+
+    # -- scanning --------------------------------------------------------------
+
+    def _start_scan(self) -> None:
+        with self._lock:
+            if self._thread and self._thread.is_alive():
+                return
+            self._thread = self._threading.Thread(target=self._scan, name="recommendation-scan", daemon=True)
+            self._thread.start()
+
+    def _scan(self) -> None:
+        try:
+            for _round in range(MAX_SCAN_ROUNDS):
+                if self.consent() != "on":
+                    self._index.clear()
+                    return
+                try:
+                    result = self._index.refresh(self._homes(), budget_seconds=SCAN_BUDGET_SECONDS)
+                except OSError:
+                    return
+                self._waiting = result["waiting"]
+                if not result["waiting"] or not result["read"]:
+                    return
+        finally:
+            self._scanned_at = time.monotonic()
+
+    def _scan_is_due(self) -> bool:
+        return self._scanned_at is None or time.monotonic() - self._scanned_at > RESCAN_AFTER_SECONDS
+
+    def scanning(self) -> bool:
+        thread = self._thread
+        return bool(thread and thread.is_alive())
+
+    def wait(self, timeout: float = 30.0) -> None:
+        """Block until the current scan finishes (tests and the command line)."""
+        thread = self._thread
+        if thread:
+            thread.join(timeout)
+
+    # -- result ----------------------------------------------------------------
+
+    def status(self) -> dict[str, Any]:
+        """What the home page needs: whether to ask, and what to show."""
+        consent = self.consent()
+        if consent != "on":
+            return {"consent": consent, "state": "off", "reason": "", "items": [], "needs": [], "sessions": 0}
+        if sessions.zstd_decoder() is None:
+            return {
+                "consent": consent, "state": "unavailable", "items": [], "needs": [], "sessions": 0,
+                "reason": "Session history can't be read on this computer yet. Install the zstd tool, or Node 22.15 or newer.",
+            }
+        if self._scan_is_due():
+            self._start_scan()
+        summaries = self._index.summaries()
+        needs = capability_needs(summaries)
+        items = recommend(needs, self._plugins(), self._installed()) if needs else []
+        return {
+            "consent": consent,
+            "state": "scanning" if self.scanning() else "ready",
+            "reason": "",
+            "items": items,
+            "needs": needs[:MAX_NEEDS + 2],
+            "sessions": len(summaries),
+        }

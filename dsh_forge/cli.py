@@ -272,6 +272,14 @@ def _parser() -> argparse.ArgumentParser:
     run_configuration.add_argument("configuration_id")
     run_configuration.add_argument("--task", help="override the task of a headless configuration")
 
+    recommendations = commands.add_parser(
+        "recommendations", help="plugins suggested from your local session history (nothing leaves this computer)"
+    )
+    recommendation_commands = recommendations.add_subparsers(dest="recommendations_command", required=True)
+    recommendation_commands.add_parser("show", help="show suggestions, or whether history reading is on")
+    recommendation_commands.add_parser("enable", help="allow reading local session history, then show suggestions")
+    recommendation_commands.add_parser("disable", help="stop reading local session history and delete what was derived")
+
     cells = commands.add_parser("cells", help="control persistent local cells")
     cell_commands = cells.add_subparsers(dest="cells_command", required=True)
     cell_commands.add_parser("list", help="list cells, including recovered processes")
@@ -430,6 +438,8 @@ def _command_name(args: argparse.Namespace) -> str:
         return f"packages.{args.packages_command}"
     if args.command == "research":
         return f"research.{args.research_command}"
+    if args.command == "recommendations":
+        return f"recommendations.{args.recommendations_command}"
     return str(args.command)
 
 
@@ -928,6 +938,14 @@ def run(
                 data = {"configurations": launcher.remove_configuration(args.configuration_id)}
             elif command == "configurations.run":
                 data = launcher.run_configuration(args.configuration_id, task=args.task)
+            elif command == "recommendations.show":
+                data = launcher.recommendations_status()
+            elif command == "recommendations.enable":
+                launcher.set_recommendations_consent(True)
+                launcher.recommendations.wait(120)
+                data = launcher.recommendations_status()
+            elif command == "recommendations.disable":
+                data = launcher.set_recommendations_consent(False)
             elif command == "cells.list":
                 status = launcher.status()
                 data = {"cells": status["cells"], "registry": status["registry"]}

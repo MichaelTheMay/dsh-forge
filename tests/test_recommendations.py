@@ -189,5 +189,73 @@ class SessionIndexTests(unittest.TestCase):
         self.assertEqual(self.index.refresh([self.home])["read"], 1)
 
 
+class ServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.home = self.root / "home"
+        self.catalog = [plugin("1", "dsh-test-runner", "Runs tests"), plugin("2", "dsh-memory", "Remember things")]
+        self.installed = []
+        self.service = recommendations.RecommendationService(
+            self.root / "state", lambda: [self.home], lambda: self.catalog, lambda: self.installed,
+        )
+
+    def sessions_with_tests(self, count=4):
+        created = int(time.time()) - 3600
+        for index in range(count):
+            folder = self.home / "sessions" / f"project-{index}" / "s"
+            folder.mkdir(parents=True, exist_ok=True)
+            records = [{"type": "session", "createdAt": created * 1000, "cwd": f"/work/private-{index}"}]
+            records += [{"type": "tool/call", "data": {"name": "bash", "arguments": json.dumps({"command": "pytest -q"})}}] * 4
+            (folder / "session.jsonl").write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+
+    def test_reads_nothing_until_the_user_says_yes(self):
+        self.sessions_with_tests()
+        status = self.service.status()
+        self.assertEqual((status["consent"], status["state"], status["items"]), ("unasked", "off", []))
+        self.assertFalse((self.root / "state" / recommendations.CACHE_NAME).exists())
+        self.assertFalse(self.service.scanning())
+
+    def test_yes_scans_in_the_background_and_then_suggests_plugins(self):
+        self.sessions_with_tests()
+        self.service.set_consent(True)
+        self.service.wait()
+        status = self.service.status()
+        self.assertEqual((status["consent"], status["state"], status["sessions"]), ("on", "ready", 4))
+        self.assertEqual([item["artifact"]["artifact_id"] for item in status["items"]], ["1"])
+        self.assertEqual(status["items"][0]["evidence"], "You ran tests 16 times across 4 sessions.")
+        self.assertEqual(status["needs"][0]["capability"], "testing")
+        # A plugin the user already has is not suggested again.
+        self.installed.append("dsh-test-runner")
+        self.assertEqual(self.service.status()["items"], [])
+
+    def test_no_turns_it_off_and_deletes_what_was_derived(self):
+        self.sessions_with_tests()
+        self.service.set_consent(True)
+        self.service.wait()
+        cache = self.root / "state" / recommendations.CACHE_NAME
+        self.assertTrue(cache.exists())
+        status = self.service.set_consent(False)
+        self.assertEqual((status["consent"], status["state"], status["items"]), ("off", "off", []))
+        self.assertFalse(cache.exists())
+        # The answer survives a restart.
+        again = recommendations.RecommendationService(self.root / "state", lambda: [self.home], lambda: self.catalog, lambda: [])
+        self.assertEqual(again.consent(), "off")
+
+    def test_says_plainly_when_history_cannot_be_read(self):
+        self.service.set_consent(True)
+        self.service.wait()
+        with mock.patch.object(sessions, "zstd_decoder", return_value=None):
+            status = self.service.status()
+        self.assertEqual(status["state"], "unavailable")
+        self.assertIn("zstd", status["reason"])
+
+    def test_rejects_a_consent_value_that_is_not_yes_or_no(self):
+        with self.assertRaises(ValueError):
+            self.service.set_consent("yes")
+        self.assertEqual(self.service.consent(), "unasked")
+
+
 if __name__ == "__main__":
     unittest.main()

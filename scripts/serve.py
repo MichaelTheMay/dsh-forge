@@ -266,6 +266,12 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
             elif self._loopback_host():
                 self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
             return
+        if path == "/api/v1/recommendations":
+            if self._api_guard() and self._session_ok():
+                self._json(self.server.launcher.recommendations_status())
+            elif self._loopback_host():
+                self._json({"error": "Launcher session required"}, HTTPStatus.FORBIDDEN)
+            return
         if path == "/api/v1/cells":
             if self._api_guard() and self._session_ok():
                 self._json({"cells": self.server.launcher.status()["cells"]})
@@ -450,6 +456,9 @@ class LauncherUIHandler(SimpleHTTPRequestHandler):
                     self.server.launcher.run_configuration(body.get("id"), task=task),
                     HTTPStatus.CREATED,
                 )
+                return
+            if path == "/api/v1/recommendations/consent":
+                self._json(self.server.launcher.set_recommendations_consent(body.get("enabled")))
                 return
             if path == "/api/v1/assistant/start":
                 version_id = body.get("version_id")
