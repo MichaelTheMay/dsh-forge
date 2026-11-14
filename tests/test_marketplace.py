@@ -117,6 +117,19 @@ class MarketplaceTests(unittest.TestCase):
         )
         self.assertEqual(len(snapshot["supplemental_entries"]), 1)
 
+    def test_fetch_accepts_a_grown_catalog_but_not_an_unbounded_one(self):
+        payload = json.dumps(sample_catalog(), ensure_ascii=False, separators=(",", ":")).encode()
+        snapshot = fetch_catalog(
+            "https://catalog.example/plugins.json",
+            opener=lambda *_args, **_kwargs: Response(payload, content_length=str(20_000_000)),
+        )
+        self.assertEqual(len(snapshot["supplemental_entries"]), 1)
+        with self.assertRaisesRegex(MarketplaceError, "download limit"):
+            fetch_catalog(
+                "https://catalog.example/plugins.json",
+                opener=lambda *_args, **_kwargs: Response(payload, content_length=str(65 * 1024 * 1024)),
+            )
+
     def test_fetch_rejects_invalid_content_length(self):
         with self.assertRaisesRegex(MarketplaceError, "Content-Length"):
             fetch_catalog(

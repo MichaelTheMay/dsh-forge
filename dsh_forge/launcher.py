@@ -1033,6 +1033,12 @@ class Launcher:
         except CatalogStoreError as error:
             raise LauncherError(str(error)) from error
 
+    def catalog_discover(self) -> dict[str, Any]:
+        try:
+            return self.catalog_store.discover()
+        except CatalogStoreError as error:
+            raise LauncherError(str(error)) from error
+
     def catalog_artifact(self, artifact_id: str) -> dict[str, Any]:
         try:
             record = self.catalog_store.get(artifact_id)

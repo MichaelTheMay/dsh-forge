@@ -12,8 +12,8 @@ const CACHE_MS = 10 * 60 * 1000;
 const MAX_CURSOR = 50_000;
 const MAX = {
   feed: 64 * 1024,
-  registryCompressed: 8 * 1024 * 1024,
-  registryExpanded: 64 * 1024 * 1024,
+  registryCompressed: 16 * 1024 * 1024,
+  registryExpanded: 128 * 1024 * 1024,
   researchCompressed: 2 * 1024 * 1024,
   researchExpanded: 8 * 1024 * 1024
 };
@@ -101,7 +101,7 @@ async function loadFeed() {
   }
 }
 
-function validateCatalog(feed, registry, research) {
+export function validateCatalog(feed, registry, research) {
   const entries = Array.isArray(registry && registry.entries) ? registry.entries : [];
   const plugins = Array.isArray(registry && registry.supplemental_entries) ? registry.supplemental_entries : [];
   const packages = Array.isArray(registry && registry.package_entries) ? registry.package_entries : [];
@@ -116,7 +116,21 @@ function validateCatalog(feed, registry, research) {
   const artifacts = [...entries, ...plugins, ...packages];
   const byId = new Map(artifacts.map(item => [item.artifact_id, item]));
   const hiddenGems = new Map(candidates.map(item => [item.research.artifact_id, item.research]));
-  return { feed, artifacts, byId, hiddenGems };
+  const packs = (Array.isArray(research.packs) ? research.packs : [])
+    // Pack ids become page routes and like keys, so only plain slugs are accepted.
+    .filter(pack => pack && typeof pack.id === 'string' && /^[a-z0-9-]{1,64}$/.test(pack.id) && Array.isArray(pack.members))
+    .map(pack => ({
+      id: pack.id,
+      title: String(pack.title || ''),
+      summary: String(pack.summary || ''),
+      members: pack.members.filter(member => member && byId.has(member.artifact_id)).map(member => ({
+        role: String(member.role || ''),
+        why: String(member.why || ''),
+        artifact: { ...byId.get(member.artifact_id), hidden_gem: hiddenGems.get(member.artifact_id) || null }
+      }))
+    }))
+    .filter(pack => pack.members.length >= 3);
+  return { feed, artifacts, byId, hiddenGems, packs, policy: String(research.policy || '') };
 }
 
 async function loadCatalog() {
@@ -211,6 +225,17 @@ export function queryCatalog(catalog, url) {
   };
 }
 
+// The Discover page: today's strongest gems per type, plus curated packs.
+export function discoverView(catalog, { plugins = 12, forks = 6 } = {}) {
+  const pick = (type, limit) => catalog.artifacts
+    .filter(artifact => artifact.artifact_type === type && catalog.hiddenGems.get(artifact.artifact_id)?.candidate)
+    .map(artifact => ({ artifact, research: catalog.hiddenGems.get(artifact.artifact_id) }))
+    .sort((a, b) => (a.research.rank ?? Infinity) - (b.research.rank ?? Infinity))
+    .slice(0, limit)
+    .map(({ artifact, research }) => ({ ...artifact, hidden_gem: research }));
+  return { gems: { plugins: pick('plugin', plugins), forks: pick('fork', forks) }, packs: catalog.packs, policy: catalog.policy };
+}
+
 function storeMetadata(catalog) {
   const { feed } = catalog;
   return {
@@ -231,7 +256,16 @@ export async function GET(request) {
     const catalog = await loadCatalog();
     const id = url.searchParams.get('id');
     let body;
-    if (id) {
+    if (url.searchParams.get('view') === 'discover') {
+      body = { ...discoverView(catalog), catalog_store: storeMetadata(catalog) };
+    } else if (url.searchParams.has('ids')) {
+      // A handful of records at once (the "Most liked" shelf); unknown ids are skipped.
+      const ids = [...new Set(String(url.searchParams.get('ids')).split(','))].filter(item => item && item.length <= 160).slice(0, 24);
+      body = {
+        artifacts: ids.map(item => catalog.byId.get(item)).filter(Boolean)
+          .map(artifact => ({ ...artifact, hidden_gem: catalog.hiddenGems.get(artifact.artifact_id) || null }))
+      };
+    } else if (id) {
       if (id.length > 160) fail('Catalog artifact id is too long', 400);
       const artifact = catalog.byId.get(id);
       if (!artifact) fail('Unknown catalog artifact', 404);

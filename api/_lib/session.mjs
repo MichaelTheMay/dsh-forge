@@ -21,12 +21,15 @@ export function authConfig(env = process.env) {
   const kvUrl = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL || '';
   const kvToken = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN || '';
   const configured = !!(clientId && clientSecret && secret.length >= 32);
+  const store = /^https:\/\//.test(kvUrl) && !!kvToken;
   return {
     configured,
     clientId,
     clientSecret,
     secret,
-    sync: configured && /^https:\/\//.test(kvUrl) && !!kvToken,
+    // Likes need only the store: anonymous visitors can like without sign-in.
+    likes: store,
+    sync: configured && store,
     kvUrl: kvUrl.replace(/\/+$/, ''),
     kvToken
   };
@@ -203,4 +206,19 @@ export async function kv(config, command, fetcher = fetch) {
 
 export function favoritesKey(session) {
   return 'dsh-forge:favorites:v1:' + session.sub;
+}
+
+export async function kvPipeline(config, commands, fetcher = fetch) {
+  const response = await fetcher(config.kvUrl + '/pipeline', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + config.kvToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error('Store returned ' + response.status);
+  const payload = await response.json();
+  if (!Array.isArray(payload) || payload.length !== commands.length || payload.some(item => !item || item.error)) {
+    throw new Error('Store rejected the request');
+  }
+  return payload.map(item => item.result);
 }

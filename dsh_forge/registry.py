@@ -183,6 +183,9 @@ def _fork(
         "seed_rank": None,
         "forks_count": forks_count,
         "pushed_at": repo.get("pushed_at") if isinstance(repo.get("pushed_at"), str) else None,
+        # A fork starts with pushed_at at or before created_at; a later push
+        # means someone committed to it.
+        "created_at": repo.get("created_at") if isinstance(repo.get("created_at"), str) else None,
         "archived": bool(repo.get("archived")),
         "default_branch": repo.get("default_branch") if isinstance(repo.get("default_branch"), str) else None,
         "head_sha": None,

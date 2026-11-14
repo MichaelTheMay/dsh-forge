@@ -15,6 +15,8 @@ from .catalog_store import MAX_SNAPSHOT_BYTES
 from .packages import read_json, write_json
 from .research import DISCOVERY_QUEUE_SCHEMA, POLICY_VERSION, SELECTION_POLICY
 
+QUEUE_POLICIES = {POLICY_VERSION, "dsh-forge.hidden-gems/v3"}
+
 
 REGISTRY_FEED_SCHEMA = "dsh-forge.registry-feed/v1"
 DEFAULT_FEED_URL = (
@@ -184,7 +186,7 @@ def build_feed_assets(
     quality = queue.get("quality")
     if (
         queue.get("schema") != DISCOVERY_QUEUE_SCHEMA
-        or queue.get("policy") != POLICY_VERSION
+        or queue.get("policy") not in QUEUE_POLICIES
         or not isinstance(candidates, list)
         or queue.get("candidate_count") != len(candidates)
         or not isinstance(quality, Mapping)

@@ -3,14 +3,14 @@ import { SESSION_COOKIE, authConfig, clearCookie, json, publicUser, sameOrigin, 
 
 export function handleSession(request, { env = process.env } = {}) {
   const config = authConfig(env);
-  if (!config.configured) return json({ configured: false, sync: false, user: null });
-  return json({ configured: true, sync: config.sync, user: publicUser(sessionUser(request, config)) });
+  if (!config.configured) return json({ configured: false, sync: false, likes: config.likes, user: null });
+  return json({ configured: true, sync: config.sync, likes: config.likes, user: publicUser(sessionUser(request, config)) });
 }
 
 export async function handleLogout(request, { env = process.env } = {}) {
   if (!sameOrigin(request)) return json({ error: 'Same-origin request required' }, 403);
   const config = authConfig(env);
-  return json({ configured: config.configured, sync: config.sync, user: null }, 200, { 'Set-Cookie': clearCookie(SESSION_COOKIE) });
+  return json({ configured: config.configured, sync: config.sync, likes: config.likes, user: null }, 200, { 'Set-Cookie': clearCookie(SESSION_COOKIE) });
 }
 
 export function GET(request) {

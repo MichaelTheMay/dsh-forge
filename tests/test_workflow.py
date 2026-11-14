@@ -64,8 +64,17 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("scripts/index_registry.py", workflow)
         self.assertIn("scripts/analyze_registry.py", workflow)
         self.assertIn("scripts/build_catalog_feed.py", workflow)
-        self.assertIn("--snapshot dist/registry-raw.json", workflow)
-        self.assertIn("--snapshot dist/registry.json", workflow)
+        self.assertIn("scripts/enrich_registry.py", workflow)
+        # Index → evidence → fork analysis → ranking, each reading the previous step's output.
+        order = [
+            "--snapshot dist/registry-raw.json",
+            "--output dist/registry-evidence.json",
+            "--snapshot dist/registry-evidence.json",
+            "--snapshot dist/registry-analyzed.json",
+            "--annotate dist/registry.json",
+        ]
+        positions = [workflow.index(step) for step in order]
+        self.assertEqual(positions, sorted(positions))
         self.assertIn("GITHUB_TOKEN: ${{ github.token }}", workflow)
         self.assertIn("dist/registry.json", workflow)
         self.assertIn("github.ref == 'refs/heads/main'", workflow)

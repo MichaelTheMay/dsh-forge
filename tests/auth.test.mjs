@@ -59,7 +59,7 @@ test('session tokens are signed, expiring, and tamper-evident', () => {
 
 test('sign-in is hidden until the deployment is fully configured', async () => {
   const missing = await handleSession(new Request(ORIGIN + '/api/auth/session'), { env: {} }).json();
-  assert.deepEqual(missing, { configured: false, sync: false, user: null });
+  assert.deepEqual(missing, { configured: false, sync: false, likes: false, user: null });
   const weakSecret = handleLogin(new Request(ORIGIN + '/api/auth/login'), { env: { ...ENV, DSH_FORGE_SESSION_SECRET: 'short' } });
   assert.equal(weakSecret.status, 503);
   const noSync = await handleSession(new Request(ORIGIN + '/api/auth/session'), { env: { ...ENV, KV_REST_API_URL: '' } }).json();

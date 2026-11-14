@@ -8,11 +8,14 @@ import copy
 import datetime as dt
 import hashlib
 import json
+import math
 import re
+from collections import Counter
 from typing import Any, Callable, Mapping
 from urllib.parse import quote, urlencode
 from urllib.request import urlopen
 
+from .enrichment import has_own_commits
 from .registry import GITHUB_API, GITHUB_API_VERSION, RegistryError, _github_json
 from .research import evaluate_artifact
 
@@ -265,26 +268,65 @@ def _compatibility(record: Mapping[str, Any], paths: list[str], manifest: Mappin
 
 
 def select_fork_leads(snapshot: Mapping[str, Any], *, limit: int = MAX_FORK_ANALYSES) -> list[str]:
-    """Select metadata leads for bounded analysis without claiming they are gems."""
+    """Pick forks worth a commit comparison, without claiming they are gems.
+
+    Most forks are untouched copies. A fork earns a comparison when someone
+    committed to it after forking, it has stars, or it carries a description of
+    its own; among those, recent pushes, stars, a custom description, and a
+    known license come first. Capability keywords are not required: a fork that
+    changes the runtime but kept the upstream description is still worth a look.
+    """
 
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= MAX_FORK_ANALYSES:
         raise AnalysisError(f"Fork analysis limit must be between 1 and {MAX_FORK_ANALYSES}")
+    forks = [
+        record for record in [*(snapshot.get("entries") or []), *(snapshot.get("supplemental_entries") or [])]
+        if isinstance(record, Mapping) and record.get("artifact_type") == "fork" and record.get("archived") is not True
+    ]
+    descriptions = Counter(str(record.get("description") or "") for record in forks)
+    upstream_description = descriptions.most_common(1)[0][0] if len(forks) > 1 else ""
+    observed = _instant_value(snapshot.get("fetched_at"))
     values = []
-    for record in [*(snapshot.get("entries") or []), *(snapshot.get("supplemental_entries") or [])]:
-        if not isinstance(record, Mapping) or record.get("artifact_type") != "fork" or record.get("archived") is True:
-            continue
-        report = evaluate_artifact(record, snapshot.get("fetched_at"))
-        license_value = record.get("license") if isinstance(record.get("license"), Mapping) else {}
-        if report["score"] < 45 or not report["capabilities"] or not license_value.get("spdx"):
-            continue
+    for record in forks:
+        description = str(record.get("description") or "")
+        own_description = bool(description) and description != upstream_description and not description.startswith(
+            "No repository description"
+        )
         stars = record.get("github_stars")
-        values.append((
-            -report["score"],
-            stars if isinstance(stars, int) and not isinstance(stars, bool) else 10**12,
-            str(record.get("artifact_id") or ""),
-        ))
+        stars = stars if isinstance(stars, int) and not isinstance(stars, bool) and stars > 0 else 0
+        own_commits = has_own_commits(record)
+        if own_commits is False and not stars:
+            continue
+        if own_commits is None and not stars and not own_description:
+            continue
+        license_value = record.get("license") if isinstance(record.get("license"), Mapping) else {}
+        pushed = _instant_value(record.get("pushed_at"))
+        age = (observed - pushed).days if observed and pushed else 9999
+        priority = (
+            3.0 * own_description
+            + 2.0 * math.log1p(stars)
+            + (2.0 if age <= 60 else 1.0 if age <= 180 else 0.0)
+            + (1.0 if own_commits else 0.0)
+            + (0.5 if license_value.get("spdx") else 0.0)
+        )
+        parent = str(record.get("parent_repository") or "").casefold()
+        source = str(record.get("source_repository") or "").casefold()
+        if parent and source and parent != source and not own_description:
+            # A fork of a fork mostly re-measures its parent's changes.
+            priority -= 3.0
+        values.append((-priority, -(pushed.timestamp() if pushed else 0), str(record.get("artifact_id") or "")))
     values.sort()
     return [identity for _, _, identity in values[:limit]]
+
+
+def _instant_value(value: Any) -> dt.datetime | None:
+    if not isinstance(value, str) or len(value) > 64:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
 
 
 def enrich_github_forks(

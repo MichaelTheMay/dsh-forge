@@ -26,7 +26,8 @@ checksum-verifying, paginated endpoint. A connected launcher can sync the same
 feed, currently covering thousands of plugins and tens of thousands of forks,
 into its local search store.
 Forge adds an explainable, bounded hidden-gem research queue over that full
-inventory. The V1 browser stays focused on plugins and forks. Package curation
+inventory: it measures how each project is built, predicts the attention a
+build like that usually earns, and surfaces the ones with the widest gap. The V1 browser stays focused on plugins and forks. Package curation
 remains a separate signed CLI workflow.
 
 Every runnable official or personal cell now requires the **fail-closed
@@ -285,10 +286,15 @@ unchanged. See [docs/catalog-store.md](docs/catalog-store.md).
   reflects measured divergence), layered under the repository's custom GitHub
   social preview and its owner's avatar when those exist. Both browsers switch
   between cards and a compact list, and remember the choice.
-- Favorite an artifact and reopen it from either browser's **Favorites**
-  filter. Favorites always stay in this browser; on the hosted site, **Sign in
-  with GitHub** also syncs them across devices. See
-  [Accounts and synced favorites](docs/accounts.md). Ratings remain post-V1.
+- **Discover** leads the website: today's hidden gems, curated packs of
+  plugins that work well together, the most-liked items, and forks worth a
+  look. Every pick says why it was chosen in plain sentences generated from
+  measured GitHub evidence, not by an AI; see
+  [Hidden-gem research](docs/hidden-gem-pipeline.md).
+- **Save** an artifact and reopen it from the **Saved** filter. Saved items
+  always stay in this browser; on the hosted site, **Sign in with GitHub** also
+  syncs them across devices. Plugins, forks, and packs can be **liked**, with or
+  without signing in. See [Accounts, saved items, and likes](docs/accounts.md).
 - A plugin page checks an exact declared Harness version list against the
   launch-ready versions on this machine. Real semver ranges and prose
   qualifiers are shown verbatim and never evaluated.

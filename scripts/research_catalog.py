@@ -14,7 +14,8 @@ from dsh_forge.marketplace import DEFAULT_CATALOG_URL, fetch_catalog
 from dsh_forge.packages import write_json
 from dsh_forge.packages import read_json
 from dsh_forge.catalog_store import MAX_SNAPSHOT_BYTES
-from dsh_forge.research import MAX_DISCOVERY_QUEUE, discovery_queue
+from dsh_forge.discovery import annotate, discovery_queue
+from dsh_forge.research import MAX_DISCOVERY_QUEUE
 
 
 def main() -> int:
@@ -24,17 +25,28 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=MAX_DISCOVERY_QUEUE)
     parser.add_argument("--output", required=True, metavar="JSON")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--annotate",
+        metavar="JSON",
+        help="also write the snapshot with each gem's report attached (read by the desktop catalog store)",
+    )
     args = parser.parse_args()
 
     snapshot = read_json(args.snapshot, max_bytes=MAX_SNAPSHOT_BYTES) if args.snapshot else fetch_catalog(args.url)
     queue = discovery_queue(snapshot, limit=args.limit)
     write_json(args.output, queue, force=args.force, compact=True)
+    annotated = None
+    if args.annotate:
+        annotated = annotate(snapshot, queue)
+        write_json(args.annotate, snapshot, force=True, compact=True)
     print(json.dumps({
         "output": str(Path(args.output).expanduser()),
         "snapshot_id": queue["snapshot_id"],
         "source_count": queue["source_count"],
         "candidate_count": queue["candidate_count"],
         "quality": queue["quality"],
+        "packs": [pack["title"] for pack in queue.get("packs") or []],
+        "annotated": annotated,
         "security_verified": False,
     }, separators=(",", ":")))
     return 0
