@@ -310,6 +310,14 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("evidence", records[-1])
         self.assertEqual(trim_evidence(snapshot, observed_at=NOW, max_bytes=10**9), 0)
 
+    def test_published_size_cap_leaves_room_for_evidence(self):
+        from dsh_forge.catalog_store import MAX_SNAPSHOT_BYTES
+
+        # Readers reject anything above MAX_SNAPSHOT_BYTES; the registry without any
+        # evidence was 78.8 MB on 2026-11-10. A cap below that drops all evidence.
+        self.assertLess(enrichment.MAX_PUBLISHED_REGISTRY_BYTES, MAX_SNAPSHOT_BYTES)
+        self.assertGreater(enrichment.MAX_PUBLISHED_REGISTRY_BYTES, 100 * 1024 * 1024)
+
 
 if __name__ == "__main__":
     unittest.main()
