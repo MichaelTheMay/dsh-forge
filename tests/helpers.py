@@ -1,6 +1,23 @@
 """Test-only adapters that exercise launcher lifecycle without requiring Apptainer."""
 
 import os
+import shutil
+
+
+_real_which = shutil.which
+
+
+def _which_without_host_dsh(cmd, *args, **kwargs):
+    """Hide a developer's own ``dsh`` so the launcher scan sees only test fixtures."""
+    if cmd == "dsh":
+        return None
+    return _real_which(cmd, *args, **kwargs)
+
+
+# Launcher.scan() adds whatever ``dsh`` is on PATH as an extra Harness version.
+# On a machine with the Harness installed that leaks a real install into every
+# launcher test. Tests that need a ``dsh`` on PATH patch ``shutil.which`` themselves.
+shutil.which = _which_without_host_dsh
 
 
 class FakeCellSandbox:
