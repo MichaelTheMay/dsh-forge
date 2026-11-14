@@ -1,0 +1,26 @@
+# Decisions
+
+Settled during the kickoff grilling on 2026-11-13. The brief is in [PROBLEM.md](PROBLEM.md). Append new rows; do not rewrite old ones.
+
+| # | Decision | Choice | Why | Rejected |
+|---|---|---|---|---|
+| 1 | What this build covers | The public launch plus the first platform features: hidden-gem system, recommendations, run in tabs, parallel sessions | Michael chose the platform horizon over a catalog-only V1 | Catalog-only V1; generalising to other harnesses now |
+| 2 | What "launched" means | Public web catalog and a Linux desktop app; Windows and macOS labelled "coming later" | Running anything only works on Linux today and no desktop release has ever shipped | Unsigned Windows build; waiting for all three systems |
+| 3 | Where community code runs | On the user's own machine, inside the Apptainer sandbox | A hosted sandbox costs money and invites abuse before there are users | Hosted sandbox |
+| 4 | Hidden-gem engine | Two stages: the existing statistics pass filters every project, then a deep stage reads the code of the top candidates | The statistics pass never opens a repository, so it cannot tell what a plugin does | Statistics only; deep stage only |
+| 5 | Who reads code in the deep stage | Claude, during this build, over a capped set of about 120 projects, saved as data files in a source-neutral format | Populates picks with genuinely good projects now without spending on an API; a paid model plugs in later | Paid model in the daily job now; automatic checks only |
+| 6 | How gem quality is scored | A backtest (do obscure projects it ranks highly later take off) plus about 30 labels from Michael | The backtest is free and repeatable; the labels keep it honest about quality versus popularity | Either one alone |
+| 7 | Where the gem system lives | Its own top-level `gems/` package with a file contract: reads catalog files, writes `gem-picks.json` | Can be worked on without touching the app, and split out later in one move | Separate repository now; staying inside the app's discovery module |
+| 8 | Recommendations: where analysis runs | On the user's machine, rules only, no AI, nothing uploaded | Session logs hold prompts and code; uploading them would cost money and trust | Server-side analysis; AI pass by default |
+| 9 | Recommendations: consent | Ask once on first run, then on, with an off switch that deletes the cache | Users should be asked before their history is read, but the feature should not be buried | On by default; off until found in settings |
+| 10 | Recommendations: when shown | After a session, on the home view next time the app opens | Interrupting a live session is much harder to get right | During the session |
+| 11 | Featured shelves | Add "New this week" and "Best in each category", both measured, no AI | Uses evidence already gathered daily at no extra cost | AI-judged best in class; skipping best in class |
+| 12 | Parallel sessions | One task across 2 to 4 saved configurations, results side by side, the user picks one | Automatic merging is its own project | Automatic merging |
+| 13 | Order of platform features | Saved configurations (already built) → recommendations → parallel sessions → harness-tab extensions → base harness versions | Later features depend on earlier ones | Crowdsourced compute, dropped until there is a community |
+| 14 | Pull request 41 | Rebuild "run in tabs" on current styling; close the old pull request at the end | It conflicts with main and most of it is superseded; tabs are the base for the side-by-side view | Reviving the old branch; skipping tabs |
+| 15 | How work lands | One integration branch, `feat/platform-v1`, small tested commits, a draft pull request per milestone. Nothing reaches `main` or production without explicit approval | Lets the build run unattended without unreviewed code going live | Merging to main automatically; stacked drafts with no merges |
+| 16 | Accounts and keys | Built and tested with stand-in values; the real GitHub OAuth app, Upstash store, Vercel keys and production deploy are a checklist for Michael at the end | Creating accounts and deploying are his to do | Launching without sign-in and likes |
+| 17 | Name | Build as DSH Forge; the rename is one isolated final step once Michael supplies a name | The new name must not be AI-generated, so it is his to choose | Blocking the build on the name; keeping the name for good |
+| 18 | Testing the sandbox | Michael installs Apptainer once; every milestone is then tested against the real sandbox | Launch users will hit the real sandbox, not a stand-in | Testing only with the stand-in |
+| 19 | Dependencies | None added. Python stays stdlib only; session logs are decompressed with whatever the machine already has | The project is dependency-free today and installs with one command | Adding a zstd package |
+| 20 | Merge of main into the open-now branch | Kept main's plain-language detail pages and the branch's "Open now" behaviour; the run-readiness checklist is not shown on the page | Main had removed that kind of technical detail from the interface | Restoring the checklist panel |
