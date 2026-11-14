@@ -97,6 +97,116 @@ test('cell open URLs require the requested cell and exact loopback port', () => 
   );
 });
 
+// ---- Recommended for you ----
+function localApp() {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  return c;
+}
+const recommendation = (id, name, capability = 'testing') => ({
+  artifact: {
+    artifact_id: id, artifact_type: 'plugin', full_name: 'owner/' + name, owner: 'owner', name,
+    description: 'Does ' + name, github_stars: 2, topics: [], license: { spdx: 'MIT' }, package: { name }
+  },
+  capability,
+  evidence: 'You ran tests 18 times across 4 sessions.'
+});
+
+test('suggestions are asked for first, and only inside the local app', () => {
+  const offline = instance();
+  assert.equal(offline.renderVals().showRecsBlock, false);
+  const c = localApp();
+  let values = c.renderVals();
+  assert.equal(values.showRecsBlock, true);
+  assert.equal(values.recsAsk, true);
+  assert.equal(values.recsOn, false);
+  assert.equal(values.hasRecs, false);
+  assert.match(html, /Nothing leaves this computer, and it keeps only counts, never what you typed\./);
+  return onWebsite(() => {
+    const site = instance();
+    site.state.sidecarConnected = true;
+    assert.equal(site.renderVals().showRecsBlock, false);
+  });
+});
+
+test('saying yes turns suggestions on and shows them with their evidence', async () => {
+  const c = localApp();
+  const calls = [];
+  c.api = async (url, options) => {
+    calls.push([url, options && options.body]);
+    return { consent: 'on', state: 'ready', sessions: 12, reason: '', items: [recommendation('github:1', 'dsh-test-runner'), { bad: true }] };
+  };
+  await c.renderVals().recsYes();
+  assert.deepEqual(calls, [['/api/v1/recommendations/consent', '{"enabled":true}']]);
+  const values = c.renderVals();
+  assert.equal(values.recsAsk, false);
+  assert.equal(values.recsOn, true);
+  assert.equal(values.recsNote, 'From 12 sessions on this computer. Nothing is uploaded.');
+  assert.deepEqual(values.recItems.map(item => [item.name, item.capability, item.evidence]),
+    [['dsh-test-runner', 'testing', 'You ran tests 18 times across 4 sessions.']]);
+  // A suggestion opens that plugin's page.
+  values.recItems[0].select();
+  assert.equal(c.state.artifactId, 'github:1');
+  assert.equal(c.state.detailOpen, true);
+});
+
+test('saying no hides suggestions for good, and turning them off deletes them', async () => {
+  const c = localApp();
+  c.api = async () => ({ consent: 'off', state: 'off', items: [], sessions: 0 });
+  await c.renderVals().recsNo();
+  const values = c.renderVals();
+  assert.equal(values.showRecsBlock, false);
+  assert.equal(c.state.recommendations.items.length, 0);
+  assert.match(c.lastMessage, /off and their data is deleted/);
+});
+
+test('suggestions explain themselves while reading, when empty, and when unavailable', () => {
+  const c = localApp();
+  c.applyRecommendations({ consent: 'on', state: 'scanning', sessions: 3, items: [] });
+  let values = c.renderVals();
+  assert.equal(values.recsNote, 'Reading your recent sessions…');
+  assert.equal(values.recsEmpty, false);
+  c.applyRecommendations({ consent: 'on', state: 'ready', sessions: 1, items: [] });
+  values = c.renderVals();
+  assert.equal(values.recsNote, 'From 1 session on this computer. Nothing is uploaded.');
+  assert.equal(values.recsEmpty, true);
+  assert.match(values.recsEmptyText, /Nothing to suggest yet/);
+  c.applyRecommendations({ consent: 'on', state: 'unavailable', reason: 'Install the zstd tool.', items: [] });
+  values = c.renderVals();
+  assert.equal(values.recsEmptyText, 'Install the zstd tool.');
+  // A payload this page does not understand is treated as "not asked yet".
+  c.applyRecommendations({ consent: 'maybe', items: 'nope' });
+  assert.equal(c.state.recommendations.consent, 'unasked');
+});
+
+test('suggestions are refreshed sparingly, faster while still reading', async () => {
+  const c = localApp();
+  let calls = 0;
+  c.api = async () => { calls += 1; return { consent: 'on', state: calls === 1 ? 'scanning' : 'ready', sessions: 1, items: [] }; };
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    await c.loadRecommendations();
+    await c.loadRecommendations();
+    assert.equal(calls, 1);
+    now += 3000; // still reading: checked again after a few seconds
+    await c.loadRecommendations();
+    assert.equal(calls, 2);
+    now += 3000; // finished: not asked again so soon
+    await c.loadRecommendations();
+    assert.equal(calls, 2);
+    now += 30000;
+    await c.loadRecommendations();
+    assert.equal(calls, 3);
+    c.setState({ sidecarConnected: false });
+    await c.loadRecommendations(true);
+    assert.equal(calls, 3);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
