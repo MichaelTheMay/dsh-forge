@@ -1856,6 +1856,8 @@ class Component extends DCLogic {
       catalogLayout: storedLayout(),
       discover: null,
       discoverLoading: false,
+      recommendations: { consent: 'unasked', state: 'off', items: [], reason: '', sessions: 0 },
+      recommendationsBusy: false,
       discoverError: '',
       packId: initialRoute.packId || null,
       detailFrom: null,
@@ -2688,6 +2690,56 @@ class Component extends DCLogic {
   }
 
   // Gems and packs for the Discover page, from the hosted API or the local store.
+  // ---- Recommended for you -----------------------------------------------------
+  // Suggestions come from the local app, which works them out from session history
+  // on this computer. The website never has them.
+  async loadRecommendations(force = false) {
+    if (!this.state.sidecarConnected || this.isPublicWeb()) return;
+    const now = Date.now();
+    const wait = this.state.recommendations.state === 'scanning' ? 2500 : 30000;
+    if (!force && this._recommendationsAt && now - this._recommendationsAt < wait) return;
+    this._recommendationsAt = now;
+    try {
+      this.applyRecommendations(await this.api('/api/v1/recommendations'));
+    } catch {
+      // Suggestions are optional; the page works without them.
+    }
+  }
+
+  applyRecommendations(payload) {
+    const items = (Array.isArray(payload.items) ? payload.items : [])
+      .filter(item => item && item.artifact && item.artifact.artifact_id)
+      .map(item => ({
+        artifact: mapCatalogRecord({ ...item.artifact, hidden_gem: item.artifact.hidden_gem || null }),
+        capability: String(item.capability || ''),
+        evidence: String(item.evidence || '')
+      }));
+    this.setState({
+      recommendations: {
+        consent: ['on', 'off'].includes(payload.consent) ? payload.consent : 'unasked',
+        state: String(payload.state || 'off'),
+        reason: String(payload.reason || ''),
+        sessions: Number.isInteger(payload.sessions) ? payload.sessions : 0,
+        items
+      }
+    });
+  }
+
+  async answerRecommendations(enabled) {
+    this.setState({ recommendationsBusy: true });
+    try {
+      this.applyRecommendations(await this.api('/api/v1/recommendations/consent', {
+        method: 'POST', body: JSON.stringify({ enabled })
+      }));
+      this._recommendationsAt = 0;
+      this.flash(enabled ? 'Reading your recent sessions on this computer' : 'Suggestions are off and their data is deleted');
+    } catch (error) {
+      this.flash(error.message);
+    } finally {
+      this.setState({ recommendationsBusy: false });
+    }
+  }
+
   async loadDiscover() {
     if (this._discoverPromise) return this._discoverPromise;
     const hosted = this.isPublicWeb() && !this.state.sidecarConnected;
@@ -2972,6 +3024,7 @@ class Component extends DCLogic {
     try {
       const status = await this.api('/api/v1/status');
       this.applyStatus(status);
+      this.loadRecommendations();
       await this.refreshAssistantUrl(Array.isArray(status.cells) ? status.cells : []);
     } catch (error) {
       this.setState({ sidecarConnected: false, cells: [] });
@@ -4061,6 +4114,39 @@ class Component extends DCLogic {
       hasDiscoverError: !!s.discoverError && !s.discover,
       discoverError: s.discoverError,
       retryDiscover: () => this.loadDiscover(),
+      ...(() => {
+        const recs = s.recommendations;
+        const local = !!s.sidecarConnected && !this.isPublicWeb();
+        const on = local && recs.consent === 'on';
+        const items = on ? recs.items.map(item => {
+          const card = cardView(item.artifact, { badge: false });
+          return {
+            id: card.id, name: card.name, owner: card.owner, description: card.description,
+            avatarStyle: card.avatarStyle, initials: card.initials,
+            capability: item.capability, evidence: item.evidence,
+            accessibleLabel: 'Open ' + card.slug,
+            select: () => this.selectCatalogArtifact(item.artifact)
+          };
+        }) : [];
+        const sessions = recs.sessions === 1 ? '1 session' : recs.sessions.toLocaleString('en-US') + ' sessions';
+        return {
+          showRecsBlock: local && recs.consent !== 'off',
+          recsAsk: local && recs.consent === 'unasked',
+          recsOn: on,
+          recsBusy: s.recommendationsBusy,
+          recsYes: () => this.answerRecommendations(true),
+          recsNo: () => this.answerRecommendations(false),
+          recItems: items,
+          hasRecs: items.length > 0,
+          recsNote: recs.state === 'scanning'
+            ? 'Reading your recent sessions…'
+            : (recs.state === 'unavailable' ? '' : 'From ' + sessions + ' on this computer. Nothing is uploaded.'),
+          recsEmpty: on && !items.length && recs.state !== 'scanning',
+          recsEmptyText: recs.state === 'unavailable'
+            ? recs.reason
+            : 'Nothing to suggest yet. Suggestions appear once you have a few sessions, and only for things you don’t already have a plugin for.'
+        };
+      })(),
       discoverPlugins: distinct(discoverData.plugins.map(item => cardView(item, { badge: false }))),
       hasDiscoverPlugins: discoverData.plugins.length > 0,
       discoverForks: distinct(discoverData.forks.map(item => cardView(item, { badge: false }))),

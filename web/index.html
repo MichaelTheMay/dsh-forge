@@ -440,6 +440,19 @@
   .shelf-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .shelf-head .link-btn { margin-left: auto; }
   .shelf-note { font-size: 13px; color: oklch(0.62 0.013 255); }
+  /* Recommended for you */
+  .recs { margin: 4px 0 22px; }
+  .recs .shelf-head { margin-top: 0; margin-bottom: 14px; }
+  .recs-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; padding: 18px 22px; border: 1px solid oklch(0.36 0.05 235); border-radius: 14px; background: oklch(0.225 0.022 240); }
+  .recs-ask h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .recs-ask p { max-width: 640px; font-size: 13px; line-height: 1.55; color: oklch(0.78 0.012 255); }
+  .recs-actions { display: flex; gap: 10px; margin-left: auto; flex: 0 0 auto; }
+  .rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .rcard { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px 18px; border: 1px solid oklch(0.31 0.013 255); border-radius: 14px; background: oklch(0.205 0.01 255); cursor: pointer; }
+  .rcard:hover { border-color: oklch(0.45 0.04 235); }
+  .rcard .pcard-head { margin-top: 0; align-items: center; }
+  .rcard .tag { margin-left: auto; align-self: flex-start; white-space: nowrap; }
+  .recs-empty { margin: 0; }
   .skeleton { display: block; height: 260px; border-radius: 14px; background: linear-gradient(90deg, oklch(0.21 0.01 255), oklch(0.25 0.012 255), oklch(0.21 0.01 255)); background-size: 200% 100%; animation: dshshimmer 1.4s linear infinite; }
   @keyframes dshshimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
   .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
@@ -692,6 +705,45 @@
         </div>
       </div>
 
+      <sc-if value="{{ showRecsBlock }}" hint-placeholder-val="{{ false }}">
+        <section class="recs" aria-label="Recommended for you">
+          <sc-if value="{{ recsAsk }}" hint-placeholder-val="{{ false }}">
+            <div class="recs-ask">
+              <div>
+                <h2>Want suggestions based on how you work?</h2>
+                <p>DSH Forge can look at your session history on this computer and suggest plugins you would actually use. Nothing leaves this computer, and it keeps only counts, never what you typed.</p>
+              </div>
+              <div class="recs-actions">
+                <button class="btn btn-go" onClick="{{ recsYes }}" disabled="{{ recsBusy }}">Yes, suggest plugins</button>
+                <button class="btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">No thanks</button>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ recsOn }}" hint-placeholder-val="{{ false }}">
+            <div class="shelf-head"><h2>Recommended for you</h2><span class="shelf-note">{{ recsNote }}</span><button class="link-btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">Turn off</button></div>
+            <sc-if value="{{ hasRecs }}" hint-placeholder-val="{{ false }}">
+              <div class="rgrid">
+                <sc-for list="{{ recItems }}" as="r" hint-placeholder-count="0">
+                  <div class="rcard" onClick="{{ r.select }}">
+                    <span class="pcard-head">
+                      <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                      <span class="pcard-title">
+                        <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                        <span class="iowner">{{ r.owner }}</span>
+                      </span>
+                      <span class="tag">{{ r.capability }}</span>
+                    </span>
+                    <span class="desc2">{{ r.description }}</span>
+                    <span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.evidence }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}"><p class="note recs-empty">{{ recsEmptyText }}</p></sc-if>
+          </sc-if>
+        </section>
+      </sc-if>
+
       <sc-if value="{{ showPlatformNotice }}" hint-placeholder-val="{{ false }}">
         <aside class="platform-note" aria-label="Windows isolation capability">{{ platformNotice }}</aside>
       </sc-if>
@@ -832,6 +884,45 @@
             </div>
           </details>
         </div>
+
+        <sc-if value="{{ showRecsBlock }}" hint-placeholder-val="{{ false }}">
+          <section class="recs" aria-label="Recommended for you">
+            <sc-if value="{{ recsAsk }}" hint-placeholder-val="{{ false }}">
+              <div class="recs-ask">
+                <div>
+                  <h2>Want suggestions based on how you work?</h2>
+                  <p>DSH Forge can look at your session history on this computer and suggest plugins you would actually use. Nothing leaves this computer, and it keeps only counts, never what you typed.</p>
+                </div>
+                <div class="recs-actions">
+                  <button class="btn btn-go" onClick="{{ recsYes }}" disabled="{{ recsBusy }}">Yes, suggest plugins</button>
+                  <button class="btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">No thanks</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ recsOn }}" hint-placeholder-val="{{ false }}">
+              <div class="shelf-head"><h2>Recommended for you</h2><span class="shelf-note">{{ recsNote }}</span><button class="link-btn" onClick="{{ recsNo }}" disabled="{{ recsBusy }}">Turn off</button></div>
+              <sc-if value="{{ hasRecs }}" hint-placeholder-val="{{ false }}">
+                <div class="rgrid">
+                  <sc-for list="{{ recItems }}" as="r" hint-placeholder-count="0">
+                    <div class="rcard" onClick="{{ r.select }}">
+                      <span class="pcard-head">
+                        <span class="avatar" style="{{ r.avatarStyle }}" aria-hidden="true">{{ r.initials }}</span>
+                        <span class="pcard-title">
+                          <span class="name-row"><button class="iname" onClick="{{ r.select }}" aria-label="{{ r.accessibleLabel }}">{{ r.name }}</button></span>
+                          <span class="iowner">{{ r.owner }}</span>
+                        </span>
+                        <span class="tag">{{ r.capability }}</span>
+                      </span>
+                      <span class="desc2">{{ r.description }}</span>
+                      <span class="reason"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2 14.6 9.4 22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6Z"/></svg>{{ r.evidence }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}"><p class="note recs-empty">{{ recsEmptyText }}</p></sc-if>
+            </sc-if>
+          </section>
+        </sc-if>
 
         <sc-if value="{{ discoverLoading }}" hint-placeholder-val="{{ false }}">
           <div class="pgrid pgrid-skeleton" aria-busy="true" aria-label="Loading picks"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>

@@ -29,6 +29,7 @@ from .configurations import ConfigurationError, ConfigurationRegistry
 from .file_lock import lock as lock_file, unlock as unlock_file
 from .forks import ForkInstallError, ForkInstaller, detect_build, normalize_remote
 from .packages import PackageError
+from .recommendations import RecommendationService
 from .sandbox import ApptainerSandbox, SandboxConfig, SandboxError
 
 
@@ -435,6 +436,9 @@ class Launcher:
         home_candidates.append(Path(configured_home).expanduser() if configured_home else Path.home() / ".dsh")
         self._dsh_homes = self._dedupe_paths(home_candidates)
         self.fork_installer = ForkInstaller(self.versions_directory / "forks", self.state_root)
+        self.recommendations = RecommendationService(
+            self.state_root, self._session_homes, self._ranked_plugins, self._installed_plugin_names,
+        )
         self.scan()
 
     def _load_roots(self) -> dict[str, dict[str, Any]]:
@@ -1031,6 +1035,51 @@ class Launcher:
         try:
             return self.catalog_store.search(**options)
         except CatalogStoreError as error:
+            raise LauncherError(str(error)) from error
+
+    # ---- recommendations ----------------------------------------------------
+
+    def _session_homes(self) -> list[Path]:
+        """Where session logs live: the user's Harness homes and each launcher session's own home."""
+        homes = list(self._dsh_homes)
+        cells = self.state_root / "cells"
+        if cells.is_dir():
+            try:
+                homes.extend(sorted(path / "home" for path in cells.iterdir() if (path / "home").is_dir())[:500])
+            except OSError:
+                pass
+        return homes
+
+    def _ranked_plugins(self, limit: int = 250) -> list[dict[str, Any]]:
+        """Catalog plugins, best first (reviewed gems lead), each with its gem report."""
+        plugins: list[dict[str, Any]] = []
+        cursor = ""
+        try:
+            while len(plugins) < limit:
+                page = self.catalog_store.search(types=["plugin"], sort="rank", limit=50, cursor=cursor)
+                for record in page["artifacts"]:
+                    report = page["research"].get(record.get("artifact_id"))
+                    plugins.append({**record, **({"hidden_gem": report} if report else {})})
+                cursor = page.get("next_cursor") or ""
+                if not cursor:
+                    break
+        except CatalogStoreError:
+            return []
+        return plugins[:limit]
+
+    def _installed_plugin_names(self) -> list[str]:
+        names: set[str] = set()
+        for profile in self._discover_profiles().values():
+            names.update(profile.get("dependencies") or [])
+        return sorted(names)
+
+    def recommendations_status(self) -> dict[str, Any]:
+        return self.recommendations.status()
+
+    def set_recommendations_consent(self, enabled: Any) -> dict[str, Any]:
+        try:
+            return self.recommendations.set_consent(enabled)
+        except ValueError as error:
             raise LauncherError(str(error)) from error
 
     def catalog_discover(self) -> dict[str, Any]:

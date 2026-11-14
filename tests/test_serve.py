@@ -640,6 +640,34 @@ class LauncherServer(LauncherFixture):
         self.assertTrue(updated["launch"]["open_browser"])
         self.assertEqual(updated["launch"]["resources"]["gpu"], "allocated")
 
+    def test_recommendation_endpoints_ask_first_and_need_a_session(self):
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(self.url + "/api/v1/recommendations", timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        cookie, _status = self.establish_session()
+        request = urllib.request.Request(self.url + "/api/v1/recommendations", headers={"Cookie": cookie})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            payload = json.load(response)
+        self.assertEqual((payload["consent"], payload["state"], payload["items"]), ("unasked", "off", []))
+
+        with self.request("/api/v1/recommendations/consent", {"enabled": True}, cookie) as response:
+            self.assertEqual(json.load(response)["consent"], "on")
+        self.launcher.recommendations.wait()
+        with self.request("/api/v1/recommendations/consent", {"enabled": False}, cookie) as response:
+            self.assertEqual(json.load(response)["consent"], "off")
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request("/api/v1/recommendations/consent", {"enabled": "yes"}, cookie)
+        self.assertEqual(caught.exception.code, 400)
+        # Another site cannot switch history reading on.
+        foreign = urllib.request.Request(
+            self.url + "/api/v1/recommendations/consent", data=json.dumps({"enabled": True}).encode(), method="POST",
+            headers={"Content-Type": "application/json", "Cookie": cookie, "Origin": "https://elsewhere.example"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(foreign, timeout=3)
+        self.assertEqual(caught.exception.code, 403)
+        self.assertEqual(self.launcher.recommendations.consent(), "off")
+
     def test_configuration_endpoints_save_and_run_without_accepting_paths(self):
         cookie, _ = self.establish_session()
         with self.request("/api/v1/scan", {"roots": [str(self.tree_root)]}, cookie=cookie) as response:
