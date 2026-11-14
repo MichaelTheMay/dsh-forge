@@ -50,12 +50,15 @@ def _saturate(value: float, full_at: float) -> float:
 def substance_score(inspection: Mapping[str, Any], copy_overlap: float = 0.0) -> float:
     """0-100: how much real, working-looking plugin is in the repository.
 
-    The shape and weights were chosen on the backtest (``eval/data``): on a held-out
-    half, projects that later took off outscore ones that did not 81% of the time,
-    against 69% for the first version of this function. What moved it: let size and
-    documentation keep counting well past small projects, and treat the plugin
-    wiring as a gate rather than as points, since almost every project has it.
+    The shape and weights were chosen on the first backtest (``eval/data``). On a
+    later holdout of 342 repositories never used for tuning, projects that went on
+    to gain stars outscore ones that did not 77% of the time. That is no better
+    than code size alone or than "already had a couple of stars" (both 79.5%), so
+    the backtest does not show this score beating simpler signals; see
+    ``eval/history.jsonl``. The backtest rewards attention, which is not the same
+    as quality, so the weights are not tuned on it further.
     """
+
     manifest = inspection.get("manifest") or {}
     code = inspection.get("code") or {}
     tests = inspection.get("tests") or {}
