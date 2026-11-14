@@ -10,7 +10,7 @@ def inspection(lines=1200, test_lines=300, kind="plugin", **changes):
         "manifest": {"valid": True, "declares_plugin": True, "patch_file_present": True, "entry_present": True, "lifecycle_scripts": []},
         "code": {"lines": lines, "files": 8},
         "tests": {"lines": test_lines, "files": 4},
-        "docs": {"readme_bytes": 5000},
+        "docs": {"readme_bytes": 5000, "bytes": 9000},
         "practices": {"ci": True, "license": True, "changelog": False},
         "risk_hints": {},
     }
@@ -31,10 +31,16 @@ def review(name, verdict="gem", value=4, commit="a" * 40):
 
 class ScoreTests(unittest.TestCase):
     def test_substance_rewards_real_tested_wired_code(self):
-        strong = substance_score(inspection())
+        strong = substance_score(inspection(lines=6000, test_lines=1500, docs={"bytes": 60000}))
+        ordinary = substance_score(inspection())
         self.assertGreater(strong, 75)
-        self.assertLess(substance_score(inspection(lines=30, test_lines=0, kind="stub")), 30)
-        self.assertLess(substance_score(inspection(test_lines=0)), strong)
+        self.assertGreater(strong, ordinary)
+        self.assertLess(substance_score(inspection(lines=30, test_lines=0, kind="stub")), 25)
+        self.assertLess(substance_score(inspection(test_lines=0)), ordinary)
+        # Missing plugin wiring halves the score rather than costing a few points.
+        unwired = inspection()
+        unwired["manifest"] = {"valid": False, "declares_plugin": False, "patch_file_present": False, "entry_present": False}
+        self.assertAlmostEqual(substance_score(unwired), ordinary / 2, delta=3)
 
     def test_substance_penalises_copies_install_scripts_and_risk_hints(self):
         clean = substance_score(inspection())
