@@ -241,8 +241,12 @@ def recommend(
     for position, record in enumerate(plugins):
         if record.get("archived"):
             continue
-        for capability, strength in capability_strengths(record):
-            if strength < MIN_PLUGIN_STRENGTH:
+        strengths = capability_strengths(record)
+        strongest = strengths[0][1] if strengths else 0
+        for capability, strength in strengths:
+            # Only what the plugin is mainly about. A memory plugin whose description
+            # also mentions logging is not an observability suggestion.
+            if strength < MIN_PLUGIN_STRENGTH or strength < strongest:
                 continue
             if _package_name(record) in have:
                 covered.add(capability)

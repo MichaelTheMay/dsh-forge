@@ -119,6 +119,12 @@ class RecommendTests(unittest.TestCase):
         self.assertEqual([item["artifact"]["artifact_id"] for item in items], ["9"])
         self.assertEqual(recommend(self.NEEDS[:1], [self.PLUGINS[7]], installed=[]), [])
 
+    def test_a_plugin_is_suggested_only_for_what_it_is_mainly_about(self):
+        memory = plugin("9", "dsh-agent-memory", "Long-term memory with logging, metrics and tracing of recalls")
+        needs = [{"capability": "observability", "evidence": "e"}, {"capability": "memory", "evidence": "m"}]
+        items = recommend(needs, [memory], installed=[])
+        self.assertEqual([(item["artifact"]["artifact_id"], item["capability"]) for item in items], [("9", "memory")])
+
     def test_no_needs_or_no_matching_plugins_means_no_suggestions(self):
         self.assertEqual(recommend([], self.PLUGINS, installed=[]), [])
         self.assertEqual(recommend([{"capability": "security", "evidence": "e"}], self.PLUGINS, installed=[]), [])
