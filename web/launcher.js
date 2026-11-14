@@ -1874,7 +1874,7 @@ class Component extends DCLogic {
       update: { status: 'idle', current_version: 'development' },
       sandbox: {
         mode: 'unavailable', ready: false, hostile_code_isolation: false,
-        reason: 'Start the sidecar with a pinned Apptainer image to enable complete cells.'
+        reason: 'Set up the isolated container to run plugins and forks.'
       },
       previewData: null,
       logLines: [],
@@ -2372,27 +2372,6 @@ class Component extends DCLogic {
     this.favoriteSyncTimer = setTimeout(() => { this.favoriteSyncTimer = null; this.pushFavorites(); }, 400);
   }
 
-  async copyRepositoryRef(detail) {
-    const value = detail.url + (detail.head_sha ? '/tree/' + detail.head_sha : '');
-    try {
-      if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('Clipboard API unavailable');
-      await navigator.clipboard.writeText(value);
-      this.flash('Copied repository reference');
-    } catch {
-      const field = document.createElement('textarea');
-      field.value = value;
-      field.setAttribute('readonly', '');
-      field.style.position = 'fixed'; field.style.opacity = '0';
-      const previousFocus = document.activeElement;
-      document.body.appendChild(field); field.select();
-      let copied = false;
-      try { copied = document.execCommand('copy'); } catch {}
-      field.remove();
-      if (previousFocus && previousFocus.focus) previousFocus.focus();
-      this.flash(copied ? 'Copied repository reference' : 'Clipboard unavailable. Use the captured commit link.');
-    }
-  }
-
   async copyPackagePage(detail) {
     const base = typeof window !== 'undefined' && window.location && window.location.href
       ? window.location.href.split('#')[0]
@@ -2473,7 +2452,7 @@ class Component extends DCLogic {
       await this.refreshStatus(true);
       this.setState({ view: 'launch', logCell: cell.id, inspectorTab: 'logs' });
       if (typeof window !== 'undefined') window.location.hash = 'launch';
-      this.flash('Configuration started inside Apptainer');
+      this.flash('Configuration started');
     } catch (error) {
       this.flash(error.message);
     } finally {
@@ -2551,7 +2530,7 @@ class Component extends DCLogic {
     const versionId = this.state.assistantVersionId || this.defaultHostVersionId();
     if (!this.state.sidecarConnected) return this.flash('Start the local launcher first');
     if (!versionId) return this.flash('Save a launch-ready Harness version first');
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ assistantBusy: true, assistantVersionId: versionId, assistantUrl: '' });
     try {
       const cell = await this.api('/api/v1/assistant/start', {
@@ -2580,7 +2559,7 @@ class Component extends DCLogic {
 
   async reviewForkInstall(detail) {
     if (!this.state.sidecarConnected) return this.flash('Open the desktop launcher to install forks');
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ forkPlanBusy: true });
     try {
       const plan = await this.api('/api/v1/forks/plan', { method: 'POST', body: JSON.stringify({ artifact_id: detail.id }) });
@@ -2630,7 +2609,7 @@ class Component extends DCLogic {
   }
 
   confirmCommunityLaunch(version) {
-    if (!this.state.sandbox.ready) return this.flash(this.state.sandbox.reason || 'Apptainer isolation is required');
+    if (!this.state.sandbox.ready) return this.flash('Set up the isolated container on the Local tab first');
     this.setState({ communityLaunch: version, communityRiskAcknowledged: false });
   }
 
@@ -3129,7 +3108,7 @@ class Component extends DCLogic {
   } = {}) {
     if (!this.state.sidecarConnected) {
       if (pendingWindow) pendingWindow.close();
-      this.flash('Start scripts/serve.py to launch a real cell');
+      this.flash('Open the DSH Forge app to run this');
       return null;
     }
     if (!version.treeId) {
@@ -3280,7 +3259,7 @@ class Component extends DCLogic {
           ? 'Community fork · ' + (community.full_name || 'catalog') + ' @ ' + String(community.commit || '').slice(0, 7)
           : (saved && saved.source === 'auto' ? 'Found automatically' : (saved ? 'Added manually' : 'Found for this session')),
         isCommunity: !!community,
-        launchSummary: 'auto port · new session' + (gpuMode === 'allocated' ? ' · GPU' : ''),
+        launchSummary: 'fresh session each time' + (gpuMode === 'allocated' ? ' · GPU' : ''),
         status,
         statusColor: canLaunch ? OK : WARN,
         buttonLabel: canLaunch ? (community ? 'Launch…' : 'Launch') : status,
@@ -3532,7 +3511,7 @@ class Component extends DCLogic {
         : (forkActive
           ? { pill: forkState === 'building' ? 'Building' : 'Downloading', label: 'Installing…', disabled: true, text: forkInstall.detail || 'Working…' }
           : (!sandbox.ready
-            ? { pill: '', label: 'Isolation setup required', disabled: true, text: 'Set up the isolated container on the Local tab before installing forks.' }
+            ? { pill: '', label: 'Finish setup to install', disabled: true, text: 'Set up the isolated container on the Local tab before installing forks.' }
             : {
                 pill: forkState === 'failed' ? 'Failed' : '',
                 label: s.forkPlanBusy ? 'Checking…' : (forkState === 'failed' ? 'Try again…' : 'Install…'),
@@ -3546,14 +3525,14 @@ class Component extends DCLogic {
           { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
           { label: 'Exact signed recipe', ready: !!(artifactExecution.exact_package && artifactExecution.exact_repository_commit), detail: artifactExecution.reason || 'No matching recipe' },
           { label: 'Harness target selected', ready: !!selectedPackageVersion, detail: selectedPackageVersion ? 'Launch-ready official or personal version' : 'Add a launch-ready version on Local' },
-          { label: 'Apptainer isolation', ready: !!sandbox.ready, detail: sandbox.ready ? 'Isolation is ready' : (sandbox.reason || 'Configure the pinned image') }
+          { label: 'Isolated container', ready: !!sandbox.ready, detail: sandbox.ready ? 'Ready' : 'Set it up on the Local tab' }
         ]
       : (detail.type === 'fork'
         ? [
             { label: 'Launcher connected', ready: !!s.sidecarConnected, detail: s.sidecarConnected ? 'Local policy is available' : 'Start the desktop launcher' },
             { label: 'Pinned fork installed', ready: forkReady, detail: forkReady ? String(forkInstall.commit).slice(0, 12) : 'Review and install one exact commit' },
             { label: 'Launch-ready fork tree', ready: forkLaunchable, detail: forkLaunchable ? forkTree.version : 'Complete the isolated build and registration' },
-            { label: 'Apptainer isolation', ready: !!sandbox.ready, detail: sandbox.ready ? 'Isolation is ready' : (sandbox.reason || 'Configure the pinned image') }
+            { label: 'Isolated container', ready: !!sandbox.ready, detail: sandbox.ready ? 'Ready' : 'Set it up on the Local tab' }
           ]
         : []);
     const forkPlan = s.forkPlan;
@@ -3809,7 +3788,7 @@ class Component extends DCLogic {
       noVersions: versions.length === 0,
       emptyVersionsText: s.sidecarConnected
         ? 'Forge checks ' + ((s.versionsDirectory && s.versionsDirectory.path) || '~/dsh-versions') + ' automatically. Use Add folder for a checkout anywhere else.'
-        : 'Portable preview only. No sample process is presented as real; run scripts/serve.py for local controls.',
+        : 'This is a preview. Open the DSH Forge app to find and run Harness versions on this computer.',
       localProfiles,
       hasLocalProfiles: localProfiles.length > 0,
       noLocalProfiles: localProfiles.length === 0,
@@ -3817,8 +3796,10 @@ class Component extends DCLogic {
       versionBusy: s.versionBusy,
       versionControlsDisabled: !s.sidecarConnected || s.versionBusy,
       pickVersion: () => this.pickLocalVersion(),
-      sandboxTitle: sandbox.ready ? 'Isolation ready' : 'Isolation setup required',
-      sandboxReason: sandbox.reason || 'No capability result is available.',
+      sandboxTitle: sandbox.ready ? 'Isolated container ready' : 'Isolated container needs setup',
+      sandboxReason: sandbox.ready
+        ? 'Plugins and forks run inside an isolated container, separate from your own setup.'
+        : 'Plugins and forks only run inside an isolated container. It is not set up on this computer yet.',
       sandboxColor: sandbox.ready ? OK : WARN,
 
       inspectorTabs,
@@ -3951,7 +3932,7 @@ class Component extends DCLogic {
         ? 'Open now'
         : (s.artifactRunBusy
           ? 'Installing and testing…'
-          : (artifactExecution.eligible ? 'Review, install & run…' : 'Sandbox recipe required')),
+          : (artifactExecution.eligible ? 'Review, install & run…' : 'Can’t be installed from here yet')),
       installAndRunReason: activeArtifactCell
         ? 'The verified local cell is running on port ' + activeArtifactCell.port
         : artifactExecution.reason,
@@ -3976,7 +3957,7 @@ class Component extends DCLogic {
       installLabel: s.packageInstallBusy ? 'Testing package…' : (latestPackageInstall && latestPackageInstall.state === 'ready' ? 'Install again' : 'Verify, test & install'),
       installStatus: latestPackageInstall
         ? (latestPackageInstall.state === 'ready' ? 'Ready · tested profile saved' : latestPackageInstall.detail)
-        : (recipeConfigured ? 'Signed recipe configured locally' : 'Signed recipe required'),
+        : (recipeConfigured ? 'Ready to verify and install' : 'Not yet reviewed for installing'),
       sharePackagePage: () => detail.catalogPackage ? this.copyPackagePage(detail) : undefined,
       saveConfiguration: () => detail.id ? this.saveCatalogConfiguration(detail) : undefined,
       saveConfigurationDisabled: !detail.id || !s.sidecarConnected || !selectedPackageVersion || s.configurationBusy,
@@ -3990,7 +3971,6 @@ class Component extends DCLogic {
       emptyDescription: emptyCopy.description,
       emptyActionLabel: emptyCopy.action,
       resetCatalogFilters: emptyCopy.run,
-      copyRef: () => detail.id ? this.copyRepositoryRef(detail) : undefined,
 
       forkInstallPill: forkCopy.pill,
       forkInstallPillClass: (activeArtifactCell || forkReady) ? 'pill pill-ok' : (forkState === 'failed' ? 'pill pill-bad' : 'pill'),
@@ -4017,7 +3997,7 @@ class Component extends DCLogic {
 
       forkPlanOpen: !!forkPlan,
       forkPlanName: forkPlan ? forkPlan.full_name : '',
-      forkPlanCommit: forkPlan ? forkPlan.commit : '',
+      forkPlanCommit: forkPlan ? String(forkPlan.commit || '').slice(0, 12) : '',
       forkPlanCommitSource: forkPlan
         ? (forkPlan.commit_source === 'catalog'
           ? 'Commit captured by the catalog'
@@ -4062,7 +4042,7 @@ class Component extends DCLogic {
         statusColor: (configuration.runtime || {}).runnable ? OK : (configuration.status === 'draft' ? WARN : MUTED),
         run: () => this.runConfiguration(configuration),
         runDisabled: !(configuration.runtime || {}).runnable || s.configurationBusy,
-        runLabel: (configuration.runtime || {}).runnable ? 'Run in Apptainer' : 'Not ready'
+        runLabel: (configuration.runtime || {}).runnable ? 'Run' : 'Not ready'
       })),
       noConfigurations: s.configurations.length === 0,
 

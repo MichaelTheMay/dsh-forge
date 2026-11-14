@@ -521,7 +521,7 @@ test('launcher remains default and Community opens individual plugins and forks'
   const c = instance(); assert(c.renderVals().showLaunch); assert(!c.renderVals().showCatalog);
   assert.equal(c.state.cells.length, 0);
   assert.equal(c.renderVals().sidecarLabel, 'Offline preview');
-  assert.match(c.renderVals().emptyVersionsText, /No sample process is presented as real/);
+  assert.match(c.renderVals().emptyVersionsText, /This is a preview\. Open the DSH Forge app/);
   c.renderVals().goPlugins(); assert(c.renderVals().showCatalog); assert(!c.renderVals().showLaunch);
   assert.equal(windowStub.location.hash, 'plugins');
   assert.equal(c.renderVals().pluginsTabCurrent, 'page');
@@ -605,7 +605,7 @@ test('portable preview shows no versions or cells that are not locally detected'
   assert(values.noVersions);
   assert.equal(values.versionGroups.length, 0);
   assert.equal(values.hasLocalRows, false);
-  assert.equal(values.sandboxTitle, 'Isolation setup required');
+  assert.equal(values.sandboxTitle, 'Isolated container needs setup');
   assert(!/Fail-closed cell fleet/.test(html));
   assert(!/quota unenforced/.test(html));
 });
@@ -771,14 +771,6 @@ test('license filter is based on reported metadata, not a verification claim', (
   assert(c.renderVals().results.every(r => r.licenseOk));
   assert(CATALOG.every(r => r.verification.security_verified === false));
 });
-test('copy pinned ref actually writes the captured commit URL', async () => {
-  const c = instance(); const plugin = snapshot.supplemental_entries[0];
-  c.renderVals().goPlugins();
-  c.renderVals().results.find(r => r.id === plugin.artifact_id).select();
-  await c.renderVals().copyRef();
-  assert.equal(clipboard.at(-1), plugin.repository_url + '/tree/' + plugin.head_sha);
-  assert.equal(c.lastMessage, 'Copied repository reference');
-});
 test('catalog interactions cannot add, stop, or modify local cells', () => {
   const c = instance(); const before = JSON.stringify(c.state.cells);
   c.renderVals().goPlugins(); c.renderVals().results[5].select();
@@ -836,7 +828,7 @@ test('installed-profile rail one-clicks web and headless and copies the rest', a
       argv: ['/usr/bin/dsh', '--profile', 'web', '--host', '127.0.0.1', '--port', '3100', '--no-open'],
       command: "DSH_HOME=~/.dsh /usr/bin/dsh --profile web", cwd: '~/dsh-forge', home: '~/.dsh',
       environment_keys: ['PATH'], credential_keys: [],
-      notes: ['This is an existing local profile, so it runs directly on the host rather than inside Apptainer.']
+      notes: ['This is one of your own setups, so it runs directly on this computer rather than in the isolated container.']
     };
   };
   await values.localProfiles[0].run();
@@ -866,7 +858,7 @@ test('plugin detail never exposes a host install command', () => {
   assert.equal(values.isPluginDetail, true);
   assert(!Object.keys(values).some(key => /InstallCommand|Download(?:Url|Command)/.test(key)));
   assert.equal(values.installAndRunDisabled, true);
-  assert.equal(values.installAndRunLabel, 'Sandbox recipe required');
+  assert.equal(values.installAndRunLabel, 'Can’t be installed from here yet');
   assert(!/Copy exact-version install command/.test(html));
 });
 
@@ -902,7 +894,7 @@ test('eligible plugin requires confirmation, stays on its detail page, and opens
     ['Launcher connected', true],
     ['Exact signed recipe', true],
     ['Harness target selected', true],
-    ['Apptainer isolation', true]
+    ['Isolated container', true]
   ]);
   values.installAndRun();
   values = c.renderVals();
@@ -937,8 +929,8 @@ test('eligible plugin requires confirmation, stays on its detail page, and opens
   assert.equal(c.state.detailOpen, true);
   assert.equal(c.state.artifactId, plugin.id);
   assert.equal(c.state.artifactRunConfirmation, null);
-  assert.match(html, /Sandboxing reduces risk but does not eliminate it/);
-  assert.match(html, /Apptainer shares the host kernel/);
+  assert.match(html, /The isolated container lowers the risk but does not remove it/);
+  assert.match(html, /shares this computer’s operating system core/);
 });
 
 test('raw plugins and forks cannot bypass sandbox acquisition', () => {
@@ -1695,7 +1687,8 @@ test('fork pages review the pinned commit before installing', async () => {
   await values.forkInstallAction();
   values = c.renderVals();
   assert.equal(values.forkPlanOpen, true);
-  assert.equal(values.forkPlanCommit, 'fe8e3f8d5e190e756c29c46036b4d879cf7bc754');
+  // The dialog shows a short form of the exact version, not a 40-character id.
+  assert.equal(values.forkPlanCommit, 'fe8e3f8d5e19');
   assert.equal(values.forkInstallConfirmDisabled, true);
   await values.confirmForkInstall();
   assert.equal(requests.length, 1, 'no install without acknowledgement');
@@ -1729,7 +1722,7 @@ test('installed forks launch only through the sandbox acknowledgement', async ()
     ['Launcher connected', true],
     ['Pinned fork installed', true],
     ['Launch-ready fork tree', true],
-    ['Apptainer isolation', true]
+    ['Isolated container', true]
   ]);
   assert.deepEqual(values.packageVersions.map(item => item.id), ['version_bbbbbbbbbbbb']);
   assert.equal(c.defaultHostVersionId(), 'version_bbbbbbbbbbbb');

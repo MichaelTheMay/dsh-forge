@@ -505,7 +505,7 @@ def install_in_sandbox(
                 "version": plugin["source"]["version"],
             })
 
-        report("probe", "Checking composition and Web startup inside Apptainer")
+        report("probe", "Checking that it starts inside the isolated container")
         probe = sandbox.package_command_plan(
             tree=tree, home=home, workspace=workspace,
             payload=["--profile", profile, "--dump-config"], network="none",
