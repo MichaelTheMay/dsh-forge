@@ -18,12 +18,13 @@ def register(commands) -> None:
     evaluate.add_argument("--note", help="append this run to the history file with a note")
     evaluate.add_argument("--json", action="store_true")
 
-    collect = commands.add_parser("backtest-collect", help="gather the backtest dataset from GitHub (needs GITHUB_TOKEN)")
-    collect.add_argument("--registry", required=True, help="the published registry.json or .json.gz")
+    collect = commands.add_parser("backtest-collect", help="build the backtest dataset from two dated registry files")
+    collect.add_argument("--then", required=True, help="an older published registry.json or .json.gz")
+    collect.add_argument("--now", required=True, help="a newer one")
     collect.add_argument("--workdir", required=True)
     collect.add_argument("--output", required=True)
-    collect.add_argument("--days", type=int, default=60)
-    collect.add_argument("--size", type=int, default=200)
+    collect.add_argument("--took-off", type=int, default=150)
+    collect.add_argument("--others", type=int, default=250)
     collect.add_argument("--seed", type=int, default=7)
 
     rescore = commands.add_parser("backtest-score", help="score a collected backtest with the current ranking code")
@@ -46,18 +47,15 @@ def dispatch(args) -> int:
         print(json.dumps(row, sort_keys=True) if args.json else scoreboard.render(row))
         return 0
     if args.command == "backtest-collect":
-        import datetime as dt
-
         from . import backtest
         from ..pipeline import write_json
 
         dataset = backtest.collect(
-            args.registry, args.workdir, post=backtest.github_post(backtest.token_from_environment()),
-            now=dt.datetime.now(dt.timezone.utc), days_back=args.days, size=args.size, seed=args.seed,
+            args.then, args.now, args.workdir, took_off=args.took_off, others=args.others, seed=args.seed,
             report=lambda line: print(line, file=sys.stderr),
         )
         write_json(args.output, dataset)
-        print(json.dumps({"sampled": dataset["sampled"], "rows": len(dataset["rows"]), "rewound_to": dataset["rewound_to"]}))
+        print(json.dumps({key: dataset[key] for key in ("then", "now", "population", "population_took_off")} | {"rows": len(dataset["rows"])}))
         return 0
     if args.command == "backtest-score":
         from . import backtest

@@ -41,12 +41,15 @@ class ScoreboardTests(unittest.TestCase):
         self.assertNotIn("backtest_spearman", row)
 
     def test_backtest_columns_appear_when_given(self):
-        backtest = {"rows": [{"score": s, "stars_gained": g} for s, g in [(9, 30), (8, 20), (3, 1), (2, 0), (1, 0)]]}
+        backtest = {"rows": [{"score": s, "stars_gained": g, "took_off": g >= 5}
+                             for s, g in [(9, 30), (8, 20), (3, 1), (2, 0), (1, 0)]]}
         row = scoreboard.score(picks([]), {}, backtest)
         self.assertEqual(row["backtest_repositories"], 5)
+        self.assertEqual(row["backtest_took_off"], 2)
+        self.assertEqual(row["backtest_agreement"], 1.0)
         self.assertGreater(row["backtest_spearman"], 0.9)
-        self.assertGreater(row["backtest_lift_top_fifth"], 2)
         self.assertIsNone(row["precision_at_10"])
+        self.assertIn("backtest agreement     1.0", scoreboard.render(row))
 
     def test_history_and_render(self):
         row = scoreboard.score(picks(["a/b"]), {"a/b": True})

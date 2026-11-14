@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from .metrics import pairwise_agreement, precision_at_k, spearman, top_share_lift
+from .metrics import pairwise_agreement, precision_at_k, spearman
 
 HISTORY = Path(__file__).resolve().parent / "history.jsonl"
 
@@ -41,11 +41,13 @@ def score(
     }
     if backtest and backtest.get("rows"):
         rows = [item for item in backtest["rows"] if isinstance(item.get("score"), (int, float))]
-        predicted = [float(item["score"]) for item in rows]
-        gained = [float(item["stars_gained"]) for item in rows]
+        outcome = {str(index): bool(item.get("took_off")) for index, item in enumerate(rows)}
+        predicted = {str(index): float(item["score"]) for index, item in enumerate(rows)}
         row["backtest_repositories"] = len(rows)
-        row["backtest_spearman"] = spearman(predicted, gained)
-        row["backtest_lift_top_fifth"] = top_share_lift(predicted, gained, 0.2)
+        row["backtest_took_off"] = sum(outcome.values())
+        # Chance that a project which took off outscores one which did not.
+        row["backtest_agreement"] = pairwise_agreement(predicted, outcome)
+        row["backtest_spearman"] = spearman(list(predicted.values()), [float(item["stars_gained"]) for item in rows])
     return row
 
 
@@ -69,8 +71,8 @@ def render(row: Mapping[str, Any]) -> str:
     ]
     if "backtest_repositories" in row:
         lines += [
-            f"backtest repositories  {show(row.get('backtest_repositories'))}",
-            f"backtest correlation   {show(row.get('backtest_spearman'))}  (score vs stars gained later)",
-            f"backtest lift          {show(row.get('backtest_lift_top_fifth'))}  (top fifth vs average; 1.0 is chance)",
+            f"backtest repositories  {show(row.get('backtest_repositories'))}  ({show(row.get('backtest_took_off'))} took off)",
+            f"backtest agreement     {show(row.get('backtest_agreement'))}  (took-off outscores did-not; 0.5 is chance)",
+            f"backtest correlation   {show(row.get('backtest_spearman'))}  (score vs stars gained)",
         ]
     return "\n".join(lines)

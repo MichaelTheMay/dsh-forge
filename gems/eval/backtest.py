@@ -1,200 +1,122 @@
 """Backtest: would the system have spotted projects before they were noticed?
 
-Rewind to a date some weeks ago. For a sample of plugins that were obscure then,
-take the code as it was on that date, score it with the automatic part of the
-pipeline, and compare the score with how many stars each project has gained since.
+Take two dated copies of the published registry, weeks apart. Among plugins that
+were obscure in the older copy, some took off by the newer one and most did not.
+Fetch the code each project had at the older date, score it with the automatic
+part of the pipeline, and check whether the ones that took off scored higher.
 
-Only public GitHub facts are read. The token is used for rate limits, not access.
+The sample deliberately over-represents projects that took off (they are rare), so
+the headline number is one that does not depend on that mix: the chance that a
+project which took off outscores one which did not (0.5 is a coin flip).
+
+No GitHub API is used: star counts and commits come from the two registry files.
 """
 
 from __future__ import annotations
 
-import datetime as dt
 import gzip
 import json
-import os
 from pathlib import Path
 import random
 import re
 import shutil
 from typing import Any, Callable, Mapping, Sequence
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from ..fetch import FetchError, fetch_commit
 from ..inspection import inspect_tree
 from ..rank import substance_score
 
-BACKTEST_SCHEMA = "dsh-forge.gem-backtest/v1"
-GRAPHQL_URL = "https://api.github.com/graphql"
-BATCH = 15
-MAX_STARS_NOW = 400
+BACKTEST_SCHEMA = "dsh-forge.gem-backtest/v2"
 HIDDEN_THEN = 10
-STARGAZER_PAGES = 4
+TOOK_OFF = 5
 
 _SLUG = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$")
-
-Post = Callable[[str, Mapping[str, Any]], Mapping[str, Any]]
-
-
-class BacktestError(RuntimeError):
-    pass
+_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
-def github_post(token: str) -> Post:
-    def post(query: str, variables: Mapping[str, Any]) -> Mapping[str, Any]:
-        request = Request(
-            GRAPHQL_URL,
-            data=json.dumps({"query": query, "variables": variables}).encode("utf-8"),
-            headers={"Authorization": f"bearer {token}", "Content-Type": "application/json",
-                     "User-Agent": "dsh-forge-gem-backtest/1"},
-            method="POST",
-        )
-        try:
-            with urlopen(request, timeout=60) as response:
-                payload = json.loads(response.read(16 * 1024 * 1024))
-        except (HTTPError, URLError, ValueError, TimeoutError) as error:
-            raise BacktestError(f"GitHub request failed: {error}") from error
-        return payload if isinstance(payload, dict) else {}
-    return post
-
-
-def load_population(registry_path: str | Path) -> list[dict[str, Any]]:
-    """Plugins from a published registry file: name and current stars."""
-    source = Path(registry_path)
-    raw = source.read_bytes()
+def load_plugins(registry_path: str | Path) -> tuple[dict[str, dict[str, Any]], str]:
+    """Plugins from a registry file: {lower-cased name: facts}, and its date."""
+    raw = Path(registry_path).read_bytes()
     if raw[:2] == b"\x1f\x8b":
         raw = gzip.decompress(raw)
     registry = json.loads(raw)
-    population = []
+    plugins: dict[str, dict[str, Any]] = {}
     for group in ("supplemental_entries", "entries"):
         for record in registry.get(group) or []:
             name = record.get("full_name")
             stars = record.get("github_stars")
             if (
                 record.get("artifact_type") == "plugin" and isinstance(name, str) and _SLUG.match(name)
-                and isinstance(stars, int) and not record.get("archived") and not record.get("parent_repository")
+                and isinstance(stars, int) and not isinstance(stars, bool)
+                and not record.get("archived") and not record.get("parent_repository")
             ):
-                population.append({"full_name": name, "stars_now": stars})
-    return population
+                plugins[name.casefold()] = {"full_name": name, "stars": stars, "commit": str(record.get("head_sha") or "")}
+    return plugins, str(registry.get("fetched_at") or "")[:10]
 
 
-def sample(population: Sequence[Mapping[str, Any]], size: int, seed: int = 7) -> list[dict[str, Any]]:
-    """A repeatable sample spread across star counts, so growth and no-growth both appear."""
-    bands = [(0, 0), (1, 2), (3, 9), (10, 39), (40, MAX_STARS_NOW)]
+def outcomes(then: Mapping[str, Mapping[str, Any]], now: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Every plugin that was obscure then and still exists now, with what it gained."""
+    rows = []
+    for key, earlier in then.items():
+        later = now.get(key)
+        if later is None or earlier["stars"] > HIDDEN_THEN or not _SHA.match(earlier["commit"]):
+            continue
+        rows.append({
+            "full_name": earlier["full_name"], "commit_then": earlier["commit"],
+            "stars_then": earlier["stars"], "stars_gained": later["stars"] - earlier["stars"],
+        })
+    return sorted(rows, key=lambda row: row["full_name"].casefold())
+
+
+def sample(rows: Sequence[Mapping[str, Any]], *, took_off: int, others: int, seed: int = 7) -> list[dict[str, Any]]:
+    """A repeatable sample: up to ``took_off`` projects that took off and ``others`` that did not."""
     generator = random.Random(seed)
-    chosen: list[dict[str, Any]] = []
-    per_band = max(1, size // len(bands))
-    for low, high in bands:
-        members = sorted(
-            (dict(item) for item in population if low <= item["stars_now"] <= high),
-            key=lambda item: item["full_name"].casefold(),
-        )
-        generator.shuffle(members)
-        chosen.extend(members[:per_band])
-    return chosen[:size]
-
-
-def _history_query(names: Sequence[str]) -> str:
-    parts = []
-    for index, name in enumerate(names):
-        owner, repo = name.split("/", 1)
-        parts.append(
-            f'r{index}: repository(owner: {json.dumps(owner)}, name: {json.dumps(repo)}) {{'
-            " createdAt stargazerCount"
-            " defaultBranchRef { target { ... on Commit { history(first: 1, until: $until) { nodes { oid } } } } }"
-            " stargazers(first: 100, orderBy: {field: STARRED_AT, direction: DESC}) {"
-            " pageInfo { hasNextPage endCursor } edges { starredAt } } }"
-        )
-    return "query($until: GitTimestamp!) {" + " ".join(parts) + "}"
-
-
-_MORE_STARS = (
-    "query($owner: String!, $name: String!, $after: String!) { repository(owner: $owner, name: $name) {"
-    " stargazers(first: 100, after: $after, orderBy: {field: STARRED_AT, direction: DESC}) {"
-    " pageInfo { hasNextPage endCursor } edges { starredAt } } } }"
-)
-
-
-def collect_history(
-    names: Sequence[str], then: dt.datetime, post: Post, *, report: Callable[[str], None] = lambda _line: None,
-) -> dict[str, dict[str, Any]]:
-    """For each repository: the commit that was current at ``then`` and star counts then and now."""
-    until = then.strftime("%Y-%m-%dT%H:%M:%SZ")
-    found: dict[str, dict[str, Any]] = {}
-    for start in range(0, len(names), BATCH):
-        batch = list(names[start:start + BATCH])
-        data = post(_history_query(batch), {"until": until}).get("data") or {}
-        for index, name in enumerate(batch):
-            node = data.get(f"r{index}")
-            if not isinstance(node, Mapping):
-                continue
-            created = str(node.get("createdAt") or "")
-            if not created or created > until:
-                continue  # did not exist yet
-            history = (((node.get("defaultBranchRef") or {}).get("target") or {}).get("history") or {}).get("nodes") or []
-            if not history:
-                continue
-            stargazers = node.get("stargazers") or {}
-            times = [edge.get("starredAt") for edge in stargazers.get("edges") or []]
-            page = stargazers.get("pageInfo") or {}
-            owner, repo = name.split("/", 1)
-            pages = 1
-            # Newest first: stop paging once a page reaches back before the rewind date.
-            while page.get("hasNextPage") and pages < STARGAZER_PAGES and (not times or times[-1] > until):
-                more = (post(_MORE_STARS, {"owner": owner, "name": repo, "after": page["endCursor"]}).get("data") or {})
-                more = ((more.get("repository") or {}).get("stargazers")) or {}
-                times.extend(edge.get("starredAt") for edge in more.get("edges") or [])
-                page = more.get("pageInfo") or {}
-                pages += 1
-            if page.get("hasNextPage") and times and times[-1] > until:
-                continue  # too many recent stars to count within the page limit
-            now = int(node.get("stargazerCount") or 0)
-            gained = sum(1 for moment in times if isinstance(moment, str) and moment > until)
-            found[name] = {"commit_then": history[0]["oid"], "stars_then": max(0, now - gained), "stars_gained": gained}
-        report(f"history {min(start + BATCH, len(names))}/{len(names)}")
-    return found
+    risers = [dict(row) for row in rows if row["stars_gained"] >= TOOK_OFF]
+    rest = [dict(row) for row in rows if row["stars_gained"] < TOOK_OFF]
+    generator.shuffle(risers)
+    generator.shuffle(rest)
+    return sorted(risers[:took_off] + rest[:others], key=lambda row: row["full_name"].casefold())
 
 
 def collect(
-    registry_path: str | Path,
+    registry_then: str | Path,
+    registry_now: str | Path,
     workdir: str | Path,
     *,
-    post: Post,
-    now: dt.datetime,
-    days_back: int = 60,
-    size: int = 200,
+    took_off: int = 150,
+    others: int = 250,
     seed: int = 7,
     fetch: Callable[..., Path] = fetch_commit,
     report: Callable[[str], None] = lambda _line: None,
 ) -> dict[str, Any]:
-    """Build the backtest dataset: measurements as of the rewind date plus the outcome."""
-    then = now - dt.timedelta(days=days_back)
-    chosen = sample(load_population(registry_path), size, seed)
-    history = collect_history([item["full_name"] for item in chosen], then, post, report=report)
+    """Build the backtest dataset: measurements of the older code plus what happened next."""
+    then, then_date = load_plugins(registry_then)
+    now, now_date = load_plugins(registry_now)
+    population = outcomes(then, now)
+    chosen = sample(population, took_off=took_off, others=others, seed=seed)
     rows = []
-    for name, facts in sorted(history.items()):
-        if facts["stars_then"] > HIDDEN_THEN:
-            continue  # already noticed at the rewind date
-        directory = Path(workdir) / name.replace("/", "__")
+    for index, row in enumerate(chosen, 1):
+        directory = Path(workdir) / row["full_name"].replace("/", "__")
         shutil.rmtree(directory, ignore_errors=True)
         try:
-            fetch(name, facts["commit_then"], directory)
+            fetch(row["full_name"], row["commit_then"], directory)
             inspection = inspect_tree(directory)
         except FetchError as error:
-            report(f"skipped {name}: {error}")
+            report(f"skipped {row['full_name']}: {error}")
             continue
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         inspection.pop("fingerprints", None)
-        rows.append({"full_name": name, **facts, "inspection": inspection})
-        report(f"measured {name}")
+        rows.append({**row, "inspection": inspection})
+        if index % 25 == 0:
+            report(f"measured {index}/{len(chosen)}")
     return {
         "schema": BACKTEST_SCHEMA,
-        "rewound_to": then.strftime("%Y-%m-%d"),
-        "collected_at": now.strftime("%Y-%m-%d"),
-        "days": days_back,
-        "sampled": len(chosen),
+        "then": then_date,
+        "now": now_date,
+        "took_off_means": f"gained {TOOK_OFF} or more stars from {HIDDEN_THEN} or fewer",
+        "population": len(population),
+        "population_took_off": sum(1 for row in population if row["stars_gained"] >= TOOK_OFF),
         "rows": rows,
     }
 
@@ -203,14 +125,7 @@ def score_rows(dataset: Mapping[str, Any], scorer: Callable[[Mapping[str, Any]],
     """Attach the system's score to every row, ready for the scoreboard."""
     rows = [
         {"full_name": row["full_name"], "score": scorer(row["inspection"]), "stars_gained": row["stars_gained"],
-         "stars_then": row["stars_then"]}
+         "took_off": row["stars_gained"] >= TOOK_OFF}
         for row in dataset.get("rows") or []
     ]
-    return {"schema": BACKTEST_SCHEMA, "rewound_to": dataset.get("rewound_to"), "days": dataset.get("days"), "rows": rows}
-
-
-def token_from_environment() -> str:
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    if not token:
-        raise BacktestError("Set GITHUB_TOKEN to collect a backtest (any read-only token)")
-    return token
+    return {"schema": BACKTEST_SCHEMA, "then": dataset.get("then"), "now": dataset.get("now"), "rows": rows}
