@@ -18,6 +18,11 @@ def register(commands) -> None:
     evaluate.add_argument("--note", help="append this run to the history file with a note")
     evaluate.add_argument("--json", action="store_true")
 
+    label = commands.add_parser("label", help="open a local page to mark picks as gem or not")
+    label.add_argument("--picks", required=True)
+    label.add_argument("--labels", default=str(labels_module.DEFAULT_PATH))
+    label.add_argument("--port", type=int, default=0)
+
 
 def dispatch(args) -> int:
     if args.command == "eval":
@@ -27,6 +32,18 @@ def dispatch(args) -> int:
         if args.note:
             scoreboard.append_history(row, args.note)
         print(json.dumps(row, sort_keys=True) if args.json else scoreboard.render(row))
+        return 0
+    if args.command == "label":
+        from .label_server import serve
+
+        server = serve(args.picks, args.labels, port=args.port)
+        print(f"Label picks at http://127.0.0.1:{server.server_address[1]}/  (Ctrl+C to stop)", flush=True)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
         return 0
     print(f"unknown command: {args.command}", file=sys.stderr)
     return 2
