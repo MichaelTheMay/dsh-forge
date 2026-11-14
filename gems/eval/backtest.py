@@ -86,13 +86,20 @@ def collect(
     took_off: int = 150,
     others: int = 250,
     seed: int = 7,
+    exclude: Sequence[str] = (),
     fetch: Callable[..., Path] = fetch_commit,
     report: Callable[[str], None] = lambda _line: None,
 ) -> dict[str, Any]:
-    """Build the backtest dataset: measurements of the older code plus what happened next."""
+    """Build the backtest dataset: measurements of the older code plus what happened next.
+
+    ``exclude`` names repositories to leave out, typically every repository in an
+    earlier dataset that was used to choose the weights, so a new dataset is a true
+    holdout.
+    """
     then, then_date = load_plugins(registry_then)
     now, now_date = load_plugins(registry_now)
-    population = outcomes(then, now)
+    skipped = {name.casefold() for name in exclude}
+    population = [row for row in outcomes(then, now) if row["full_name"].casefold() not in skipped]
     chosen = sample(population, took_off=took_off, others=others, seed=seed)
     rows = []
     for index, row in enumerate(chosen, 1):
@@ -115,6 +122,7 @@ def collect(
         "then": then_date,
         "now": now_date,
         "took_off_means": f"gained {TOOK_OFF} or more stars from {HIDDEN_THEN} or fewer",
+        "excluded": len(skipped),
         "population": len(population),
         "population_took_off": sum(1 for row in population if row["stars_gained"] >= TOOK_OFF),
         "rows": rows,

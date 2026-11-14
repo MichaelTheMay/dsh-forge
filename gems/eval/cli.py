@@ -26,6 +26,10 @@ def register(commands) -> None:
     collect.add_argument("--took-off", type=int, default=150)
     collect.add_argument("--others", type=int, default=250)
     collect.add_argument("--seed", type=int, default=7)
+    collect.add_argument(
+        "--exclude-dataset", action="append", default=[], metavar="JSON",
+        help="leave out every repository in this earlier dataset (repeatable), for a true holdout",
+    )
 
     rescore = commands.add_parser("backtest-score", help="score a collected backtest with the current ranking code")
     rescore.add_argument("--dataset", required=True)
@@ -50,9 +54,14 @@ def dispatch(args) -> int:
         from . import backtest
         from ..pipeline import write_json
 
+        excluded = [
+            row["full_name"]
+            for path in args.exclude_dataset
+            for row in json.loads(Path(path).read_text(encoding="utf-8")).get("rows") or []
+        ]
         dataset = backtest.collect(
             args.then, args.now, args.workdir, took_off=args.took_off, others=args.others, seed=args.seed,
-            report=lambda line: print(line, file=sys.stderr),
+            exclude=excluded, report=lambda line: print(line, file=sys.stderr),
         )
         write_json(args.output, dataset)
         print(json.dumps({key: dataset[key] for key in ("then", "now", "population", "population_took_off")} | {"rows": len(dataset["rows"])}))
