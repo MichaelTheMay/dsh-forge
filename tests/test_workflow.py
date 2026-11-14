@@ -86,6 +86,17 @@ class WorkflowPolicyTests(unittest.TestCase):
         self.assertIn("gh release upload catalog-latest", workflow)
         self.assertIn("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1", workflow)
         self.assertRegex(workflow, r"permissions:\s*\n\s*contents: read")
+        # The gem stage can fail without stopping the catalog from publishing.
+        gem_step = workflow[workflow.index("- name: Open the top candidates"):workflow.index("- name: Fold the gem picks")]
+        self.assertIn("continue-on-error: true", gem_step)
+        self.assertRegex(gem_step, r"timeout-minutes: \d+")
+        # The feed index is uploaded right after the assets it describes; the optional
+        # picks file comes after both, only when it exists, and never fails the job.
+        publish = workflow[workflow.index("- name: Publish the current public catalog feed"):]
+        self.assertLess(publish.index("dist/feed/hidden-gems.json.gz"), publish.index("dist/feed/registry-feed.json"))
+        self.assertLess(publish.index("dist/feed/registry-feed.json"), publish.index("dist/gem-picks.json"))
+        self.assertIn("if [ -f dist/gem-picks.json ]", publish)
+        self.assertIn("|| echo", publish[publish.index("dist/gem-picks.json"):])
         self.assertRegex(workflow, r"permissions:\s*\n\s*contents: write")
 
 
