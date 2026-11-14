@@ -2776,8 +2776,14 @@ class Component extends DCLogic {
     const trees = Array.isArray(status.trees) ? status.trees : [];
     const current = trees.some(t => t.id === this.state.treeId) ? this.state.treeId : (trees[0] ? trees[0].id : '');
     const cells = Array.isArray(status.cells) ? status.cells : [];
+    // "Open now" on a plugin or fork page points at one running session. Once that
+    // session has stopped or gone, the button must go back to offering a fresh run.
+    const opened = this.state.artifactOpenCell;
+    const openedCell = opened && cells.find(cell => cell.id === opened.cell.id);
+    const artifactOpenCell = openedCell && openedCell.agent_state !== 'exited' && openedCell.process !== 'exited'
+      ? opened : null;
     this.setState({
-      sidecarConnected: true, trees, treeId: current, cells,
+      sidecarConnected: true, trees, treeId: current, cells, artifactOpenCell,
       savedVersions: Array.isArray(status.saved_versions) ? status.saved_versions : [],
       trustedPackageRecipes: Array.isArray(status.trusted_package_recipes) ? status.trusted_package_recipes : [],
       packageInstallations: Array.isArray(status.package_installations) ? status.package_installations : [],
@@ -2960,7 +2966,11 @@ class Component extends DCLogic {
   reserveOpenWindow() {
     if (typeof window === 'undefined' || typeof window.open !== 'function') return null;
     try {
-      return window.open('about:blank', '_blank', 'noopener');
+      // Not 'noopener': with it window.open returns null, so there would be no tab
+      // to send the session to. The link back to this page is cut by hand instead.
+      const target = window.open('about:blank', '_blank');
+      if (target) target.opener = null;
+      return target || null;
     } catch {
       return null;
     }
@@ -2987,6 +2997,10 @@ class Component extends DCLogic {
 
   async openCell(cell, existingWindow = null) {
     const target = existingWindow || this.reserveOpenWindow();
+    if (!target) {
+      this.flash('Your browser blocked the new tab. Allow pop-ups for this page, then choose Open again.');
+      return false;
+    }
     for (let attempt = 0; attempt < 30; attempt++) {
       let payload;
       try {

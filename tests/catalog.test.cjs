@@ -97,6 +97,56 @@ test('cell open URLs require the requested cell and exact loopback port', () => 
   );
 });
 
+test('a blocked new tab is reported instead of claimed as opened', async () => {
+  const c = instance();
+  const messages = [];
+  c.flash = message => messages.push(message);
+  let asked = false;
+  c.api = async () => { asked = true; return { cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/' }; };
+  const previousOpen = windowStub.open;
+  // What a real browser returns when it blocks the pop-up.
+  windowStub.open = () => null;
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), false);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.equal(asked, false);
+  assert.match(messages[0], /blocked the new tab/);
+});
+
+test('a reserved tab is cut off from this page and receives the session address', async () => {
+  const c = instance();
+  const replaced = [];
+  const tab = { opener: {}, location: { replace: url => replaced.push(url) }, close() {} };
+  const previousOpen = windowStub.open;
+  const calls = [];
+  windowStub.open = (...args) => { calls.push(args); return tab; };
+  c.api = async () => ({ cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/?token=t' });
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), true);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.deepEqual(calls, [['about:blank', '_blank']]);
+  assert.equal(tab.opener, null);
+  assert.deepEqual(replaced, ['http://127.0.0.1:3200/?token=t']);
+});
+
+test('Open now disappears once its session has stopped or gone', () => {
+  const c = instance();
+  const status = cells => ({ trees: [], cells, saved_versions: [], configurations: [], package_installations: [] });
+  const opened = { artifactId: 'github:1', cell: { id: 'cell_a', port: 3200 } };
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'alive', agent_state: 'idle' }]));
+  assert.equal(c.state.artifactOpenCell, opened);
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'exited', agent_state: 'exited' }]));
+  assert.equal(c.state.artifactOpenCell, null);
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([]));
+  assert.equal(c.state.artifactOpenCell, null);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -548,7 +598,8 @@ test('eligible plugin requires confirmation, stays on its detail page, and opens
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  assert.deepEqual(opened, [['about:blank', '_blank', 'noopener']]);
+  assert.deepEqual(opened, [['about:blank', '_blank']]);
+  assert.equal(pendingWindow.opener, null);
   assert.deepEqual(openRequest, { cell: { id: 'cell_plugin', port: 3200 }, target: pendingWindow });
   assert.equal(c.state.view, 'catalog');
   assert.equal(c.state.detailOpen, true);
