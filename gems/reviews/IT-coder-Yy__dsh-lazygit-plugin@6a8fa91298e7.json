@@ -1,0 +1,20 @@
+{
+ "commit": "6a8fa91298e72fe38c59c0ceab23a69a91937d07",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "IT-coder-Yy/dsh-lazygit-plugin",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "A full visual Git client in the right sidebar, with AI-proposed git steps that are parsed and allowlisted before they run.",
+ "source": "claude-session",
+ "summary": "Sidebar Git workbench for DSH Web: status, commit graph, diffs, stage/commit/branch/merge/stash/push, a three-pane conflict editor, plus an AI side-chat whose git command proposals pass an allowlist before running.",
+ "verdict": "solid"
+}

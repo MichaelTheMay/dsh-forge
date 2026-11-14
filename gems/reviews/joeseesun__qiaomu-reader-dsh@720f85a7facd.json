@@ -1,0 +1,20 @@
+{
+ "commit": "720f85a7facdc582111ead57e93e4fafb8af51a0",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "joeseesun/qiaomu-reader-dsh",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "A real EPUB and PDF reader with listening, word lookup and AI discussion built into the Harness sidebar.",
+ "source": "claude-session",
+ "summary": "Ebook reader inside DSH: EPUB, PDF, TXT, Markdown import, highlights, vocabulary book, text to speech (system, cloud and local Kokoro), free lookup translation, and AI companion chat over the page.",
+ "verdict": "solid"
+}

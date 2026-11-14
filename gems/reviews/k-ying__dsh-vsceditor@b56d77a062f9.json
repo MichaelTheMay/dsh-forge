@@ -1,0 +1,20 @@
+{
+ "commit": "b56d77a062f9e02c71d2b080f92d04130690181b",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "k-ying/dsh-vsceditor",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Watch your agent's edits land in a real VS Code editor with live diff follow and file locking, inside the DSH page.",
+ "source": "claude-session",
+ "summary": "Embeds a code-server VS Code panel (or drives local VS Code) next to DSH sessions, with a bundled bridge extension that follows agent edits as red/green diffs and locks files during writes.",
+ "verdict": "solid"
+}

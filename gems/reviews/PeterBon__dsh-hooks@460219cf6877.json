@@ -1,0 +1,20 @@
+{
+ "commit": "460219cf687733a9930c6fc2145fee33dde233b8",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "PeterBon/dsh-hooks",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Fire a command or a desktop, webhook or Feishu notification on turn end, tool call or approval request using only YAML, with dry-run and history.",
+ "source": "claude-session",
+ "summary": "Config-driven lifecycle hooks: declare event to command rules in the profile patch, with match filters, retries, debounce and failure events, plus built-in desktop, webhook and Feishu notifications and a settings GUI.",
+ "verdict": "solid"
+}

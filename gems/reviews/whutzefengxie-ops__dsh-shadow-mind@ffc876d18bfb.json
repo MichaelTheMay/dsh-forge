@@ -1,0 +1,20 @@
+{
+ "commit": "ffc876d18bfb68a3a0ef9f091bfc550326d08e7e",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "whutzefengxie-ops/dsh-shadow-mind",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "A second, independent AI quietly audits your agent's work after tool turns and only surfaces findings that pass structural validation.",
+ "source": "claude-session",
+ "summary": "After tool-using turns it probabilistically spawns fresh read-only background reviewer agents over a reasoning-free trajectory, validates their structured findings, and relays accepted reports into the root session.",
+ "verdict": "gem"
+}

@@ -3687,7 +3687,9 @@ class Component extends DCLogic {
     const detailCautions = detail.id && !detail.catalogPackage ? [
       ...cautionNotes(detail),
       ...(detail.licenseOk ? [] : ['No license reported, so reuse terms are unclear']),
-      'DSH Forge checks public information about projects, not their code'
+      detail.hiddenGem && detail.hiddenGem.gem && /^reviewed/.test(String(detail.hiddenGem.gem.confidence))
+        ? 'A reviewer read this project’s code, but nothing was run. Reading is not a safety guarantee'
+        : 'DSH Forge checks public information about projects, not their code'
     ] : [];
     const spotlightSource = discoverData.plugins[0] || null;
     const landingSpotlight = spotlightSource ? {
@@ -4173,6 +4175,19 @@ class Component extends DCLogic {
       hasWhyGem: whyReasons.length > 0,
       whyGemReasons: whyReasons,
       whyGemTitle: detail.hiddenGem && detail.hiddenGem.candidate ? 'Why it’s a hidden gem' : 'What we measured',
+      // When someone read this project's code, lead with what they found.
+      ...(() => {
+        const gem = detail.hiddenGem && detail.hiddenGem.gem && typeof detail.hiddenGem.gem === 'object' ? detail.hiddenGem.gem : null;
+        const read = !!gem && (gem.confidence === 'reviewed' || gem.confidence === 'reviewed at an earlier version');
+        return {
+          gemSummary: read && typeof gem.summary === 'string' ? gem.summary : '',
+          hasGemSummary: read && typeof gem.summary === 'string' && !!gem.summary,
+          gemReadLabel: !gem ? '' : (gem.confidence === 'reviewed'
+            ? 'We read the code'
+            : (read ? 'We read an earlier version of the code' : 'Measured from the code, not yet read')),
+          hasGemReadLabel: !!gem
+        };
+      })(),
       whyGemFootnote: detail.hiddenGem && detail.hiddenGem.built_percentile != null
         ? 'Built better than ' + detail.hiddenGem.built_percentile + '% of plugins we measured.'
         : '',

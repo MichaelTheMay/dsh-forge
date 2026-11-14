@@ -1,0 +1,20 @@
+{
+ "commit": "1326b316b7d06147dc726efc0de9d35bfffec8e3",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "chipweaver/veripower",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 2,
+  "works": 3
+ },
+ "showcase": "An agent-driven RTL design and verification loop where a small kernel tracks proofs, freshness and rework in an event log across stages.",
+ "source": "claude-session",
+ "summary": "Host-neutral chip front-end design workflow: twelve skills driven by an event-sourced Python kernel that decides and schedules stages; a 69-line DSH adapter registers the skills and adds scheduling reminders.",
+ "verdict": "solid"
+}

@@ -453,6 +453,8 @@
   .rcard .pcard-head { margin-top: 0; align-items: center; }
   .rcard .tag { margin-left: auto; align-self: flex-start; white-space: nowrap; }
   .recs-empty { margin: 0; }
+  .gem-read { margin-left: 10px; vertical-align: middle; font-weight: 500; }
+  .gem-summary { margin: 8px 0 4px; font-size: 13.5px; line-height: 1.6; color: oklch(0.88 0.008 255); }
   .skeleton { display: block; height: 260px; border-radius: 14px; background: linear-gradient(90deg, oklch(0.21 0.01 255), oklch(0.25 0.012 255), oklch(0.21 0.01 255)); background-size: 200% 100%; animation: dshshimmer 1.4s linear infinite; }
   @keyframes dshshimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
   .packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
@@ -623,7 +625,7 @@
       <div class="landing-downloads"><article class="landing-download"><span class="platform">Windows</span><h3>Windows 10 and 11</h3><p>A signed installer with a Start Menu shortcut. The app tells you when an update is available.</p><a class="landing-cta landing-cta-secondary" href="{{ desktopReleasesUrl }}" target="_blank" rel="noopener noreferrer">Download for Windows</a></article><article class="landing-download"><span class="platform">Linux and macOS</span><h3>Run from source</h3><p>Needs Python 3.9 or later and Git. Paste this into a terminal:</p><div class="landing-command"><span>{{ landingSourceCommand }}</span><button onClick="{{ landingCopyInstall }}" aria-label="Copy the install command"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div><a class="landing-cta landing-cta-secondary" href="{{ repositoryUrl }}" target="_blank" rel="noopener noreferrer">View on GitHub</a></article></div>
     </section>
 
-    <footer class="landing-footer"><span>DSH Forge · open source</span><span>Picks are based on public information about each project, not a review of its code.</span></footer>
+    <footer class="landing-footer"><span>DSH Forge · open source</span><span>Top picks are read by a reviewer. Nothing is run, and a pick is not a safety guarantee.</span></footer>
   </main>
   </sc-if>
 
@@ -872,12 +874,14 @@
           <details class="how">
             <summary>How picks work</summary>
             <div class="how-body">
-              <p>No AI guessing. Every day we measure each project the same way, then look for the gap between how well it’s built and how much attention it gets.</p>
+              <p>Two steps. Every day we measure each project the same way and look for the gap between how well it’s built and how much attention it gets. Then we open the most promising ones and read their code.</p>
               <ol>
                 <li><b>How it’s built.</b> Tests, CI, docs, releases, a license, and steady recent work.</li>
                 <li><b>What that usually earns.</b> A model trained on the whole catalog predicts the stars a project built like this tends to have.</li>
                 <li><b>The gap.</b> Projects with far fewer stars than predicted rise to the top.</li>
                 <li><b>Someone else noticed.</b> Stars from Harness contributors and plugin authors, merged pull requests, and outside contributors count as real-world checks.</li>
+                <li><b>What’s really inside.</b> For the top candidates we fetch the code and check it: how much is its own, whether it has tests, whether it is a copy of something else. Nothing is run.</li>
+                <li><b>It gets read.</b> A reviewer, today an AI model working through a fixed checklist, reads the code and says what it does and whether it’s worth your time. Picks marked “We read the code” have been through this; the rest are measured only.</li>
               </ol>
               <p>The prediction is tested on projects it wasn’t trained on. If it doesn’t hold up that day, picks fall back to a simple equal-weight quality score instead.</p>
               <p>Archived, unlicensed, abandoned, or barely documented projects are left out. Forks are judged only on what they changed, and a fork of a fork can’t borrow its parent’s work.</p>
@@ -1402,7 +1406,8 @@
             <div class="stack">
               <sc-if value="{{ hasWhyGem }}" hint-placeholder-val="{{ false }}">
                 <section class="card why">
-                  <h2 class="h2">{{ whyGemTitle }}</h2>
+                  <h2 class="h2">{{ whyGemTitle }}<sc-if value="{{ hasGemReadLabel }}" hint-placeholder-val="{{ false }}"><span class="tag gem-read">{{ gemReadLabel }}</span></sc-if></h2>
+                  <sc-if value="{{ hasGemSummary }}" hint-placeholder-val="{{ false }}"><p class="gem-summary">{{ gemSummary }}</p></sc-if>
                   <ul class="why-list">
                     <sc-for list="{{ whyGemReasons }}" as="reason" hint-placeholder-count="3"><li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7"/></svg><span>{{ reason }}</span></li></sc-for>
                   </ul>

@@ -1,0 +1,20 @@
+{
+ "commit": "1d96eee4232153de73d22d007498f46d8ac3adae",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Yu-tao-Li/dsh-read-image-view",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 2,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Images the agent reads show up as real previews with zoom and pan, including very long screenshots, instead of JSON text.",
+ "source": "claude-session",
+ "summary": "Client-only plugin that renders read_image tool results as an inline image card with a zoomable gallery, fetching bytes via the attachment RPC instead of showing raw JSON.",
+ "verdict": "solid"
+}

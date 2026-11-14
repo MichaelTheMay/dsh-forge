@@ -1,0 +1,20 @@
+{
+ "commit": "d50a2e45eddcb6cd1483820f9c4c1e8991913581",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "cookiesheep/whale-on-desk",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 2,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "A charming animated whale that taps the glass when an approval is waiting, so you notice blocked agents.",
+ "source": "claude-session",
+ "summary": "Pixel-art whale pet in the web UI that reacts to agent state (swim, think, approval tap, celebrate), with an agent tool, pet-pack creation skill, and a route that launches a bundled Windows desktop binary.",
+ "verdict": "solid"
+}

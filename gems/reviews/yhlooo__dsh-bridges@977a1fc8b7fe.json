@@ -1,0 +1,20 @@
+{
+ "commit": "977a1fc8b7fe0d37e304c81526774be1d5a64b7f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "yhlooo/dsh-bridges",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 5,
+  "works": 4
+ },
+ "showcase": "Open a project already set up for Claude Code, Codex or Cursor in DSH and its skills, memory, hooks and MCP servers just work, no migration.",
+ "source": "claude-session",
+ "summary": "Reads the project and user assets of seven other coding agents (Claude Code, CodeBuddy, OpenCode, Codex, Pi, Gemini CLI, Cursor) and exposes their skills, commands, memory, hooks, permissions and MCP servers inside DSH.",
+ "verdict": "gem"
+}

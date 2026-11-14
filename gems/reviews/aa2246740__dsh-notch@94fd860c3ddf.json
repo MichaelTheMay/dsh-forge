@@ -1,0 +1,20 @@
+{
+ "commit": "94fd860c3ddfe53fe87418986e8a915822b28936",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "aa2246740/dsh-notch",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Approve tool requests and answer agent questions from the macOS notch without switching back to the DSH window.",
+ "source": "claude-session",
+ "summary": "Host plugin plus native Swift macOS notch app: a local HTTP board tracks DSH sessions, approvals and model questions, and the notch lets you answer them and jump to the conversation.",
+ "verdict": "gem"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "3222881e511bc07506b6bf61852941556b3e1044",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "myYangyunfan/dsh-deepisland",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 2,
+  "usefulness": 3,
+  "works": 3
+ },
+ "showcase": "Always-on-top island showing agent thinking, tool runs and approval requests so you can watch sessions without switching windows.",
+ "source": "claude-session",
+ "summary": "Bridges DSH session state to a separate native menu-bar island app, and can auto-download, install and launch that app from GitHub releases or a public mirror; also ships a proxy CA export script.",
+ "verdict": "solid"
+}

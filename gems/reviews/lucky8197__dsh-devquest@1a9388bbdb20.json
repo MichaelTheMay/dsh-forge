@@ -1,0 +1,20 @@
+{
+ "commit": "1a9388bbdb2078c311bc192d8e77a2ce4d3f5744",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "lucky8197/dsh-devquest",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "Turns routine agent sessions into an RPG with levels, achievements and quests, scored by a pure-function engine.",
+ "source": "claude-session",
+ "summary": "Gamifies agent work: turns session events into XP, levels, achievements, daily quests, relics and a season shop, saved locally, with a panel UI and three model tools.",
+ "verdict": "solid"
+}

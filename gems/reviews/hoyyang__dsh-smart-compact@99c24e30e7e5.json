@@ -1,0 +1,20 @@
+{
+ "commit": "99c24e30e7e5cef2f2906129658ef21f63fba57c",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "hoyyang/dsh-smart-compact",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Context never degrades into a lossy summary: the old window stays searchable verbatim and the new one resumes from notes, at zero extra model cost.",
+ "source": "claude-session",
+ "summary": "Replaces summary compaction with a zero-model-call rollover: switches to a fresh window at a computed budget threshold, archives the old one verbatim, and hands over via notes and a mechanical anchor, with ctx_* tools.",
+ "verdict": "gem"
+}

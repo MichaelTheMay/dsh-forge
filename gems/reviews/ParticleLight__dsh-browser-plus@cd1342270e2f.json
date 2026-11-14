@@ -1,0 +1,20 @@
+{
+ "commit": "cd1342270e2f15ca0a9cd51a44e81d38c54ec3f7",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "ParticleLight/dsh-browser-plus",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "You watch the same real browser page the agent drives and can take control of a task, then hand it back, instead of a hidden headless session.",
+ "source": "claude-session",
+ "summary": "Electron-based visible browser for agents: one real window with an isolated view per session, CDP physical input, task manager and operation trail panels, human takeover and handback, write guard.",
+ "verdict": "solid"
+}

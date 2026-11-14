@@ -1,0 +1,20 @@
+{
+ "commit": "f456f9d05d21b5a45507b13295ba407dac21d800",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Max-Samson/dsh-usage-chart",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "See tokens, estimated cost, peak versus off-peak billing tier and account balance live under the input box, with a per-round cost chart.",
+ "source": "claude-session",
+ "summary": "Adds a usage indicator under the composer and an SVG dashboard of per-turn tokens, cost, cache hit, context pressure and compaction events, with list-price costing, pricing.json override and DeepSeek balance lookup.",
+ "verdict": "solid"
+}

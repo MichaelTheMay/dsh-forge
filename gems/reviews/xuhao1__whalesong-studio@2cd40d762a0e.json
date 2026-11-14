@@ -1,0 +1,20 @@
+{
+ "commit": "2cd40d762a0ee742af3655a7b4711b65e4f81689",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "xuhao1/whalesong-studio",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 5,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Write a novel with a crew of agents that keeps characters and plot consistent over hundreds of thousands of words, then publish it as an illustrated, narrated website.",
+ "source": "claude-session",
+ "summary": "Long-form fiction studio: a showrunner agent plus continuity, planning, directing and post-production crew agents, story bible and cast tracking, with pipelines for illustration, audio drama, video and publishing a book site.",
+ "verdict": "gem"
+}

@@ -1,0 +1,20 @@
+{
+ "commit": "12b743594aee77674fd116a78ab52a51ac7236b7",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "PerryLink/dsh-budget",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Set a session, daily and monthly spend cap and have the harness warn you, or stop model calls, before the bill surprises you.",
+ "source": "claude-session",
+ "summary": "Meters token cost per model, session and day, enforces session, daily and monthly caps with alerts and block or degrade policies, estimates carbon, tracks latency, and adds a settings tab and a budget command.",
+ "verdict": "solid"
+}

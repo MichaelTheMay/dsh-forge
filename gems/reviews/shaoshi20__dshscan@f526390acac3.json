@@ -1,0 +1,20 @@
+{
+ "commit": "f526390acac3ef7b45d62c65fa55d07e3a020702",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "shaoshi20/dshscan",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Scan any plugin repo, zip or marketplace entry before installing it, with rules written for DSH-specific attacks such as hidden MCP client rows, security row tampering and client-side exfiltration.",
+ "source": "claude-session",
+ "summary": "Security scanner for DSH plugins: regex and heuristic rules over source, package.json lifecycle scripts and cordis.patch.yml rows, optional npm audit and LLM pass, with a dshscan tool, CLI and HTML report.",
+ "verdict": "solid"
+}

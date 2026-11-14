@@ -1,0 +1,20 @@
+{
+ "commit": "f2190deb0f3d5308307a6b586f87d9812329f8d7",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "HaoyueQin/deepseek-harness-background",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "A polished wallpaper and frosted-glass theme for the DSH GUI with a live preview card and a bridge other plugins can join.",
+ "source": "claude-session",
+ "summary": "Lets you set an uploaded or linked wallpaper behind the DSH web UI with opacity, blur, fit and pan controls, frosted-glass panels, a glass registry for other plugins and a smoother turn-rail jump.",
+ "verdict": "solid"
+}

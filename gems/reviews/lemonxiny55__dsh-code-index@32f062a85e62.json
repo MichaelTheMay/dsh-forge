@@ -1,0 +1,20 @@
+{
+ "commit": "32f062a85e625198197b20528357e43fe4537d09",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "lemonxiny55/dsh-code-index",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Before an agent edits, see which callers, imports and test leads a diff may affect, with each link clickable to its real source line.",
+ "source": "claude-session",
+ "summary": "Tree-sitter symbol and call-graph index of the workspace exposed as agent tools (search, symbols, repo map, refs, change context, context pack, optional health), plus a repo map prompt section and an Impact X-Ray panel.",
+ "verdict": "solid"
+}

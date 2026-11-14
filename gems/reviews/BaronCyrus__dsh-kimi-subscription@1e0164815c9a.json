@@ -1,0 +1,20 @@
+{
+ "commit": "1e0164815c9af0ba429a59549ba3b033df2dd01f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "BaronCyrus/dsh-kimi-subscription",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Use a Kimi Code subscription inside DSH with OAuth sign-in, visible remaining quota and optional Kimi-backed web search.",
+ "source": "claude-session",
+ "summary": "Adds a Kimi Code subscription model route to DSH with API key or device-code OAuth, region choice, optional Kimi web search, a quota readout beside the composer, and an in-settings update check.",
+ "verdict": "solid"
+}

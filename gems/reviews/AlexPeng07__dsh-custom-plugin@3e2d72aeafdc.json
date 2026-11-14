@@ -1,0 +1,20 @@
+{
+ "commit": "3e2d72aeafdc46700907c1076eb73b9d21cee5a5",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "AlexPeng07/dsh-custom-plugin",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 2,
+  "trust": 3,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "One install adds usage and balance tracking, Mermaid rendering in chat, session search and project folders to the DSH web UI.",
+ "source": "claude-session",
+ "summary": "Kitchen-sink Web GUI suite: themes and weather effects, project folders, prompt library, session export and search, Mermaid rendering, quote reply, usage and balance panel, local budget, JSON backups.",
+ "verdict": "solid"
+}

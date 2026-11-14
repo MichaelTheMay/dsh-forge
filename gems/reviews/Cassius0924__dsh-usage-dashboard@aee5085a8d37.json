@@ -1,0 +1,20 @@
+{
+ "commit": "aee5085a8d371e2c7143816fd099e95bc28c7316",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Cassius0924/dsh-usage-dashboard",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Answers how many days the balance lasts and how much moving work to off-peak hours would save, from session logs plus the balance API.",
+ "source": "claude-session",
+ "summary": "Usage dashboard: balance runway, today and month spend, per-model and per-session cost, cache savings, image-token cost, and a peak-versus-off-peak savings estimate, in a floating widget and a tab.",
+ "verdict": "solid"
+}

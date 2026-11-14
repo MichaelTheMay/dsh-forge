@@ -1,0 +1,20 @@
+{
+ "commit": "1372e0f1007b73d627cbe7798527a0455a362eaf",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "bloodarea/dsh-agent-team-presets",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Define a named Team once, give each member its own model and tool policy and private skills, then summon it from the chat box.",
+ "source": "claude-session",
+ "summary": "Saves reusable multi-agent Team presets (captain plus members, each with own prompt, model, reasoning effort, tools and private skills) and lets you pick one or chat with one member from the composer.",
+ "verdict": "solid"
+}

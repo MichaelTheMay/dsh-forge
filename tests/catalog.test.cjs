@@ -408,6 +408,38 @@ test('suggestions are refreshed sparingly, faster while still reading', async ()
   }
 });
 
+test('a plugin page leads with what the code reviewer found', () => {
+  const c = instance();
+  const plugin = CATALOG.find(item => item.type === 'plugin');
+  const open = hiddenGem => {
+    c.setState({ view: 'catalog', catalogType: 'plugin', detailOpen: true, artifactId: plugin.id, detailArtifact: { ...plugin, hiddenGem } });
+    return c.renderVals();
+  };
+  const report = { policy: 'p', candidate: true, score: 90, rank: 1, reasons: ['Worth a look.', '900 lines of its own code'] };
+  let values = open({ ...report, gem: { confidence: 'reviewed', verdict: 'gem', summary: 'Keeps a searchable memory.', reasons: [], rank: 1, score: 91 } });
+  assert.equal(values.hasGemSummary, true);
+  assert.equal(values.gemSummary, 'Keeps a searchable memory.');
+  assert.equal(values.gemReadLabel, 'We read the code');
+  assert.deepEqual(values.whyGemReasons, ['Worth a look.', '900 lines of its own code']);
+  // The install caution no longer claims the code was not looked at.
+  assert(values.detailCautions.some(note => /read this project’s code, but nothing was run/.test(note)));
+  assert(!values.detailCautions.some(note => /not their code/.test(note)));
+  values = open({ ...report, gem: { confidence: 'reviewed at an earlier version', summary: 'Older read.' } });
+  assert.equal(values.gemReadLabel, 'We read an earlier version of the code');
+  assert.equal(values.hasGemSummary, true);
+  // Measured only: no reviewer text is shown, and the label says so.
+  values = open({ ...report, gem: { confidence: 'measured', verdict: null, summary: 'Catalog text', reasons: [] } });
+  assert.equal(values.hasGemSummary, false);
+  assert.equal(values.gemReadLabel, 'Measured from the code, not yet read');
+  assert(values.detailCautions.some(note => /not their code/.test(note)));
+  // No gem block at all: nothing new appears.
+  values = open(report);
+  assert.equal(values.hasGemReadLabel, false);
+  assert.equal(values.hasGemSummary, false);
+  values = open({ ...report, gem: 'nonsense' });
+  assert.equal(values.hasGemReadLabel, false);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -1797,7 +1829,9 @@ test('the website leads with Discover: gems, packs, and forks with plain reasons
   assert.equal(values.discoverPacks[0].count, '3 plugins');
   assert.equal(values.discoverPacks[0].roles, 'Memory · Code navigation · Search');
   assert.match(html, /How picks work/);
-  assert.match(html, /No AI guessing/);
+  assert.match(html, /read their code/);
+  // The page says plainly who does the reading.
+  assert.match(html, /today an AI model working through a fixed checklist/);
 }));
 
 test('packs open their own page and a plugin opened from a pack returns to it', () => onWebsite(async () => {

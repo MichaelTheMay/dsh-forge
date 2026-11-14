@@ -1,0 +1,20 @@
+{
+ "commit": "31cf94f38ff4e1e961dfca51098967e861e49cc4",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "jiezeng2004-design/dsh-requirements-alignment",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Stops a long-running agent from quietly widening scope or breaking your stated constraints by recording a baseline and asking once when direction would change.",
+ "source": "claude-session",
+ "summary": "Drift guard for long agent tasks: injects a policy plus a durable requirement baseline, adds establish_baseline and report_drift tools, a /align command and a status UI, so scope changes are put to the user.",
+ "verdict": "solid"
+}

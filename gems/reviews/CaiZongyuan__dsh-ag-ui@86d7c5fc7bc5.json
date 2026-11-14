@@ -1,0 +1,20 @@
+{
+ "commit": "86d7c5fc7bc524c01bacfa560e311d0868de58f8",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "CaiZongyuan/dsh-ag-ui",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 5,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Lets any AG-UI frontend such as CopilotKit drive a DSH agent, including browser-side tools that resume the same turn when the result returns.",
+ "source": "claude-session",
+ "summary": "Exposes DSH agents over the AG-UI protocol through an authenticated HTTP and SSE gateway: thread-to-agent bindings, streamed tool events, browser-owned tools, file upload, shared state, plus an embeddable adapter and React cards.",
+ "verdict": "solid"
+}

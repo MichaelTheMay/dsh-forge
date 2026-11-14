@@ -1,0 +1,20 @@
+{
+ "commit": "fdab8ea7bc7090f6e2f23db929db0f1f74d32e07",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "ywleeo/browser-mcp",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 2,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Lets the agent search and read Zhihu, Xiaohongshu, Douyin, Bilibili, X and Reddit through your own logged-in Chrome, with confirmation prompts for actions that change account state.",
+ "source": "claude-session",
+ "summary": "Config-only DSH bundle that launches the separate PyPI package ai-browser-mcp through uvx as an MCP server. That server drives the user's real Chrome via an extension to search and read logged-in sites.",
+ "verdict": "solid"
+}

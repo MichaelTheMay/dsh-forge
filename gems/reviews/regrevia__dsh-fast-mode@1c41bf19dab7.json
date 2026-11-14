@@ -1,0 +1,20 @@
+{
+ "commit": "1c41bf19dab7054eb4f27f66d2d61f617941cea3",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "regrevia/dsh-fast-mode",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "A lightning chip that trims agent narration and batches tool calls, backed by a paired benchmark claiming about half the wall time.",
+ "source": "claude-session",
+ "summary": "Per-conversation speed mode for DSH: a prompt-side guidance section plus a scheduler for parallel tool calls, a bounded shell-call timeout, stall guard and metrics journal; it does not change model, effort or request body.",
+ "verdict": "solid"
+}

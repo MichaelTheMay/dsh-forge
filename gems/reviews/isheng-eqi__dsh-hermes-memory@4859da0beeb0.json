@@ -1,0 +1,20 @@
+{
+ "commit": "4859da0beeb07acd1ecf5121ae11bd278fb0dd47",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "isheng-eqi/dsh-hermes-memory",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 2,
+  "trust": 4,
+  "usefulness": 3,
+  "works": 4
+ },
+ "showcase": "Small, bounded, auditable agent memory with atomic batch edits and a panel to inspect it, with no extra model calls.",
+ "source": "claude-session",
+ "summary": "Port of the Hermes agent memory design: two bounded memory banks edited by add, patch, replace, remove and batch actions, frozen per-session snapshot, content checks, and a web panel to view and edit entries.",
+ "verdict": "solid"
+}

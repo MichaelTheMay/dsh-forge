@@ -1,0 +1,20 @@
+{
+ "commit": "cbedaab86e4479f7985507004427b74512d39bcf",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "Tranquillitatis-Lab/dsh-tool-activator",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Cuts the tool schemas sent every turn: the model starts with eight basics and activates bash, web or others only when needed.",
+ "source": "claude-session",
+ "summary": "Hides most tools from the model by default, showing only a configurable basic set plus an available-tools catalog, and adds an activate_tools tool so the agent loads others on demand, tracked per session.",
+ "verdict": "gem"
+}

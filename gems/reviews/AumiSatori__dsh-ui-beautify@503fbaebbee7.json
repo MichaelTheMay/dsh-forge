@@ -1,0 +1,20 @@
+{
+ "commit": "503fbaebbee7ddc3b665a079a7d6462166653f9c",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "AumiSatori/dsh-ui-beautify",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "A full theming studio for DSH with separate light and dark sets, background media and a preset market with hash-checked downloads.",
+ "source": "claude-session",
+ "summary": "Large web UI theming plugin: glass panels, custom backgrounds, chat bubbles, particles, a preset market, plus a small Windows-only host half for file rename, delete-to-recycle-bin and clipboard.",
+ "verdict": "solid"
+}

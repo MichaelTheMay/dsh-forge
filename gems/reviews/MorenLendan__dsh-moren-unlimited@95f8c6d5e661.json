@@ -1,0 +1,20 @@
+{
+ "commit": "95f8c6d5e661a2cdf2758b3f4dc1cffe453d5490",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "MorenLendan/dsh-moren-unlimited",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 3,
+  "novelty": 2,
+  "trust": 1,
+  "usefulness": 2,
+  "works": 3
+ },
+ "showcase": "Not featured.",
+ "source": "claude-session",
+ "summary": "Reviewed and not featured.",
+ "verdict": "skip"
+}

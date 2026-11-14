@@ -1,0 +1,20 @@
+{
+ "commit": "c8e75d9ac0f49807d00c8810581b2c114d481893",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "liang-today/dsh-liangxiang",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 4,
+  "trust": 2,
+  "usefulness": 1,
+  "works": 4
+ },
+ "showcase": "Not featured.",
+ "source": "claude-session",
+ "summary": "Reviewed and not featured.",
+ "verdict": "skip"
+}

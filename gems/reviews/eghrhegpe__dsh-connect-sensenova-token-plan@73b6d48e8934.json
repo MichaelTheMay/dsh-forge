@@ -1,0 +1,20 @@
+{
+ "commit": "73b6d48e893406e14619270bd919685f1de52b2b",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "eghrhegpe/dsh-connect-sensenova-token-plan",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 3,
+  "trust": 3,
+  "usefulness": 2,
+  "works": 4
+ },
+ "showcase": "If you use a SenseNova Token Plan, see credits and per-model burn in DSH and register its models with automatic rate-limit retry.",
+ "source": "claude-session",
+ "summary": "Connects SenseNova (Chinese AI vendor) to DSH: console login for credit quota and per-model usage capsule, optional provider registration with 429 backoff, and a Xiaohuanxiong QR login with search takeover.",
+ "verdict": "solid"
+}

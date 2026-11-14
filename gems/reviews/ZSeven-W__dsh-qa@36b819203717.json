@@ -1,0 +1,20 @@
+{
+ "commit": "36b819203717641e104e75cfcafd06e7ec92edc9",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "ZSeven-W/dsh-qa",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 5,
+  "novelty": 4,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 3
+ },
+ "showcase": "Explore-then-replay QA: the agent explores an app once and the recorded path becomes a deterministic regression scenario with evidence.",
+ "source": "claude-session",
+ "summary": "QA orchestrator: eight qa_* tools plus a skill that let an agent explore an app via browser, desktop or mobile drivers, record the path, then replay it deterministically with assertions and reports.",
+ "verdict": "solid"
+}

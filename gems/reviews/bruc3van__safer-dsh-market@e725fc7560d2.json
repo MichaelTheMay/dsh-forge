@@ -1,0 +1,20 @@
+{
+ "commit": "e725fc7560d2175b9a34bc0b76869f7d2ae5227f",
+ "concerns": [],
+ "evidence": [],
+ "full_name": "bruc3van/safer-dsh-market",
+ "reviewed_at": "2026-11-13",
+ "reviewer": "claude-sonnet",
+ "schema": "dsh-forge.gem-review/v1",
+ "scores": {
+  "craft": 4,
+  "novelty": 3,
+  "trust": 4,
+  "usefulness": 4,
+  "works": 4
+ },
+ "showcase": "Browse and install DSH plugins in-app, then ask the agent to security-review what you installed before trusting it.",
+ "source": "claude-session",
+ "summary": "Plugin marketplace sidebar that reads a community catalog feed from a CDN, installs via the official plugin manager, uninstalls via pnpm remove, and stages an AI security-review prompt for installed plugins.",
+ "verdict": "solid"
+}
