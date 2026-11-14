@@ -97,6 +97,207 @@ test('cell open URLs require the requested cell and exact loopback port', () => 
   );
 });
 
+test('a blocked new tab is reported instead of claimed as opened', async () => {
+  const c = instance();
+  const messages = [];
+  c.flash = message => messages.push(message);
+  let asked = false;
+  c.api = async () => { asked = true; return { cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/' }; };
+  const previousOpen = windowStub.open;
+  // What a real browser returns when it blocks the pop-up.
+  windowStub.open = () => null;
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), false);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.equal(asked, false);
+  assert.match(messages[0], /blocked the new tab/);
+});
+
+test('a reserved tab is cut off from this page and receives the session address', async () => {
+  const c = instance();
+  const replaced = [];
+  const tab = { opener: {}, location: { replace: url => replaced.push(url) }, close() {} };
+  const previousOpen = windowStub.open;
+  const calls = [];
+  windowStub.open = (...args) => { calls.push(args); return tab; };
+  c.api = async () => ({ cell_id: 'cell_safe', url: 'http://127.0.0.1:3200/?token=t' });
+  try {
+    assert.equal(await c.openCell({ id: 'cell_safe', port: 3200 }), true);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.deepEqual(calls, [['about:blank', '_blank']]);
+  assert.equal(tab.opener, null);
+  assert.deepEqual(replaced, ['http://127.0.0.1:3200/?token=t']);
+});
+
+test('Open now disappears once its session has stopped or gone', () => {
+  const c = instance();
+  const status = cells => ({ trees: [], cells, saved_versions: [], configurations: [], package_installations: [] });
+  const opened = { artifactId: 'github:1', cell: { id: 'cell_a', port: 3200 } };
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'alive', agent_state: 'idle' }]));
+  assert.equal(c.state.artifactOpenCell, opened);
+  c.applyStatus(status([{ id: 'cell_a', port: 3200, process: 'exited', agent_state: 'exited' }]));
+  assert.equal(c.state.artifactOpenCell, null);
+  c.setState({ artifactOpenCell: opened });
+  c.applyStatus(status([]));
+  assert.equal(c.state.artifactOpenCell, null);
+});
+
+// ---- Sessions as tabs ----
+function embedded() {
+  const c = instance();
+  c.state.sidecarConnected = true;
+  c.canEmbedCells = () => true;
+  stored.delete('dsh-forge.instance-tabs');
+  return c;
+}
+const liveCell = (id, port) => ({ id, port, name: 'Session ' + id, version: 'unknown', process: 'alive', agent_state: 'idle' });
+const statusWith = cells => ({ trees: [], cells, saved_versions: [], configurations: [], package_installations: [] });
+
+test('inside the app a session opens as a tab, never a pop-up', async () => {
+  const c = embedded();
+  const previousOpen = windowStub.open;
+  let popups = 0;
+  windowStub.open = () => { popups += 1; return null; };
+  c.api = async url => ({ cell_id: 'cell_a', url: 'http://127.0.0.1:3200/?token=t' });
+  try {
+    assert.equal(c.reserveOpenWindow(), null);
+    assert.equal(await c.openCell(liveCell('cell_a', 3200)), true);
+  } finally {
+    windowStub.open = previousOpen;
+  }
+  assert.equal(popups, 0);
+  assert.equal(c.state.view, 'instance');
+  assert.equal(c.state.activeInstanceId, 'cell_a');
+  const values = c.renderVals();
+  assert.equal(values.hasInstanceTabs, true);
+  assert.deepEqual(values.instanceTabs.map(tab => [tab.title, tab.className, tab.current]), [['Session cell_a · 3200', 'tab itab tab-on', 'page']]);
+  assert.deepEqual(values.instanceSlots.map(slot => [slot.ready, slot.url, slot.className]), [[true, 'http://127.0.0.1:3200/?token=t', 'instance-pane']]);
+  assert.equal(values.instanceDeckClass, 'instance-deck');
+  // Opening it again selects the tab instead of adding another.
+  c.setState({ view: 'launch' });
+  assert.equal(c.renderVals().instanceDeckClass, 'instance-deck deck-parked');
+  assert.equal(await c.openCell(liveCell('cell_a', 3200)), true);
+  assert.equal(c.state.instanceTabs.length, 1);
+  assert.equal(c.state.view, 'instance');
+});
+
+test('a tab never frames an address that is not its own session', async () => {
+  const c = embedded();
+  for (const payload of [
+    { cell_id: 'cell_other', url: 'http://127.0.0.1:3200/' },
+    { cell_id: 'cell_a', url: 'http://127.0.0.1:9999/' },
+    { cell_id: 'cell_a', url: 'https://example.com:3200/' }
+  ]) {
+    c.setState({ instanceTabs: [], activeInstanceId: null });
+    c.api = async () => payload;
+    assert.equal(await c.openCell(liveCell('cell_a', 3200)), false);
+    const slot = c.renderVals().instanceSlots[0];
+    assert.equal(slot.url, '');
+    assert.equal(slot.ready, false);
+    assert.equal(slot.canRetry, true);
+    assert.ok(slot.waitingLabel.length > 0);
+  }
+  assert.equal(c.loopbackHref('http://127.0.0.1:3200/x'), 'http://127.0.0.1:3200/x');
+  for (const bad of ['https://127.0.0.1:3200/', 'http://example.com:3200/', 'http://127.0.0.1/', 'javascript:alert(1)', '', null]) {
+    assert.equal(c.loopbackHref(bad), '');
+  }
+});
+
+test('frames only ever receive loopback addresses', () => {
+  const c = embedded();
+  const frame = (url, src = '') => ({ dataset: { instanceUrl: url }, src, removed: false, removeAttribute() { this.removed = true; this.src = ''; } });
+  const good = frame('http://127.0.0.1:3200/?token=t');
+  const same = frame('http://127.0.0.1:3201/', 'http://127.0.0.1:3201/');
+  const bad = frame('https://evil.example/', 'http://127.0.0.1:3202/');
+  let sets = 0;
+  Object.defineProperty(same, 'src', { get: () => 'http://127.0.0.1:3201/', set: () => { sets += 1; } });
+  global.document = { querySelectorAll: () => [good, same, bad], querySelector: () => null };
+  try {
+    c.syncInstanceFrames();
+  } finally {
+    delete global.document;
+  }
+  assert.equal(good.src, 'http://127.0.0.1:3200/?token=t');
+  // An unchanged frame is left alone, so a running session is not reloaded.
+  assert.equal(sets, 0);
+  assert.equal(bad.removed, true);
+});
+
+test('closing a tab leaves the other sessions in place', async () => {
+  const c = embedded();
+  for (const [id, port] of [['a', 3201], ['b', 3202], ['c', 3203]]) {
+    c.api = async () => ({ cell_id: id, url: 'http://127.0.0.1:' + port + '/' });
+    await c.openCell(liveCell(id, port));
+  }
+  assert.equal(c.state.activeInstanceId, 'c');
+  c.closeInstanceTab('b');
+  let values = c.renderVals();
+  // The middle slot is emptied, not removed: session c keeps the third position.
+  assert.deepEqual(values.instanceSlots.map(slot => [slot.id, slot.open]), [['a', true], ['b', false], ['c', true]]);
+  assert.deepEqual(values.instanceTabs.map(tab => tab.id), ['a', 'c']);
+  assert.equal(c.state.activeInstanceId, 'c');
+  c.closeInstanceTab('c');
+  assert.deepEqual(c.state.instanceTabs.map(tab => tab.id), ['a']);
+  assert.equal(c.state.activeInstanceId, 'a');
+  assert.equal(c.state.view, 'instance');
+  c.closeInstanceTab('a');
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('a tab closes itself when its session stops', async () => {
+  const c = embedded();
+  c.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/' });
+  await c.openCell(liveCell('a', 3201));
+  c.applyStatus(statusWith([liveCell('a', 3201)]));
+  assert.equal(c.renderVals().hasInstanceTabs, true);
+  c.applyStatus(statusWith([{ ...liveCell('a', 3201), process: 'exited', agent_state: 'exited' }]));
+  assert.equal(c.renderVals().hasInstanceTabs, false);
+  assert.equal(c.state.view, 'launch');
+});
+
+test('open tabs are remembered by id only and reconnect to live sessions', async () => {
+  const c = embedded();
+  c.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/?token=secret' });
+  await c.openCell(liveCell('a', 3201));
+  const saved = stored.get('dsh-forge.instance-tabs');
+  assert.deepEqual(JSON.parse(saved), [{ id: 'a', title: 'Session a · 3201' }]);
+  assert(!saved.includes('secret'));
+
+  // A fresh window: the saved tab comes back for a live session and not for a gone one.
+  stored.set('dsh-forge.instance-tabs', JSON.stringify([{ id: 'a', title: 'Session a' }, { id: 'gone', title: 'Old' }, { nope: 1 }]));
+  const next = instance();
+  next.state.sidecarConnected = true;
+  next.canEmbedCells = () => true;
+  next.api = async () => ({ cell_id: 'a', url: 'http://127.0.0.1:3201/?token=fresh' });
+  next.applyStatus(statusWith([liveCell('a', 3201)]));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(next.state.instanceTabs.map(tab => [tab.id, tab.url]), [['a', 'http://127.0.0.1:3201/?token=fresh']]);
+  // Restored tabs wait in the background; the user stays where they were.
+  assert.notEqual(next.state.view, 'instance');
+  stored.delete('dsh-forge.instance-tabs');
+});
+
+test('a tab is named for what was launched', () => {
+  const c = embedded();
+  assert.equal(c.instanceTabTitle({ purpose: 'local-profile', profile: 'web', name: 'bin-web-3100', port: 3100 }), 'web profile · 3100');
+  assert.equal(c.instanceTabTitle({ version: '0.1.1-rc.2', name: 'x', port: 3101 }), '0.1.1-rc.2 · 3101');
+  assert.equal(c.instanceTabTitle({ version: 'unknown', name: 'my-fork' }), 'my-fork');
+  assert.equal(c.instanceTabTitle({}), 'Session');
+});
+
+test('the tab markup keeps frames mounted, sandboxed and referrer-free', () => {
+  assert.match(html, /<iframe data-instance-url="\{\{ p\.url \}\}"[^>]*referrerpolicy="no-referrer"[^>]*sandbox="[^"]*allow-scripts[^"]*"/);
+  assert(!/sandbox="[^"]*allow-top-navigation/.test(html));
+  assert.match(html, /sc-for list="\{\{ instanceSlots \}\}"/);
+  assert.match(html, /\.pane-hidden \{ visibility: hidden/);
+});
+
 test('public preview includes a real favicon asset', () => {
   assert.match(html, /<link rel="icon" href="\.\/favicon\.svg" type="image\/svg\+xml">/);
   assert.match(fs.readFileSync(path.join(root, 'web/favicon.svg'), 'utf8'), /^<svg/);
@@ -548,7 +749,8 @@ test('eligible plugin requires confirmation, stays on its detail page, and opens
     url: '/api/v1/catalog/install-run',
     body: { artifact_id: plugin.id, version_id: saved.id, acknowledge_risk: true }
   });
-  assert.deepEqual(opened, [['about:blank', '_blank', 'noopener']]);
+  assert.deepEqual(opened, [['about:blank', '_blank']]);
+  assert.equal(pendingWindow.opener, null);
   assert.deepEqual(openRequest, { cell: { id: 'cell_plugin', port: 3200 }, target: pendingWindow });
   assert.equal(c.state.view, 'catalog');
   assert.equal(c.state.detailOpen, true);
