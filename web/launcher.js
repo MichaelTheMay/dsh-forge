@@ -1823,6 +1823,8 @@ class Component extends DCLogic {
       artifactRunConfirmation: null,
       artifactRiskAcknowledged: false,
       artifactOpenCell: null,
+      instanceTabs: [],
+      activeInstanceId: null,
       configurationBusy: false,
       catalogStore: { available: false },
       storeArtifacts: [],
@@ -1939,6 +1941,7 @@ class Component extends DCLogic {
   }
   componentDidUpdate() {
     this.syncAssistantFrame();
+    this.syncInstanceFrames();
   }
   componentWillUnmount() {
     clearInterval(this.timer);
@@ -1953,17 +1956,169 @@ class Component extends DCLogic {
     if (this.hashListener) window.removeEventListener('hashchange', this.hashListener);
   }
 
+  // A session is only ever framed from a loopback HTTP address with its own port.
+  // Anything else is dropped.
+  loopbackHref(value) {
+    try {
+      const url = new URL(value || '');
+      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) return '';
+      return url.href;
+    } catch {
+      return '';
+    }
+  }
+
+  syncFrame(frame, value) {
+    const url = this.loopbackHref(value);
+    if (!url) frame.removeAttribute('src');
+    else if (frame.src !== url) frame.src = url;
+  }
+
   syncAssistantFrame() {
     if (typeof document === 'undefined') return;
     const frame = document.querySelector('iframe[data-assistant-url]');
-    if (!frame) return;
-    try {
-      const url = new URL(frame.dataset.assistantUrl || '');
-      if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname) || !url.port) throw new Error('unsafe');
-      if (frame.src !== url.href) frame.src = url.href;
-    } catch {
-      frame.removeAttribute('src');
+    if (frame) this.syncFrame(frame, frame.dataset.assistantUrl);
+  }
+
+  // ---- Sessions as tabs -------------------------------------------------------
+  // Inside the app, a running session opens as a tab in this window instead of a
+  // browser pop-up. Every open session's frame stays mounted, hidden unless its tab
+  // is selected, so switching tabs never reloads a session.
+
+  canEmbedCells() {
+    return !!this.state.sidecarConnected && !this.isPublicWeb() && typeof document !== 'undefined';
+  }
+
+  syncInstanceFrames() {
+    if (typeof document === 'undefined') return;
+    for (const frame of document.querySelectorAll('iframe[data-instance-url]')) {
+      this.syncFrame(frame, frame.dataset.instanceUrl);
     }
+  }
+
+  openInstanceTabs() {
+    return this.state.instanceTabs.filter(tab => !tab.closed);
+  }
+
+  // The launcher needs a moment after a launch before the session's address exists.
+  async resolveCellUrl(cell) {
+    for (let attempt = 0; attempt < 30; attempt++) {
+      let payload;
+      try {
+        payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      try {
+        return { url: this.validatedCellOpenUrl(payload, cell) };
+      } catch (error) {
+        return { url: '', error: error.message };
+      }
+    }
+    return { url: '', error: 'This session is still starting. Check its logs on the Local tab.' };
+  }
+
+  // What the user launched, in their words: a profile by its name, anything else
+  // by its Harness version. The port tells two sessions of the same thing apart.
+  instanceTabTitle(cell) {
+    const what = cell.purpose === 'local-profile' && cell.profile
+      ? cell.profile + ' profile'
+      : (cell.version && cell.version !== 'unknown' ? cell.version : (cell.name || 'Session'));
+    return String(cell.port ? what + ' · ' + cell.port : what).slice(0, 60);
+  }
+
+  async addInstanceTab(cell) {
+    if (!cell || !cell.id) return false;
+    const existing = this.openInstanceTabs().find(tab => tab.id === cell.id);
+    if (existing) {
+      this.activateInstanceTab(cell.id);
+      if (existing.url || existing.loading) return true;
+    } else {
+      const tab = { id: cell.id, port: cell.port, title: this.instanceTabTitle(cell), url: '', loading: true };
+      this.setState({ instanceTabs: [...this.state.instanceTabs, tab], activeInstanceId: cell.id, view: 'instance' });
+      this.persistInstanceTabs();
+    }
+    return this.connectInstanceTab(cell);
+  }
+
+  async connectInstanceTab(cell) {
+    const update = change => this.setState({
+      instanceTabs: this.state.instanceTabs.map(tab => tab.id === cell.id && !tab.closed ? { ...tab, ...change } : tab)
+    });
+    update({ loading: true, problem: '' });
+    const { url, error } = await this.resolveCellUrl(cell);
+    update({ url, loading: false, problem: url ? '' : error });
+    return !!url;
+  }
+
+  activateInstanceTab(id) {
+    this.setState({ view: 'instance', activeInstanceId: id, detailOpen: false });
+  }
+
+  // Closing a tab only detaches the view. The session keeps running until it is
+  // stopped on the Local tab. A closed tab leaves an empty slot behind so the frames
+  // after it keep their place and are not reloaded.
+  closeInstanceTab(id) {
+    let tabs = this.state.instanceTabs.map(tab => tab.id === id && !tab.closed ? { id: tab.id, closed: true } : tab);
+    while (tabs.length && tabs[tabs.length - 1].closed) tabs = tabs.slice(0, -1);
+    const open = tabs.filter(tab => !tab.closed);
+    const wasActive = this.state.activeInstanceId === id;
+    this.setState({
+      instanceTabs: tabs,
+      activeInstanceId: wasActive ? (open.length ? open[open.length - 1].id : null) : this.state.activeInstanceId,
+      ...(wasActive && !open.length && this.state.view === 'instance' ? { view: 'launch' } : {})
+    });
+    this.persistInstanceTabs(tabs);
+  }
+
+  // Tabs whose session has stopped or gone are closed for the user.
+  pruneInstanceTabs(cells) {
+    const live = new Set((cells || [])
+      .filter(cell => cell.agent_state !== 'exited' && cell.process !== 'exited')
+      .map(cell => cell.id));
+    for (const tab of this.openInstanceTabs()) {
+      if (!live.has(tab.id)) this.closeInstanceTab(tab.id);
+    }
+  }
+
+  // Only the session id and its label are remembered. The address carries a
+  // sign-in token, so it is asked for again each time.
+  persistInstanceTabs(tabs = this.state.instanceTabs) {
+    try {
+      window.localStorage.setItem('dsh-forge.instance-tabs', JSON.stringify(
+        tabs.filter(tab => !tab.closed).map(tab => ({ id: tab.id, title: tab.title }))
+      ));
+    } catch {
+      // storage is optional
+    }
+  }
+
+  restoreInstanceTabs(cells) {
+    let saved = [];
+    try {
+      saved = JSON.parse(window.localStorage.getItem('dsh-forge.instance-tabs') || '[]');
+    } catch {
+      saved = [];
+    }
+    if (!Array.isArray(saved)) return;
+    const byId = new Map((cells || []).map(cell => [cell.id, cell]));
+    const known = new Set(this.state.instanceTabs.map(tab => tab.id));
+    for (const item of saved.slice(0, 12)) {
+      const cell = item && typeof item.id === 'string' ? byId.get(item.id) : null;
+      if (!cell || known.has(cell.id) || cell.agent_state === 'exited') continue;
+      const tab = { id: cell.id, port: cell.port, title: String(item.title || this.instanceTabTitle(cell)).slice(0, 60), url: '', loading: true };
+      this.setState({ instanceTabs: [...this.state.instanceTabs, tab] });
+      this.connectInstanceTab(cell);
+    }
+  }
+
+  // For anyone who wants a session in its own browser tab. The address is already
+  // known, so the tab opens in the same click and is not blocked.
+  openInstanceInBrowser(id) {
+    const tab = this.openInstanceTabs().find(item => item.id === id);
+    const url = tab && this.loopbackHref(tab.url);
+    if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   isPublicWeb() {
@@ -2363,7 +2518,7 @@ class Component extends DCLogic {
   async startLocalProfile() {
     const spec = this.state.pendingProfile;
     if (!spec) return this.flash('Choose a detected profile first');
-    const pendingWindow = spec.open_browser ? window.open('about:blank', '_blank') : null;
+    const pendingWindow = spec.open_browser ? this.reserveOpenWindow() : null;
     this.setState({ profileBusy: true });
     try {
       const cell = await this.api('/api/v1/profiles/run', {
@@ -2372,7 +2527,7 @@ class Component extends DCLogic {
       this.setState({ preview: null, previewData: null, pendingProfile: null, logCell: cell.id, inspectorTab: 'logs' });
       await this.refreshStatus(true);
       this.flash('Started local profile ' + cell.profile + ' on the host');
-      if (pendingWindow) this.openCell(cell, pendingWindow);
+      if (spec.open_browser) this.openCell(cell, pendingWindow);
     } catch (error) {
       if (pendingWindow) pendingWindow.close();
       this.flash(error.message);
@@ -2795,6 +2950,11 @@ class Component extends DCLogic {
       sandbox: status.sandbox || this.state.sandbox,
       catalogStore: status.catalog_store || { available: false }
     });
+    this.pruneInstanceTabs(cells);
+    if (!this._instanceTabsRestored && this.canEmbedCells()) {
+      this._instanceTabsRestored = true;
+      this.restoreInstanceTabs(cells);
+    }
     const openFork = this.state.detailOpen && this.state.catalogType === 'fork' ? this.forkInstallation(this.state.artifactId) : null;
     if (openFork && ['queued', 'fetching', 'building', 'failed'].includes(openFork.state)) this.refreshForkLog(openFork);
     // An imported corpus replaces the embedded inventory for artifact types it
@@ -2938,7 +3098,7 @@ class Component extends DCLogic {
       }) });
       await this.refreshStatus(true);
       if (!preserveContext) await this.inspectCell(cell, 'logs');
-      const opened = target ? await this.openCell(cell, target) : false;
+      const opened = shouldOpen ? await this.openCell(cell, target) : false;
       this.flash(opened
         ? 'Launched and opened ' + version.version + ' on port ' + cell.port
         : 'Launched ' + version.version + ' on port ' + cell.port);
@@ -2964,6 +3124,7 @@ class Component extends DCLogic {
   }
 
   reserveOpenWindow() {
+    if (this.canEmbedCells()) return null;
     if (typeof window === 'undefined' || typeof window.open !== 'function') return null;
     try {
       // Not 'noopener': with it window.open returns null, so there would be no tab
@@ -2996,31 +3157,22 @@ class Component extends DCLogic {
   }
 
   async openCell(cell, existingWindow = null) {
+    if (this.canEmbedCells()) {
+      if (existingWindow) existingWindow.close();
+      return this.addInstanceTab(cell);
+    }
     const target = existingWindow || this.reserveOpenWindow();
     if (!target) {
       this.flash('Your browser blocked the new tab. Allow pop-ups for this page, then choose Open again.');
       return false;
     }
-    for (let attempt = 0; attempt < 30; attempt++) {
-      let payload;
-      try {
-        payload = await this.api('/api/v1/cells/' + encodeURIComponent(cell.id) + '/open-url');
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        continue;
-      }
-      try {
-        const url = this.validatedCellOpenUrl(payload, cell);
-        if (target) target.location.replace(url);
-        return true;
-      } catch (error) {
-        if (target) target.close();
-        this.flash(error.message);
-        return false;
-      }
+    const { url, error } = await this.resolveCellUrl(cell);
+    if (url) {
+      target.location.replace(url);
+      return true;
     }
-    if (target) target.close();
-    this.flash('Authenticated DSH Web URL is not ready; open logs for startup details');
+    target.close();
+    this.flash(error);
     return false;
   }
 
@@ -3512,6 +3664,39 @@ class Component extends DCLogic {
       showLaunch: s.view === 'launch',
       showCatalog: s.view === 'catalog' && catalogEnabled,
       showAssistant: s.view === 'assistant',
+      hasInstanceTabs: s.instanceTabs.some(tab => !tab.closed),
+      instanceDeckClass: s.view === 'instance' ? 'instance-deck' : 'instance-deck deck-parked',
+      instanceTabs: s.instanceTabs.filter(tab => !tab.closed).map(tab => {
+        const active = s.view === 'instance' && s.activeInstanceId === tab.id;
+        return {
+          id: tab.id,
+          title: tab.title,
+          className: active ? 'tab itab tab-on' : 'tab itab',
+          current: active ? 'page' : 'false',
+          dotColor: tab.loading ? WARN : (tab.url ? OK : BAD),
+          select: () => this.activateInstanceTab(tab.id),
+          close: event => { if (event && event.stopPropagation) event.stopPropagation(); this.closeInstanceTab(tab.id); },
+          closeLabel: 'Close the ' + tab.title + ' tab (the session keeps running)'
+        };
+      }),
+      // One slot per tab ever opened in this window, closed ones left empty, so
+      // every frame keeps its position and none reloads when another tab closes.
+      instanceSlots: s.instanceTabs.map(tab => {
+        const active = s.view === 'instance' && s.activeInstanceId === tab.id;
+        return {
+          id: tab.id,
+          open: !tab.closed,
+          title: tab.title || '',
+          url: tab.url || '',
+          ready: !tab.closed && !!tab.url,
+          waiting: !tab.closed && !tab.url,
+          waitingLabel: tab.loading ? 'Connecting to this session…' : (tab.problem || 'This session is not reachable.'),
+          canRetry: !tab.closed && !tab.url && !tab.loading,
+          retry: () => this.connectInstanceTab({ id: tab.id, port: tab.port }),
+          className: active ? 'instance-pane' : 'instance-pane pane-hidden',
+          openInBrowser: () => this.openInstanceInBrowser(tab.id)
+        };
+      }),
       goLaunch: () => this.navigate('launch'),
       goPlugins: () => this.openBrowser('plugin'),
       goForks: () => this.openBrowser('fork'),
