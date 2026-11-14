@@ -1222,6 +1222,7 @@ class Launcher:
             "fork_installations": self._fork_installations(),
             "trusted_package_recipes": self.trusted_package_recipes(),
             "configurations": self.configurations(),
+            "comparisons": self.comparisons(),
             "versions_directory": {
                 "path": _display_path(self.versions_directory),
                 "available": self.versions_directory.is_dir(),

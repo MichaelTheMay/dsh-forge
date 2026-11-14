@@ -405,6 +405,13 @@ class LocalCellCliTests(unittest.TestCase):
         code, payload = self.invoke("recommendations", "disable")
         self.assertEqual((code, payload["data"]["consent"], payload["data"]["items"]), (0, "off", []))
 
+    def test_compare_refuses_a_single_configuration_and_lists_none_at_first(self):
+        code, payload = self.invoke("compare", "list")
+        self.assertEqual((code, payload["data"]), (0, {"comparisons": []}))
+        code, payload = self.invoke("compare", "run", "--task", "x", "config_" + "a" * 20)
+        self.assertNotEqual(code, 0)
+        self.assertIn("between 2 and 4", json.dumps(payload))
+
     def test_clone_records_lineage(self):
         with mock.patch("dsh_forge.launcher._process_birth", return_value="cli-test-birth"):
             _, started = self.invoke(
